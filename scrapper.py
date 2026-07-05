@@ -141,7 +141,7 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[-] Gagal menyimpan file JSON lokal: {str(e)}")
 
-        print(f"\n[*] Mengirim payload JSON ke Backend Satria ({API_DATABASE_URL})...")
+        print(f"\n[*] Mengirim payload JSON ke Backend ({API_DATABASE_URL})...")
         try:
             response = requests.post(API_DATABASE_URL, json=hasil_bersih, timeout=10)
             
@@ -151,7 +151,7 @@ if __name__ == "__main__":
                 print(f"[-] Gagal mengirim. Backend merespons dengan status: {response.status_code}")
                 print(f"    Pesan Error: {response.text}")
         except requests.exceptions.ConnectionError:
-            print("[-] GAGAL KONEKSI: Server Backend Satria belum aktif. (Gunakan file backup JSON untuk sementara waktu).")
+            print("[-] GAGAL KONEKSI: Server Backend belum aktif. (Gunakan file backup JSON untuk sementara waktu).")
         except Exception as e:
             print(f"[-] Terjadi kesalahan saat pengiriman: {str(e)}")
 
