@@ -87,7 +87,7 @@ async def check_and_resolve_domain(session, raw_domain, semaphore):
             url = f"https://{domain}" 
             
             # Timeout dinaikkan sedikit menjadi 10 detik agar lebih toleran pada server lambat
-            async with session.get(url, timeout=10, ssl=False) as response: 
+            async with session.get(url, timeout=15, ssl=False) as response: 
                 if response.status in [200, 301, 302, 400, 401, 403]:
                     print(f"[+] SUKSES: {domain} ({ip_address}) - Status: {response.status}")
                     return {
