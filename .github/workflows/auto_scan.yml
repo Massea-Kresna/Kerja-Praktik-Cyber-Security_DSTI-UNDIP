@@ -1,0 +1,39 @@
+name: Automated Pentest Scan
+
+# Jadwal otomatis: Setiap hari jam 02:00 UTC (09:00 WIB)
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Setiap hari jam 02:00 UTC
+  workflow_dispatch:  # Tombol "Run" manual di GitHub
+
+env:
+  PENTEST_TOOLS_API_KEY: ${{ secrets.PENTEST_TOOLS_API_KEY }}
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120  # Batas waktu maksimal 2 jam
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Pentest Pipeline
+        run: python main.py
+
+      - name: Upload scan reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-reports-${{ github.run_number }}
+          path: reports/
+          retention-days: 30

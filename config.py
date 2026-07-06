@@ -3,7 +3,10 @@
 # =======================================================================
 
 import os
+from dotenv import load_dotenv
 
+# Load API keys and secrets dari .env
+load_dotenv()
 # Target utama
 TARGET_DOMAIN = "undip.ac.id"
 
@@ -129,6 +132,9 @@ MAX_CONCURRENT_API_SCANS = 3
 # Waktu Tunggu Polling Status (dalam detik)
 API_POLLING_INTERVAL = 60  # Cek status scan setiap 1 menit
 
-# Lokasi database penjadwalan
-SCHEDULER_DB_PATH = os.path.join(BASE_DIR, "scheduler.db")
+# =======================================================================
+# KONFIGURASI DATABASE PENJADWALAN (SUPABASE FRAMEWORK)
+# =======================================================================
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 

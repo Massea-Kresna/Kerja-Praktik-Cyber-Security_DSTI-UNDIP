@@ -1,14 +1,23 @@
-import sqlite3
+import psycopg2
 from datetime import datetime, timedelta, timezone
 import config
 
 class SchedulerDB:
-    def __init__(self, db_path=None):
-        self.db_path = db_path or config.SCHEDULER_DB_PATH
+    def __init__(self):
         self.init_db()
 
     def get_connection(self):
-        return sqlite3.connect(self.db_path)
+        # Jika user memasukkan URL Supabase, gunakan itu
+        if config.SUPABASE_DB_URL and config.SUPABASE_DB_URL.strip() != "":
+            return psycopg2.connect(config.SUPABASE_DB_URL)
+        else:
+            return psycopg2.connect(
+                host=config.PG_HOST,
+                port=config.PG_PORT,
+                user=config.PG_USER,
+                password=config.PG_PASSWORD,
+                dbname=config.PG_DATABASE
+            )
 
     def init_db(self):
         """Membuat tabel scan_schedules jika belum ada."""
@@ -16,7 +25,7 @@ class SchedulerDB:
             cursor = conn.cursor()
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS scan_schedules (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     domain_name TEXT UNIQUE NOT NULL,
                     interval_days INTEGER DEFAULT 7,
                     last_scan_time TEXT,
@@ -36,9 +45,10 @@ class SchedulerDB:
             for domain in domains:
                 # Masukkan domain baru, abaikan jika sudah terdaftar
                 cursor.execute("""
-                    INSERT OR IGNORE INTO scan_schedules 
+                    INSERT INTO scan_schedules 
                     (domain_name, interval_days, next_scan_time)
-                    VALUES (?, ?, ?)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (domain_name) DO NOTHING
                 """, (domain, interval_days, now.isoformat()))
             conn.commit()
 
@@ -49,7 +59,7 @@ class SchedulerDB:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT domain_name, interval_days, current_scan_id FROM scan_schedules
-                WHERE next_scan_time <= ? AND scan_status != 'Running'
+                WHERE next_scan_time <= %s AND scan_status != 'Running'
             """, (now,))
             return cursor.fetchall()
 
@@ -59,8 +69,8 @@ class SchedulerDB:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE scan_schedules
-                SET scan_status = 'Running', current_scan_id = ?, error_log = NULL
-                WHERE domain_name = ?
+                SET scan_status = 'Running', current_scan_id = %s, error_log = NULL
+                WHERE domain_name = %s
             """, (scan_id, domain_name))
             conn.commit()
 
@@ -73,10 +83,10 @@ class SchedulerDB:
             cursor.execute("""
                 UPDATE scan_schedules
                 SET scan_status = 'Idle', 
-                    last_scan_time = ?, 
-                    next_scan_time = ?, 
+                    last_scan_time = %s, 
+                    next_scan_time = %s, 
                     current_scan_id = NULL
-                WHERE domain_name = ?
+                WHERE domain_name = %s
             """, (now.isoformat(), next_scan.isoformat(), domain_name))
             conn.commit()
 
@@ -89,8 +99,8 @@ class SchedulerDB:
             cursor.execute("""
                 UPDATE scan_schedules
                 SET scan_status = 'Failed', 
-                    next_scan_time = ?, 
-                    error_log = ?
-                WHERE domain_name = ?
+                    next_scan_time = %s, 
+                    error_log = %s
+                WHERE domain_name = %s
             """, (retry_time, error_msg, domain_name))
             conn.commit()

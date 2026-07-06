@@ -25,6 +25,7 @@ if sys.platform == "win32":
 
 import config
 from scanners import port_scanner, tech_fingerprint, vuln_scanner
+import db_manager
 
 
 def load_domain_list(input_path=None):
@@ -171,7 +172,23 @@ async def run_pipeline(args):
         print(f"\n[SKIP] Vulnerability Scan dilewati.")
 
     # ===================================================================
-    # STEP 5: Copy reports ke Dashboard
+    # STEP 5: Simpan ke PostgreSQL
+    # ===================================================================
+    print(f"\n{'─'*60}")
+    print("  STEP 5/6: Menyimpan ke Database PostgreSQL")
+    print(f"{'─'*60}")
+    
+    # Hanya jalankan jika kita punya setidaknya list domain
+    if not args.dry_run and domain_list:
+        db_manager.save_all_results(
+            domain_list=domain_list,
+            port_results=port_results if not args.skip_portscan else [],
+            tech_results=tech_results if not args.skip_fingerprint else [],
+            vuln_results=vuln_results if not args.skip_vulnscan else []
+        )
+
+    # ===================================================================
+    # STEP 6: Copy reports ke Dashboard
     # ===================================================================
     print(f"\n{'─'*60}")
     print("  FINALIZING: Copy reports ke Dashboard")
