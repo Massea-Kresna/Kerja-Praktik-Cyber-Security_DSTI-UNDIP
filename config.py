@@ -120,12 +120,40 @@ EXPECTED_SECURITY_HEADERS = [
 # KONFIGURASI PENJADWALAN & PENTEST-TOOLS API
 # =======================================================================
 # Silakan masukkan/ganti API Key Pentest-Tools Anda di bawah ini
-PENTEST_TOOLS_API_KEY = os.environ.get("PENTEST_TOOLS_API_KEY", "YOUR_API_KEY_HERE")
+PENTEST_TOOLS_API_KEY = os.environ.get("PENTEST_TOOLS_API_KEY", "uk_wP9sfQiudWph9GX63pTFXAgYgZ27rrm1E6bI0CJU121d7985")
 PENTEST_TOOLS_BASE_URL = "https://app.pentest-tools.com/api/v2"
 
-# ID Tool Pentest-Tools (Default: 170 untuk Website Scanner / Full Scan)
-PENTEST_TOOLS_DEFAULT_TOOL_ID = 170
+# ID Tool Pentest-Tools
+from enum import IntEnum
 
+class Tool(IntEnum):
+    """Available scanning tools and their IDs"""
+    SUBDOMAIN_FINDER = 20
+    WHOIS_LOOKUP = 30
+    PORT_SCANNER = 70
+    URL_FUZZER = 90
+    VHOSTS_FINDER = 160
+    WEBSITE_SCANNER = 170
+    ICMP_PING = 240
+    SHAREPOINT_SCANNER = 260
+    WORDPRESS_SCANNER = 270
+    DRUPAL_SCANNER = 280
+    JOOMLA_SCANNER = 290
+    WEBSITE_RECON = 310
+    SUBDOMAIN_TAKEOVER = 320
+    NETWORK_SCANNER = 350
+    SQLI_EXPLOITER = 380
+    DOMAIN_FINDER = 390
+    PASSWORD_AUDITOR = 400
+    SSL_SCANNER = 450
+    SNIPER = 490
+    WAF_DETECTOR = 500
+    API_SCANNER = 510
+    CLOUD_SCANNER = 520
+    PEOPLE_HUNTER = 530
+    KUBERNETES_SCANNER = 540
+
+PENTEST_TOOLS_DEFAULT_TOOL_ID = Tool.WEBSITE_SCANNER
 # Batas Concurrency API agar tidak membebani limit rate akun
 MAX_CONCURRENT_API_SCANS = 3
 
@@ -138,3 +166,13 @@ API_POLLING_INTERVAL = 60  # Cek status scan setiap 1 menit
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
+# Supabase Direct DB Connection (untuk scheduler_db.py via psycopg2)
+# Format: postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
+SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL", "")
+
+# Fallback: Koneksi PostgreSQL manual (jika tidak pakai SUPABASE_DB_URL)
+PG_HOST = os.environ.get("PG_HOST", "localhost")
+PG_PORT = os.environ.get("PG_PORT", "5432")
+PG_USER = os.environ.get("PG_USER", "postgres")
+PG_PASSWORD = os.environ.get("PG_PASSWORD", "")
+PG_DATABASE = os.environ.get("PG_DATABASE", "postgres")

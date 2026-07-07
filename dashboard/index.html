@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Dashboard Pentest Keamanan Siber DSTI UNDIP — Monitor kerentanan, port terbuka, dan teknologi yang digunakan oleh aset digital Universitas Diponegoro.">
+    <title>DSTI UNDIP — Pentest Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="header-logo">🛡️</div>
+                <div class="header-title">
+                    <h1>Pentest Dashboard</h1>
+                    <span>DSTI — Universitas Diponegoro</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <div id="dbStatus" class="status-badge disconnected">
+                    <span class="status-dot"></span>
+                    <span id="dbStatusText">Memeriksa...</span>
+                </div>
+                <button id="refreshBtn" class="refresh-btn" onclick="refreshAll()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    Refresh
+                </button>
+            </div>
+        </header>
+
+        <!-- Notification Banner -->
+        <div id="notificationBanner" class="notification-banner hidden">
+            <span class="icon">⚠️</span>
+            <span id="notificationText"></span>
+        </div>
+
+        <!-- Stat Cards -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card cyan">
+                <div class="stat-card-icon">🌐</div>
+                <div class="stat-card-label">Total Domain</div>
+                <div class="stat-card-value" id="statDomains">-</div>
+            </div>
+            <div class="stat-card red">
+                <div class="stat-card-icon">🔓</div>
+                <div class="stat-card-label">Kerentanan</div>
+                <div class="stat-card-value" id="statVulns">-</div>
+            </div>
+            <div class="stat-card blue">
+                <div class="stat-card-icon">📊</div>
+                <div class="stat-card-label">Scan Terakhir</div>
+                <div class="stat-card-value" id="statScans">-</div>
+            </div>
+            <div class="stat-card purple">
+                <div class="stat-card-icon">🗄️</div>
+                <div class="stat-card-label">Sumber Data</div>
+                <div class="stat-card-value" id="statSource" style="font-size: 1.1rem;">-</div>
+            </div>
+        </div>
+
+        <!-- Two Column: Risk Distribution + Recent Scans -->
+        <div class="two-columns">
+            <!-- Risk Distribution -->
+            <div class="section">
+                <div class="section-header">
+                    <h2 class="section-title"><span class="icon">📈</span> Distribusi Risiko</h2>
+                </div>
+                <div class="panel">
+                    <div class="risk-bar-container" id="riskBarContainer">
+                        <div class="risk-bar" id="riskBar"></div>
+                        <div class="risk-legend" id="riskLegend"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Scans -->
+            <div class="section">
+                <div class="section-header">
+                    <h2 class="section-title"><span class="icon">🕐</span> Scan Terbaru</h2>
+                </div>
+                <div class="panel">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Domain</th>
+                                    <th>Risk</th>
+                                    <th>Score</th>
+                                    <th>Tanggal</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentScansBody">
+                                <tr><td colspan="4" class="empty-state"><p>Memuat data...</p></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Domain List -->
+        <div class="section">
+            <div class="section-header">
+                <h2 class="section-title"><span class="icon">🌍</span> Daftar Domain</h2>
+                <div class="search-container">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="domainSearch" placeholder="Cari domain..." oninput="searchDomains()">
+                </div>
+            </div>
+            <div class="panel">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Domain</th>
+                                <th>IP Address</th>
+                                <th>Status</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="domainTableBody">
+                            <tr><td colspan="5" class="empty-state"><p>Memuat data...</p></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="domainPagination"></div>
+            </div>
+        </div>
+
+        <!-- Two Column: Vulnerabilities + Scan History -->
+        <div class="two-columns">
+            <!-- Vulnerabilities -->
+            <div class="section">
+                <div class="section-header">
+                    <h2 class="section-title"><span class="icon">⚡</span> Kerentanan Terbaru</h2>
+                    <div class="tabs" id="vulnFilterTabs">
+                        <button class="tab-btn active" data-severity="" onclick="filterVulns(this, '')">Semua</button>
+                        <button class="tab-btn" data-severity="HIGH" onclick="filterVulns(this, 'HIGH')">High</button>
+                        <button class="tab-btn" data-severity="MEDIUM" onclick="filterVulns(this, 'MEDIUM')">Medium</button>
+                        <button class="tab-btn" data-severity="LOW" onclick="filterVulns(this, 'LOW')">Low</button>
+                    </div>
+                </div>
+                <div class="panel">
+                    <div class="vuln-list" id="vulnList">
+                        <div class="empty-state"><p>Memuat data...</p></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scan History -->
+            <div class="section">
+                <div class="section-header">
+                    <h2 class="section-title"><span class="icon">📋</span> Histori Scan Lengkap</h2>
+                </div>
+                <div class="panel">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Domain</th>
+                                    <th>Risk Level</th>
+                                    <th>Score</th>
+                                    <th>Tanggal</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scanHistoryBody">
+                                <tr><td colspan="4" class="empty-state"><p>Memuat data...</p></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Domain Detail Modal -->
+    <div id="modalOverlay" class="modal-overlay" onclick="closeModalOutside(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2 id="modalTitle">-</h2>
+                <button class="modal-close" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <div class="empty-state"><p>Memuat detail...</p></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

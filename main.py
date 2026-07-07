@@ -83,9 +83,9 @@ async def run_pipeline(args):
     # ===================================================================
     # STEP 1: Load Subdomain Data
     # ===================================================================
-    print(f"\n{'─'*60}")
+    print(f"\n{'-'*60}")
     print("  STEP 1/4: Loading Subdomain Data")
-    print(f"{'─'*60}")
+    print(f"{'-'*60}")
 
     domain_list = load_domain_list()
     if domain_list is None:
@@ -110,9 +110,9 @@ async def run_pipeline(args):
     # STEP 2: Port Scanning
     # ===================================================================
     if not args.skip_portscan:
-        print(f"\n{'─'*60}")
+        print(f"\n{'-'*60}")
         print("  STEP 2/4: Port Scanning")
-        print(f"{'─'*60}")
+        print(f"{'-'*60}")
 
         port_results = await port_scanner.scan_all(
             domain_list,
@@ -133,9 +133,9 @@ async def run_pipeline(args):
     # STEP 3: Technology Fingerprinting
     # ===================================================================
     if not args.skip_fingerprint:
-        print(f"\n{'─'*60}")
+        print(f"\n{'-'*60}")
         print("  STEP 3/4: Technology Fingerprinting")
-        print(f"{'─'*60}")
+        print(f"{'-'*60}")
 
         tech_results = await tech_fingerprint.analyze_all(
             domain_list,
@@ -155,9 +155,9 @@ async def run_pipeline(args):
     # STEP 4: Vulnerability Assessment
     # ===================================================================
     if not args.skip_vulnscan:
-        print(f"\n{'─'*60}")
+        print(f"\n{'-'*60}")
         print("  STEP 4/4: Vulnerability Assessment")
-        print(f"{'─'*60}")
+        print(f"{'-'*60}")
 
         if not tech_results:
             print("[-] Tidak ada data fingerprint. Vulnerability scan memerlukan data dari Modul 3.")
@@ -174,9 +174,9 @@ async def run_pipeline(args):
     # ===================================================================
     # STEP 5: Simpan ke PostgreSQL
     # ===================================================================
-    print(f"\n{'─'*60}")
+    print(f"\n{'-'*60}")
     print("  STEP 5/6: Menyimpan ke Database PostgreSQL")
-    print(f"{'─'*60}")
+    print(f"{'-'*60}")
     
     # Hanya jalankan jika kita punya setidaknya list domain
     if not args.dry_run and domain_list:
@@ -190,9 +190,9 @@ async def run_pipeline(args):
     # ===================================================================
     # STEP 6: Copy reports ke Dashboard
     # ===================================================================
-    print(f"\n{'─'*60}")
+    print(f"\n{'-'*60}")
     print("  FINALIZING: Copy reports ke Dashboard")
-    print(f"{'─'*60}")
+    print(f"{'-'*60}")
 
     copy_reports_to_dashboard()
 

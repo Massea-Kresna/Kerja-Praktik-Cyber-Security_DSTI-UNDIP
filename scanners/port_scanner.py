@@ -104,7 +104,7 @@ async def scan_domain(domain_info, semaphore, ports=None):
     if ports is None:
         ports = list(config.COMMON_PORTS.keys())
 
-    print(f"  [*] Scanning {domain_name} ({ip_address}) — {len(ports)} ports...")
+    print(f"  [*] Scanning {domain_name} ({ip_address}) - {len(ports)} ports...")
 
     # Buat tasks untuk scan setiap port secara paralel
     tasks = [
@@ -151,7 +151,7 @@ async def scan_all(domain_list, max_concurrent=None, ports=None):
     semaphore = asyncio.Semaphore(max_concurrent)
 
     print(f"\n{'='*60}")
-    print(f"  MODUL 2: PORT SCANNER — Memulai Scan")
+    print(f"  MODUL 2: PORT SCANNER - Memulai Scan")
     print(f"  Target: {len(domain_list)} subdomain")
     print(f"  Ports per target: {len(ports or config.COMMON_PORTS)} ports")
     print(f"  Max concurrent: {max_concurrent}")

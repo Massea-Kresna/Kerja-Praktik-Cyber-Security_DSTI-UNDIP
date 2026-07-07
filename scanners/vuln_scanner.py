@@ -541,7 +541,7 @@ async def assess_domain(session, domain_data, semaphore):
         severity_summary[sev] = severity_summary.get(sev, 0) + 1
 
     print(f"  [{'!' if risk_score >= 6 else '+'}] {domain}: "
-          f"Score={risk_score}/10 ({risk_level}) — "
+          f"Score={risk_score}/10 ({risk_level}) - "
           f"{len(all_vulns)} findings {severity_summary}")
 
     wib = timezone(timedelta(hours=7))
