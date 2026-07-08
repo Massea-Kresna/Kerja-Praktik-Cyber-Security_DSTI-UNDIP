@@ -39,7 +39,7 @@ class SchedulerDB:
 
     def register_domains(self, domains, interval_days=7):
         """Mendaftarkan domain baru dari aset_aktif ke database scheduler."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone(timedelta(hours=7)))
         with self.get_connection() as conn:
             cursor = conn.cursor()
             for domain in domains:
@@ -54,7 +54,7 @@ class SchedulerDB:
 
     def get_due_domains(self):
         """Mengambil daftar domain yang jadwal scannya sudah jatuh tempo (due)."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone(timedelta(hours=7))).isoformat()
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -76,7 +76,7 @@ class SchedulerDB:
 
     def update_scan_success(self, domain_name, interval_days):
         """Mencatat bahwa scan sukses dan menghitung jadwal scan berikutnya."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone(timedelta(hours=7)))
         next_scan = now + timedelta(days=interval_days)
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -93,7 +93,7 @@ class SchedulerDB:
     def update_scan_failed(self, domain_name, error_msg):
         """Mencatat kegagalan scan untuk ditinjau oleh administrator."""
         # Jadwal di-delay 1 hari untuk retry otomatis
-        retry_time = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+        retry_time = (datetime.now(timezone(timedelta(hours=7))) + timedelta(days=1)).isoformat()
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""

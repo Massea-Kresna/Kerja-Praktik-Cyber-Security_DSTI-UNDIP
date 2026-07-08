@@ -367,7 +367,7 @@ def get_scan_history(limit: int = Query(20, ge=1, le=100)):
         try:
             resp = (
                 supabase.table("scan_history")
-                .select("id, risk_score, risk_level, scan_date, domain_id, domains(domain_name, ip_address)")
+                .select("id, risk_score, risk_level, scan_date, raw_json, domain_id, domains(domain_name, ip_address), vulnerabilities(title, severity, check_type, description, recommendation)")
                 .order("scan_date", desc=True)
                 .limit(limit)
                 .execute()

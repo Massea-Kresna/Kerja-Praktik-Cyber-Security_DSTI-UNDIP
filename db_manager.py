@@ -1,5 +1,5 @@
 import config
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 try:
     from supabase import create_client, Client
 except ImportError:
@@ -32,7 +32,7 @@ def create_scan_history(supabase, domain_id, risk_score, risk_level, raw_json=No
         "domain_id": domain_id,
         "risk_score": risk_score,
         "risk_level": risk_level,
-        "scan_date": datetime.now(timezone.utc).isoformat(),
+        "scan_date": datetime.now(timezone(timedelta(hours=7))).isoformat(),
         "raw_json": raw_json
     }
     response = supabase.table("scan_history").insert(data).execute()
