@@ -495,10 +495,10 @@ function formatDate(dateStr) {
     try {
         const d = new Date(dateStr);
         if (isNaN(d.getTime())) return dateStr;
-        return d.toLocaleDateString('en-US', {
+        return d.toLocaleString('en-GB', {
             month: 'short', day: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-        });
+            hour: '2-digit', minute: '2-digit', hour12: false
+        }).replace(',', '') + ' WIB';
     } catch {
         return dateStr;
     }
