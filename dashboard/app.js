@@ -88,47 +88,49 @@ async function checkHealth() {
 // Overview (Dashboard Stats & Chart)
 // ==========================================================================
 let vulnChartInstance = null;
+let sevChartInstance = null;
 
 async function loadOverview() {
     try {
-        const [statsResp, trendResp] = await Promise.all([
+        const [statsResp, trendResp, sevTrendResp] = await Promise.all([
             fetch(`${API_BASE}/api/dashboard-stats`),
-            fetch(`${API_BASE}/api/trend-stats`)
+            fetch(`${API_BASE}/api/trend-stats`),
+            fetch(`${API_BASE}/api/severity-trend-stats`)
         ]);
         
         const statsData = await statsResp.json();
         const trendData = await trendResp.json();
+        const sevTrendData = await sevTrendResp.json();
         
         // Update summary cards
         document.getElementById('overviewTotalDomains').textContent = statsData.total_domains || 0;
         document.getElementById('overviewTotalVulns').textContent = statsData.total_vulnerabilities || 0;
         
-        const ctx = document.getElementById('vulnBarChart').getContext('2d');
+        const vulnCtx = document.getElementById('vulnBarChart').getContext('2d');
+        const sevCtx = document.getElementById('sevTrendChart').getContext('2d');
         
-        if (vulnChartInstance) {
-            vulnChartInstance.destroy();
-        }
+        if (vulnChartInstance) vulnChartInstance.destroy();
+        if (sevChartInstance) sevChartInstance.destroy();
         
-        // Chart colors palette for domains
-        const colors = ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#22c55e', '#8b5cf6', '#ec4899', '#14b8a6'];
-        
-        const datasets = (trendData.datasets || []).map((ds, idx) => ({
+        // --- 1. Domain Vulnerability Trend ---
+        const domainColors = ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#22c55e', '#8b5cf6', '#ec4899', '#14b8a6'];
+        const domainDatasets = (trendData.datasets || []).map((ds, idx) => ({
             label: ds.label,
             data: ds.data,
-            borderColor: colors[idx % colors.length],
-            backgroundColor: colors[idx % colors.length],
+            borderColor: domainColors[idx % domainColors.length],
+            backgroundColor: domainColors[idx % domainColors.length],
             borderWidth: 2,
             tension: 0.3,
             spanGaps: true,
-            pointRadius: 4,
+            pointRadius: ds.data.map(v => v > 0 ? 4 : 0),
             pointHoverRadius: 6
         }));
         
-        vulnChartInstance = new Chart(ctx, {
+        vulnChartInstance = new Chart(vulnCtx, {
             type: 'line',
             data: {
                 labels: trendData.labels || [],
-                datasets: datasets
+                datasets: domainDatasets
             },
             options: {
                 responsive: true,
@@ -136,33 +138,80 @@ async function loadOverview() {
                 scales: {
                     y: {
                         beginAtZero: true,
-                        ticks: {
-                            precision: 0
-                        }
+                        ticks: { precision: 0 }
                     },
                     x: {
-                        ticks: {
-                            maxTicksLimit: 12
-                        }
+                        ticks: { maxTicksLimit: 12 }
                     }
                 },
                 plugins: {
-                    legend: {
-                        display: true,
-                        position: 'bottom'
-                    },
+                    legend: { display: true, position: 'bottom' },
                     tooltip: {
                         mode: 'index',
                         intersect: false,
                         callbacks: {
                             label: function(context) {
                                 let label = context.dataset.label || '';
-                                if (label) {
-                                    label += ' | Vulns: ';
-                                }
-                                if (context.parsed.y !== null) {
-                                    label += context.parsed.y;
-                                }
+                                if (label) label += ' | Vulns: ';
+                                if (context.parsed.y !== null) label += context.parsed.y;
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // --- 2. Severity Trend ---
+        const sevColors = {
+            'Critical': '#ef4444',
+            'High': '#f97316',
+            'Medium': '#eab308'
+        };
+        
+        const sevDatasets = (sevTrendData.datasets || []).map((ds, idx) => {
+            const color = sevColors[ds.label] || '#9ca3af';
+            return {
+                label: ds.label,
+                data: ds.data,
+                borderColor: color,
+                backgroundColor: color,
+                borderWidth: 2,
+                tension: 0.3,
+                spanGaps: true,
+                pointRadius: ds.data.map(v => v > 0 ? 4 : 0),
+                pointHoverRadius: 6
+            };
+        });
+        
+        sevChartInstance = new Chart(sevCtx, {
+            type: 'line',
+            data: {
+                labels: sevTrendData.labels || [],
+                datasets: sevDatasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 }
+                    },
+                    x: {
+                        ticks: { maxTicksLimit: 12 }
+                    }
+                },
+                plugins: {
+                    legend: { display: true, position: 'bottom' },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) label += ': ';
+                                if (context.parsed.y !== null) label += context.parsed.y;
                                 return label;
                             }
                         }

@@ -144,7 +144,7 @@ def get_dashboard_stats():
 
 
 # ===================================================================
-# API: Trend Stats (Line Chart)
+# API: Trend Stats (Line Chart) - By Domain
 # ===================================================================
 @app.get("/api/trend-stats")
 def get_trend_stats():
@@ -217,6 +217,84 @@ def get_trend_stats():
                     "data": data,
                 }
                 for domain, data in domains_data.items()
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===================================================================
+# API: Severity Trend Stats (Line Chart)
+# ===================================================================
+@app.get("/api/severity-trend-stats")
+def get_severity_trend_stats():
+    """Mengambil data tren kerentanan berdasarkan severity (24 jam terakhir, interval 30 menit)"""
+    supabase = _get_supabase_or_none()
+
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    try:
+        wib_tz = timezone(timedelta(hours=7))
+        now_utc = datetime.now(timezone.utc)
+        now_wib = now_utc.astimezone(wib_tz)
+        
+        minute_snapped = 30 if now_wib.minute >= 30 else 0
+        snapped_wib = now_wib.replace(minute=minute_snapped, second=0, microsecond=0)
+        
+        start_time_wib = snapped_wib - timedelta(hours=24)
+        start_time_utc = start_time_wib.astimezone(timezone.utc)
+        start_time_iso = start_time_utc.isoformat()
+        
+        resp = (
+            supabase.table("scan_history")
+            .select("id, scan_date, vulnerabilities(severity)")
+            .gte("scan_date", start_time_iso)
+            .order("scan_date", desc=False)
+            .execute()
+        )
+        scans = resp.data
+        
+        labels = []
+        for i in range(49):
+            bucket_time_wib = start_time_wib + timedelta(minutes=i*30)
+            labels.append(bucket_time_wib.strftime("%H:%M"))
+            
+        severities_data = {
+            "CRITICAL": [0] * 49,
+            "HIGH": [0] * 49,
+            "MEDIUM": [0] * 49,
+        }
+        
+        for scan in scans:
+            scan_date_str = scan.get("scan_date")
+            if not scan_date_str:
+                continue
+            try:
+                scan_date_utc = datetime.fromisoformat(scan_date_str)
+                scan_date_wib = scan_date_utc.astimezone(wib_tz)
+            except Exception:
+                continue
+                
+            delta = scan_date_wib - start_time_wib
+            bucket_index = int(delta.total_seconds() // 1800)
+            
+            if 0 <= bucket_index < 49:
+                vulns = scan.get("vulnerabilities") or []
+                for v in vulns:
+                    sev = (v.get("severity") or "").upper()
+                    if sev in severities_data:
+                        severities_data[sev][bucket_index] += 1
+
+        return {
+            "source": "supabase",
+            "labels": labels,
+            "datasets": [
+                {
+                    "label": sev.capitalize(),
+                    "data": data,
+                }
+                for sev, data in severities_data.items()
             ]
         }
     except Exception as e:
