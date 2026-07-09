@@ -45,29 +45,6 @@ def load_domain_list(input_path=None):
     return data
 
 
-def copy_reports_to_dashboard():
-    """Copy semua file JSON dari reports/ ke dashboard/ agar bisa diakses oleh web dashboard."""
-    os.makedirs(config.DASHBOARD_DIR, exist_ok=True)
-    
-    report_files = [
-        config.PORT_SCAN_OUTPUT,
-        config.TECH_FINGERPRINT_OUTPUT,
-        config.VULN_REPORT_OUTPUT,
-    ]
-
-    # Copy juga aset_aktif_undip.json
-    if os.path.exists(config.INPUT_FILE):
-        report_files.append(config.INPUT_FILE)
-
-    for src in report_files:
-        if os.path.exists(src):
-            dst = os.path.join(config.DASHBOARD_DIR, os.path.basename(src))
-            shutil.copy2(src, dst)
-            print(f"  [+] Copied: {os.path.basename(src)} -> dashboard/")
-
-    print(f"[+] Semua report di-copy ke {config.DASHBOARD_DIR}")
-
-
 async def run_pipeline(args):
     """Menjalankan seluruh pipeline."""
 
@@ -186,15 +163,6 @@ async def run_pipeline(args):
             tech_results=tech_results if not args.skip_fingerprint else [],
             vuln_results=vuln_results if not args.skip_vulnscan else []
         )
-
-    # ===================================================================
-    # STEP 6: Copy reports ke Dashboard
-    # ===================================================================
-    print(f"\n{'-'*60}")
-    print("  FINALIZING: Copy reports ke Dashboard")
-    print(f"{'-'*60}")
-
-    copy_reports_to_dashboard()
 
     # ===================================================================
     # SELESAI

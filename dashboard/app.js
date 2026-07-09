@@ -29,10 +29,11 @@ function switchView(viewId) {
     let targetView = `view-${viewId}`;
     if (!document.getElementById(targetView)) {
         // fallback or not implemented
-        if (viewId === 'dashboard') targetView = 'view-inventory'; // mapped for now
+        if (viewId === 'dashboard') targetView = 'view-overview'; // mapped for now
+        else if (viewId === 'overview') targetView = 'view-overview';
         else if (viewId === 'targets' || viewId === 'inventory') targetView = 'view-inventory';
         else if (viewId === 'vulnerabilities') targetView = 'view-vulnerabilities';
-        else targetView = 'view-inventory';
+        else targetView = 'view-overview';
     }
     
     // Activate view
@@ -44,8 +45,9 @@ function switchView(viewId) {
     
     // Activate nav
     const activeNavs = {
-        'vulnerabilities': 0,
-        'inventory': 1
+        'overview': 0,
+        'vulnerabilities': 1,
+        'inventory': 2
     };
     const navItems = document.querySelectorAll('.nav-item');
     if (navItems[activeNavs[viewId]]) {
@@ -61,6 +63,7 @@ async function refreshData() {
     try {
         await checkHealth();
         await Promise.all([
+            loadOverview(),
             loadVulnerabilities(),
             loadDomains()
         ]);
@@ -78,6 +81,98 @@ async function checkHealth() {
         }
     } catch (err) {
         console.error('API Error:', err);
+    }
+}
+
+// ==========================================================================
+// Overview (Dashboard Stats & Chart)
+// ==========================================================================
+let vulnChartInstance = null;
+
+async function loadOverview() {
+    try {
+        const [statsResp, trendResp] = await Promise.all([
+            fetch(`${API_BASE}/api/dashboard-stats`),
+            fetch(`${API_BASE}/api/trend-stats`)
+        ]);
+        
+        const statsData = await statsResp.json();
+        const trendData = await trendResp.json();
+        
+        // Update summary cards
+        document.getElementById('overviewTotalDomains').textContent = statsData.total_domains || 0;
+        document.getElementById('overviewTotalVulns').textContent = statsData.total_vulnerabilities || 0;
+        
+        const ctx = document.getElementById('vulnBarChart').getContext('2d');
+        
+        if (vulnChartInstance) {
+            vulnChartInstance.destroy();
+        }
+        
+        // Chart colors palette for domains
+        const colors = ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#22c55e', '#8b5cf6', '#ec4899', '#14b8a6'];
+        
+        const datasets = (trendData.datasets || []).map((ds, idx) => ({
+            label: ds.label,
+            data: ds.data,
+            borderColor: colors[idx % colors.length],
+            backgroundColor: colors[idx % colors.length],
+            borderWidth: 2,
+            tension: 0.3,
+            spanGaps: true,
+            pointRadius: 4,
+            pointHoverRadius: 6
+        }));
+        
+        vulnChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: trendData.labels || [],
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            precision: 0
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxTicksLimit: 12
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ' | Vulns: ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += context.parsed.y;
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+    } catch (err) {
+        console.error('Error loading overview:', err);
     }
 }
 

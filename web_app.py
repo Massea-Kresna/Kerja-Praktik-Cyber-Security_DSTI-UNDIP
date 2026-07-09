@@ -20,6 +20,7 @@ import aiohttp
 import json
 import os
 from typing import Optional
+from datetime import datetime, timedelta, timezone
 from pentest_tools_scheduler import process_domain_scan
 
 app = FastAPI(title="DSTI UNDIP Pentest Dashboard API")
@@ -40,22 +41,6 @@ app.add_middleware(
 # ===================================================================
 DASHBOARD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard")
 os.makedirs(DASHBOARD_PATH, exist_ok=True)
-
-
-# ===================================================================
-# HELPER: Load file JSON lokal sebagai fallback
-# ===================================================================
-def _load_local_json(filename):
-    """Load file JSON dari folder dashboard/ atau reports/"""
-    paths = [
-        os.path.join(DASHBOARD_PATH, filename),
-        os.path.join(config.OUTPUT_DIR, filename),
-    ]
-    for path in paths:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-    return []
 
 
 def _get_supabase_or_none():
@@ -99,7 +84,7 @@ def health_check():
             "connected": db_connected,
             "message": db_message
         },
-        "data_source": "supabase" if db_connected else "local_json"
+        "data_source": "supabase"
     }
 
 
@@ -111,81 +96,131 @@ def get_dashboard_stats():
     """Mengambil statistik dasar dan riwayat scan terbaru"""
     supabase = _get_supabase_or_none()
 
-    if supabase:
-        try:
-            # Ambil total domain
-            domains_resp = supabase.table("domains").select("id", count="exact").execute()
-            total_domains = domains_resp.count if hasattr(domains_resp, 'count') and domains_resp.count is not None else len(domains_resp.data)
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not configured")
 
-            # Ambil history scan terbaru
-            history_resp = (
-                supabase.table("scan_history")
-                .select("id, risk_score, risk_level, scan_date, domains(domain_name)")
-                .order("scan_date", desc=True)
-                .limit(10)
-                .execute()
-            )
-            recent_scans = history_resp.data
+    try:
+        # Ambil total domain
+        domains_resp = supabase.table("domains").select("id", count="exact").execute()
+        total_domains = domains_resp.count if hasattr(domains_resp, 'count') and domains_resp.count is not None else len(domains_resp.data)
 
-            # Hitung statistik dari 100 scan terakhir
-            stats_resp = (
-                supabase.table("scan_history")
-                .select("risk_level")
-                .order("scan_date", desc=True)
-                .limit(100)
-                .execute()
-            )
-            stats = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "SAFE": 0}
-            for row in stats_resp.data:
-                r_level = row.get("risk_level", "SAFE")
-                if r_level in stats:
-                    stats[r_level] += 1
+        # Ambil history scan terbaru
+        history_resp = (
+            supabase.table("scan_history")
+            .select("id, risk_score, risk_level, scan_date, domains(domain_name)")
+            .order("scan_date", desc=True)
+            .limit(10)
+            .execute()
+        )
+        recent_scans = history_resp.data
 
-            # Hitung total vulnerabilities
-            vuln_resp = supabase.table("vulnerabilities").select("id", count="exact").execute()
-            total_vulns = vuln_resp.count if hasattr(vuln_resp, 'count') and vuln_resp.count is not None else len(vuln_resp.data)
+        # Hitung statistik dari 100 scan terakhir
+        stats_resp = (
+            supabase.table("scan_history")
+            .select("risk_level")
+            .order("scan_date", desc=True)
+            .limit(100)
+            .execute()
+        )
+        stats = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "SAFE": 0}
+        for row in stats_resp.data:
+            r_level = row.get("risk_level", "SAFE")
+            if r_level in stats:
+                stats[r_level] += 1
 
-            return {
-                "source": "supabase",
-                "total_domains": total_domains,
-                "total_vulnerabilities": total_vulns,
-                "risk_distribution": stats,
-                "recent_scans": recent_scans
-            }
-        except Exception as e:
-            # Jika query Supabase gagal, fallback ke lokal
-            pass
+        # Hitung total vulnerabilities
+        vuln_resp = supabase.table("vulnerabilities").select("id", count="exact").execute()
+        total_vulns = vuln_resp.count if hasattr(vuln_resp, 'count') and vuln_resp.count is not None else len(vuln_resp.data)
 
-    # Fallback: baca dari file JSON lokal
-    domains = _load_local_json("aset_aktif_undip.json")
-    vuln_data = _load_local_json("vuln_report.json")
+        return {
+            "source": "supabase",
+            "total_domains": total_domains,
+            "total_vulnerabilities": total_vulns,
+            "risk_distribution": stats,
+            "recent_scans": recent_scans
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    stats = {"HIGH": 0, "MEDIUM": 0, "LOW": 0, "SAFE": 0}
-    total_vulns = 0
-    recent_scans = []
 
-    for entry in vuln_data:
-        risk_level = entry.get("risk_level", "SAFE")
-        if risk_level == "CRITICAL":
-            risk_level = "HIGH"
-        if risk_level in stats:
-            stats[risk_level] += 1
-        total_vulns += entry.get("total_findings", 0)
-        recent_scans.append({
-            "id": None,
-            "risk_score": entry.get("risk_score", 0),
-            "risk_level": entry.get("risk_level", "SAFE"),
-            "scan_date": entry.get("scan_timestamp", ""),
-            "domains": {"domain_name": entry.get("domain_name", "")}
-        })
+# ===================================================================
+# API: Trend Stats (Line Chart)
+# ===================================================================
+@app.get("/api/trend-stats")
+def get_trend_stats():
+    """Mengambil data tren kerentanan per domain (24 jam terakhir, interval 30 menit)"""
+    supabase = _get_supabase_or_none()
 
-    return {
-        "source": "local_json",
-        "total_domains": len(domains),
-        "total_vulnerabilities": total_vulns,
-        "risk_distribution": stats,
-        "recent_scans": recent_scans[:10]
-    }
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    try:
+        # Gunakan zona waktu lokal WIB (UTC+7)
+        wib_tz = timezone(timedelta(hours=7))
+        now_utc = datetime.now(timezone.utc)
+        now_wib = now_utc.astimezone(wib_tz)
+        
+        # Snap ke interval 30 menit ke bawah (misal: 09:12 -> 09:00, 09:45 -> 09:30)
+        minute_snapped = 30 if now_wib.minute >= 30 else 0
+        snapped_wib = now_wib.replace(minute=minute_snapped, second=0, microsecond=0)
+        
+        # Ambil 24 jam ke belakang dari waktu yg sudah di-snap (48 bucket + 1 untuk sekarang)
+        start_time_wib = snapped_wib - timedelta(hours=24)
+        
+        # Kembalikan ke format UTC untuk query Supabase
+        start_time_utc = start_time_wib.astimezone(timezone.utc)
+        start_time_iso = start_time_utc.isoformat()
+        
+        resp = (
+            supabase.table("scan_history")
+            .select("id, scan_date, domains(domain_name), vulnerabilities(id)")
+            .gte("scan_date", start_time_iso)
+            .order("scan_date", desc=False)
+            .execute()
+        )
+        scans = resp.data
+        
+        # Kita buat 49 label agar menutupi tepat 24 jam (48 interval)
+        labels = []
+        for i in range(49):
+            bucket_time_wib = start_time_wib + timedelta(minutes=i*30)
+            labels.append(bucket_time_wib.strftime("%H:%M"))
+            
+        domains_data = {}
+        for scan in scans:
+            domain_name = scan.get("domains", {}).get("domain_name", "Unknown")
+            scan_date_str = scan.get("scan_date")
+            if not scan_date_str:
+                continue
+            try:
+                scan_date_utc = datetime.fromisoformat(scan_date_str)
+                scan_date_wib = scan_date_utc.astimezone(wib_tz)
+            except Exception:
+                continue
+                
+            delta = scan_date_wib - start_time_wib
+            bucket_index = int(delta.total_seconds() // 1800)
+            
+            if 0 <= bucket_index < 49:
+                if domain_name not in domains_data:
+                    domains_data[domain_name] = [None] * 49
+                
+                vuln_count = len(scan.get("vulnerabilities", []))
+                domains_data[domain_name][bucket_index] = vuln_count
+
+        return {
+            "source": "supabase",
+            "labels": labels,
+            "datasets": [
+                {
+                    "label": domain,
+                    "data": data,
+                }
+                for domain, data in domains_data.items()
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ===================================================================
@@ -196,36 +231,21 @@ def get_domains(search: Optional[str] = Query(None, description="Filter domain b
     """Mengambil daftar semua domain dari database"""
     supabase = _get_supabase_or_none()
 
-    if supabase:
-        try:
-            query = supabase.table("domains").select("id, domain_name, ip_address, is_active, created_at")
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not configured")
 
-            if search:
-                query = query.ilike("domain_name", f"%{search}%")
+    try:
+        query = supabase.table("domains").select("id, domain_name, ip_address, is_active")
 
-            query = query.order("domain_name")
-            resp = query.execute()
+        if search:
+            query = query.ilike("domain_name", f"%{search}%")
 
-            return {"source": "supabase", "data": resp.data, "total": len(resp.data)}
-        except Exception:
-            pass
+        query = query.order("domain_name")
+        resp = query.execute()
 
-    # Fallback: file JSON lokal
-    domains = _load_local_json("aset_aktif_undip.json")
-    if search:
-        domains = [d for d in domains if search.lower() in d.get("domain_name", "").lower()]
-
-    data = [
-        {
-            "id": None,
-            "domain_name": d.get("domain_name", ""),
-            "ip_address": d.get("ip_address", ""),
-            "is_active": True,
-            "created_at": None
-        }
-        for d in domains
-    ]
-    return {"source": "local_json", "data": data, "total": len(data)}
+        return {"source": "supabase", "data": resp.data, "total": len(resp.data)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ===================================================================
@@ -236,123 +256,78 @@ def get_domain_detail(domain_name: str):
     """Mengambil detail lengkap 1 domain: scan history, ports, teknologi, kerentanan"""
     supabase = _get_supabase_or_none()
 
-    if supabase:
-        try:
-            # Cari domain
-            domain_resp = (
-                supabase.table("domains")
-                .select("id, domain_name, ip_address, is_active")
-                .eq("domain_name", domain_name)
-                .limit(1)
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    try:
+        # Cari domain
+        domain_resp = (
+            supabase.table("domains")
+            .select("id, domain_name, ip_address, is_active")
+            .eq("domain_name", domain_name)
+            .limit(1)
+            .execute()
+        )
+        if not domain_resp.data:
+            raise HTTPException(status_code=404, detail=f"Domain '{domain_name}' tidak ditemukan")
+
+        domain = domain_resp.data[0]
+        domain_id = domain["id"]
+
+        # Ambil scan history terbaru
+        history_resp = (
+            supabase.table("scan_history")
+            .select("id, risk_score, risk_level, scan_date, raw_json")
+            .eq("domain_id", domain_id)
+            .order("scan_date", desc=True)
+            .limit(10)
+            .execute()
+        )
+
+        scans = []
+        for scan in history_resp.data:
+            scan_id = scan["id"]
+
+            # Open ports
+            ports_resp = (
+                supabase.table("open_ports")
+                .select("port_number, service_name")
+                .eq("history_id", scan_id)
                 .execute()
             )
-            if not domain_resp.data:
-                raise HTTPException(status_code=404, detail=f"Domain '{domain_name}' tidak ditemukan")
 
-            domain = domain_resp.data[0]
-            domain_id = domain["id"]
-
-            # Ambil scan history terbaru
-            history_resp = (
-                supabase.table("scan_history")
-                .select("id, risk_score, risk_level, scan_date, raw_json")
-                .eq("domain_id", domain_id)
-                .order("scan_date", desc=True)
-                .limit(10)
+            # Technologies
+            tech_resp = (
+                supabase.table("technologies")
+                .select("web_server, cms")
+                .eq("history_id", scan_id)
                 .execute()
             )
 
-            scans = []
-            for scan in history_resp.data:
-                scan_id = scan["id"]
+            # Vulnerabilities
+            vulns_resp = (
+                supabase.table("vulnerabilities")
+                .select("severity, check_type, title, description, recommendation")
+                .eq("history_id", scan_id)
+                .execute()
+            )
 
-                # Open ports
-                ports_resp = (
-                    supabase.table("open_ports")
-                    .select("port_number, service_name")
-                    .eq("history_id", scan_id)
-                    .execute()
-                )
+            scans.append({
+                **scan,
+                "open_ports": ports_resp.data,
+                "technologies": tech_resp.data[0] if tech_resp.data else {},
+                "vulnerabilities": vulns_resp.data
+            })
 
-                # Technologies
-                tech_resp = (
-                    supabase.table("technologies")
-                    .select("web_server, cms")
-                    .eq("history_id", scan_id)
-                    .execute()
-                )
-
-                # Vulnerabilities
-                vulns_resp = (
-                    supabase.table("vulnerabilities")
-                    .select("severity, check_type, title, description, recommendation")
-                    .eq("history_id", scan_id)
-                    .execute()
-                )
-
-                scans.append({
-                    **scan,
-                    "open_ports": ports_resp.data,
-                    "technologies": tech_resp.data[0] if tech_resp.data else {},
-                    "vulnerabilities": vulns_resp.data
-                })
-
-            return {
-                "source": "supabase",
-                "domain": domain,
-                "scans": scans
-            }
-        except HTTPException:
-            raise
-        except Exception:
-            pass
-
-    # Fallback: file JSON lokal
-    port_data = _load_local_json("port_scan_results.json")
-    tech_data = _load_local_json("tech_fingerprint.json")
-    vuln_data = _load_local_json("vuln_report.json")
-    domains = _load_local_json("aset_aktif_undip.json")
-
-    domain_info = next((d for d in domains if d.get("domain_name") == domain_name), None)
-    if not domain_info:
-        raise HTTPException(status_code=404, detail=f"Domain '{domain_name}' tidak ditemukan")
-
-    port_entry = next((p for p in port_data if p.get("domain_name") == domain_name), {})
-    tech_entry = next((t for t in tech_data if t.get("domain_name") == domain_name), {})
-    vuln_entry = next((v for v in vuln_data if v.get("domain_name") == domain_name), {})
-
-    scan = {
-        "id": None,
-        "risk_score": vuln_entry.get("risk_score", 0),
-        "risk_level": vuln_entry.get("risk_level", "SAFE"),
-        "scan_date": vuln_entry.get("scan_timestamp", port_entry.get("scan_timestamp", "")),
-        "open_ports": [
-            {"port_number": p["port"], "service_name": p["service"]}
-            for p in port_entry.get("open_ports", [])
-        ],
-        "technologies": tech_entry.get("technologies", {}),
-        "vulnerabilities": [
-            {
-                "severity": v.get("severity", "LOW"),
-                "check_type": v.get("check", ""),
-                "title": v.get("title", ""),
-                "description": v.get("detail", ""),
-                "recommendation": v.get("recommendation", "")
-            }
-            for v in vuln_entry.get("vulnerabilities", [])
-        ]
-    }
-
-    return {
-        "source": "local_json",
-        "domain": {
-            "id": None,
-            "domain_name": domain_name,
-            "ip_address": domain_info.get("ip_address", ""),
-            "is_active": True
-        },
-        "scans": [scan] if scan["scan_date"] else []
-    }
+        return {
+            "source": "supabase",
+            "domain": domain,
+            "scans": scans
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ===================================================================
@@ -363,36 +338,20 @@ def get_scan_history(limit: int = Query(20, ge=1, le=100)):
     """Mengambil histori scan terbaru dari database"""
     supabase = _get_supabase_or_none()
 
-    if supabase:
-        try:
-            resp = (
-                supabase.table("scan_history")
-                .select("id, risk_score, risk_level, scan_date, raw_json, domain_id, domains(domain_name, ip_address), vulnerabilities(title, severity, check_type, description, recommendation)")
-                .order("scan_date", desc=True)
-                .limit(limit)
-                .execute()
-            )
-            return {"source": "supabase", "data": resp.data, "total": len(resp.data)}
-        except Exception:
-            pass
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not configured")
 
-    # Fallback
-    vuln_data = _load_local_json("vuln_report.json")
-    data = [
-        {
-            "id": None,
-            "risk_score": v.get("risk_score", 0),
-            "risk_level": v.get("risk_level", "SAFE"),
-            "scan_date": v.get("scan_timestamp", ""),
-            "domain_id": None,
-            "domains": {
-                "domain_name": v.get("domain_name", ""),
-                "ip_address": v.get("ip_address", "")
-            }
-        }
-        for v in vuln_data
-    ]
-    return {"source": "local_json", "data": data[:limit], "total": len(data)}
+    try:
+        resp = (
+            supabase.table("scan_history")
+            .select("id, risk_score, risk_level, scan_date, raw_json, domain_id, domains(domain_name, ip_address), vulnerabilities(title, severity, check_type, description, recommendation)")
+            .order("scan_date", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return {"source": "supabase", "data": resp.data, "total": len(resp.data)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ===================================================================
@@ -406,44 +365,21 @@ def get_vulnerabilities(
     """Mengambil daftar kerentanan dari database"""
     supabase = _get_supabase_or_none()
 
-    if supabase:
-        try:
-            query = (
-                supabase.table("vulnerabilities")
-                .select("id, severity, check_type, title, description, recommendation, history_id, scan_history(scan_date, domain_id, domains(domain_name))")
-            )
-            if severity:
-                query = query.eq("severity", severity.upper())
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not configured")
 
-            resp = query.limit(limit).execute()
-            return {"source": "supabase", "data": resp.data, "total": len(resp.data)}
-        except Exception:
-            pass
+    try:
+        query = (
+            supabase.table("vulnerabilities")
+            .select("id, severity, check_type, title, description, recommendation, history_id, scan_history(scan_date, domain_id, domains(domain_name))")
+        )
+        if severity:
+            query = query.eq("severity", severity.upper())
 
-    # Fallback
-    vuln_data = _load_local_json("vuln_report.json")
-    all_vulns = []
-    for entry in vuln_data:
-        for v in entry.get("vulnerabilities", []):
-            vuln = {
-                "id": v.get("id", None),
-                "severity": v.get("severity", "LOW"),
-                "check_type": v.get("check", ""),
-                "title": v.get("title", ""),
-                "description": v.get("detail", ""),
-                "recommendation": v.get("recommendation", ""),
-                "history_id": None,
-                "scan_history": {
-                    "scan_date": entry.get("scan_timestamp", ""),
-                    "domain_id": None,
-                    "domains": {"domain_name": entry.get("domain_name", "")}
-                }
-            }
-            if severity and vuln["severity"] != severity.upper():
-                continue
-            all_vulns.append(vuln)
-
-    return {"source": "local_json", "data": all_vulns[:limit], "total": len(all_vulns)}
+        resp = query.limit(limit).execute()
+        return {"source": "supabase", "data": resp.data, "total": len(resp.data)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ===================================================================

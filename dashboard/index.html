@@ -10,6 +10,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div id="app">
@@ -22,7 +24,10 @@
             </div>
 
             <nav class="sidebar-nav">
-                <a href="#" class="nav-item active" onclick="switchView('vulnerabilities')">
+                <a href="#" class="nav-item active" onclick="switchView('overview')">
+                    Overview
+                </a>
+                <a href="#" class="nav-item" onclick="switchView('vulnerabilities')">
                     Scan History
                 </a>
                 <a href="#" class="nav-item" onclick="switchView('inventory')">
@@ -34,8 +39,33 @@
         <!-- Main Content Area -->
         <main class="main-content">
 
+            <!-- VIEW: Overview -->
+            <div id="view-overview" class="view-container active">
+                <div class="view-header">
+                    <h1>Overview</h1>
+                </div>
+
+                <div class="modal-meta-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 24px;">
+                    <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div class="meta-label">TOTAL DOMAINS</div>
+                        <div class="meta-value" id="overviewTotalDomains" style="font-size: 28px; margin-top: 8px;">0</div>
+                    </div>
+                    <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div class="meta-label">TOTAL VULNERABILITIES</div>
+                        <div class="meta-value" id="overviewTotalVulns" style="font-size: 28px; margin-top: 8px;">0</div>
+                    </div>
+                </div>
+
+                <div class="table-card" style="padding: 20px;">
+                    <h3 style="margin-bottom: 20px; font-weight: 500;">Vulnerability Trend (Last 24 Hours)</h3>
+                    <div style="position: relative; height: 300px; width: 100%;">
+                        <canvas id="vulnBarChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
             <!-- VIEW: Vulnerabilities List (Automated Pentests) -->
-            <div id="view-vulnerabilities" class="view-container active">
+            <div id="view-vulnerabilities" class="view-container hidden">
                 <div class="view-header">
                     <h1>Scan History</h1>
                 </div>
