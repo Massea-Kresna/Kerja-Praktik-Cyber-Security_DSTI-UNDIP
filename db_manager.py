@@ -127,6 +127,11 @@ def save_all_results(domain_list, port_results, tech_results, vuln_results):
             risk_level = v_data.get("risk_level", "SAFE")
             vulns_list = v_data.get("vulnerabilities", [])
             
+            # Filter: Hanya simpan jika risk_level adalah MEDIUM ke atas
+            if risk_level not in ["MEDIUM", "HIGH", "CRITICAL"]:
+                print(f"  [-] Skip {domain_name} ke Supabase (Risk Level: {risk_level} - filter aktif)")
+                continue
+            
             # 3. Buat History
             raw_v_data = v_data if v_data else None
             history_id = create_scan_history(supabase, domain_id, risk_score, risk_level, raw_v_data)
@@ -136,7 +141,9 @@ def save_all_results(domain_list, port_results, tech_results, vuln_results):
             # 4. Simpan relasi (Ports, Techs, Vulns)
             insert_open_ports(supabase, history_id, port_map.get(domain_name, []))
             insert_technologies(supabase, history_id, tech_map.get(domain_name, {}))
-            insert_vulnerabilities(supabase, history_id, vulns_list)
+            # Filter: Hanya simpan vulnerability dengan severity MEDIUM ke atas
+            filtered_vulns = [v for v in vulns_list if v.get("severity", "").upper() in ["MEDIUM", "HIGH", "CRITICAL"]]
+            insert_vulnerabilities(supabase, history_id, filtered_vulns)
             
             saved_count += 1
             
@@ -199,6 +206,10 @@ def save_pentest_tools_result(domain_name, report_json):
             desc = f.get("description", "")
             recom = f.get("remediation", f.get("recommendation", ""))
             
+            # Filter: Hanya masukkan vulnerability dengan severity MEDIUM ke atas
+            if severity not in ["MEDIUM", "HIGH", "CRITICAL"]:
+                continue
+            
             vulnerabilities.append({
                 "severity": severity,
                 "check": "Pentest-Tools",
@@ -229,6 +240,11 @@ def save_pentest_tools_result(domain_name, report_json):
             
         # Batasi max risk score ke 10.0
         final_risk_score = min(risk_score, 10.0)
+            
+        # Filter: Hanya simpan jika risk_level adalah MEDIUM ke atas
+        if risk_level not in ["MEDIUM", "HIGH", "CRITICAL"]:
+            print(f"  [-] Skip penyimpanan ke Supabase (Risk Level: {risk_level} - di bawah batas minimum MEDIUM)")
+            return True
             
         # 3. Buat History (Simpan raw JSON)
         history_id = create_scan_history(supabase, domain_id, final_risk_score, risk_level, report_json)

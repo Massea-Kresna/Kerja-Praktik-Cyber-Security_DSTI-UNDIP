@@ -110,7 +110,7 @@ function renderVulnerabilitiesList() {
         const numVulns = scan.vulnerabilities ? scan.vulnerabilities.length : 0;
         
         return `
-            <div class="vuln-row" onclick='openScanModal(${JSON.stringify(scan).replace(/'/g, "&#39;")})'>
+            <div class="vuln-row" onclick="openScanModalIndex(${i})">
                 <div class="vuln-id">SCAN-${String(scan.id || i+1).padStart(4, '0')}</div>
                 <div class="vuln-title">Automated Scan on ${escapeHtml(domainName)}</div>
                 <div class="vuln-path">${date}</div>
@@ -119,6 +119,14 @@ function renderVulnerabilitiesList() {
             </div>
         `;
     }).join('');
+}
+
+// Function helper untuk membuka modal dari index
+function openScanModalIndex(index) {
+    const scan = allVulns[index];
+    if (scan) {
+        openScanModal(scan);
+    }
 }
 
 // ==========================================================================

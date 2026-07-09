@@ -3,6 +3,7 @@
 .venv
 env/
 venv/
+venv_linux/
 ENV/
 env.bak/
 venv.bak/
@@ -22,6 +23,9 @@ __pycache__/
 reports/
 !reports/.gitkeep
 
+# Dashboard generated JSONs
+dashboard/*.json
+!dashboard/aset_aktif_undip.json
 # IDEs
 .idea/
 .vscode/
