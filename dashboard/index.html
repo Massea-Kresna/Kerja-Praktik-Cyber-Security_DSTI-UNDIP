@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MASIH KP</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-text">MASIH KP</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" onclick="switchView('overview')">
+                    Overview
+                </a>
+                <a href="#" class="nav-item" onclick="switchView('vulnerabilities')">
+                    Scan History
+                </a>
+                <a href="#" class="nav-item" onclick="switchView('inventory')">
+                    Domains
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+
+            <!-- VIEW: Overview -->
+            <div id="view-overview" class="view-container active">
+                <div class="view-header">
+                    <h1>Overview</h1>
+                </div>
+
+                <div class="modal-meta-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 24px;">
+                    <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div class="meta-label">TOTAL DOMAINS</div>
+                        <div class="meta-value" id="overviewTotalDomains" style="font-size: 28px; margin-top: 8px;">0</div>
+                    </div>
+                    <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div class="meta-label">TOTAL VULNERABILITIES</div>
+                        <div class="meta-value" id="overviewTotalVulns" style="font-size: 28px; margin-top: 8px;">0</div>
+                    </div>
+                </div>
+
+                <div class="table-card" style="padding: 20px; margin-bottom: 24px;">
+                    <h3 style="margin-bottom: 20px; font-weight: 500;">Vulnerability Trend by Domain (Last 24 Hours)</h3>
+                    <div style="position: relative; height: 300px; width: 100%;">
+                        <canvas id="vulnBarChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="table-card" style="padding: 20px;">
+                    <h3 style="margin-bottom: 20px; font-weight: 500;">Severity Trend (Last 24 Hours)</h3>
+                    <div style="position: relative; height: 300px; width: 100%;">
+                        <canvas id="sevTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: Vulnerabilities List (Automated Pentests) -->
+            <div id="view-vulnerabilities" class="view-container hidden">
+                <div class="view-header">
+                    <h1>Scan History</h1>
+                </div>
+
+                <div class="vuln-list-container" id="vulnListContainer">
+                    <div class="empty-state">Loading vulnerabilities...</div>
+                </div>
+            </div>
+
+            <!-- Domain Details removed. The Domains page is only for searching now. -->
+
+            <!-- VIEW: Inventory -->
+            <div id="view-inventory" class="view-container hidden">
+                <div class="view-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <h1>Domains</h1>
+                    <div class="topbar-search" style="background: white; border-color: var(--border-color);">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        <input type="text" id="domainSearchInput" placeholder="Search domains or IP...">
+                    </div>
+                </div>
+                <div class="table-card">
+                    <table class="modern-table">
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>IP Address</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTableBody">
+                            <tr><td colspan="4" class="empty-state">Loading domains...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Scan Vulnerabilities Modal -->
+    <div class="modal-overlay" id="scanModalOverlay">
+        <div class="modal-dialog" style="max-width: 900px;">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <h2 id="scanModalTitle">Scan Details</h2>
+                    <span class="badge badge-medium">Scan Result</span>
+                </div>
+                <div class="modal-actions">
+                    <button class="icon-btn" onclick="closeScanModal()">✕</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="modal-meta-grid" style="grid-template-columns: repeat(4, 1fr);">
+                    <div>
+                        <div class="meta-label">TARGET DOMAIN</div>
+                        <div class="meta-value" id="scanModalDomain">-</div>
+                    </div>
+                    <div>
+                        <div class="meta-label">IP ADDRESS</div>
+                        <div class="meta-value" id="scanModalIp">-</div>
+                    </div>
+                    <div>
+                        <div class="meta-label">SCAN DATE</div>
+                        <div class="meta-value" id="scanModalDate">-</div>
+                    </div>
+                    <div>
+                        <div class="meta-label">RISK LEVEL</div>
+                        <div class="meta-value" id="scanModalRisk">-</div>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div class="meta-label">VULNERABILITIES FOUND</div>
+                    </div>
+                    
+                    <div class="vuln-filters" id="scanModalFilters">
+                        <!-- Injected by JS -->
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="modern-table">
+                            <thead>
+                                <tr>
+                                    <th>SEVERITY</th>
+                                    <th>TITLE</th>
+                                    <th>CHECK TYPE</th>
+                                    <th>ACTION</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scanModalVulnBody">
+                                <!-- Injected by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert / Threat Modal (SentryLoop style) -->
+    <div class="modal-overlay" id="threatModalOverlay">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <h2 id="modalTitle">Web Scanner</h2>
+                    <span class="badge badge-orange-outline">Anomaly Detection</span>
+                </div>
+                <div class="modal-actions">
+                    <button class="icon-btn" onclick="closeThreatModal()">✕</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="modal-meta-grid">
+                    <div>
+                        <div class="meta-label">RULE ID</div>
+                        <div class="meta-value" id="modalRuleId">00000000-0000</div>
+                    </div>
+                    <div>
+                        <div class="meta-label">FIRST SEEN</div>
+                        <div class="meta-value" id="modalFirstSeen">-</div>
+                    </div>
+                    <div>
+                        <div class="meta-label">LAST SEEN</div>
+                        <div class="meta-value" id="modalLastSeen">-</div>
+                    </div>
+                    <div>
+                        <div class="meta-label">LOGS MATCHED</div>
+                        <div class="meta-value">1</div>
+                    </div>
+                </div>
+                
+                <div class="threat-insights-card">
+                    <div class="insights-header">
+                        <h3>THREAT INSIGHTS</h3>
+                        <span class="confidence">Confidence: High</span>
+                    </div>
+                    <div class="insights-desc" id="modalDesc">
+                        Description goes here.
+                    </div>
+                    
+                    <div class="insights-grid">
+                        <div>
+                            <div class="meta-label">SUGGESTED SEVERITY</div>
+                            <div class="meta-value" id="modalSeverity">High</div>
+                        </div>
+                    <div class="meta-label mt-3">THREAT TYPE</div>
+                    <div class="meta-value">web_scanner</div>
+                    
+                    <div class="meta-label mt-3">RECOMMENDATION</div>
+                    <div class="meta-value" id="modalRecommendation">Investigate and patch.</div>
+                </div>
+
+                <div class="evidence-section mt-4">
+                    <div class="meta-label mb-2">EVIDENCE LOGS (1 disimpan)</div>
+                    <table class="modern-table small-table">
+                        <thead>
+                            <tr>
+                                <th>TIMESTAMP</th>
+                                <th>HOST</th>
+                                <th>PROGRAM</th>
+                                <th>MESSAGE</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td id="modalLogTime">-</td>
+                                <td id="modalLogHost">-</td>
+                                <td>pentest-tools</td>
+                                <td id="modalLogMsg" class="font-mono text-truncate">...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=6"></script>
+</body>
+</html>
