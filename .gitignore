@@ -22,6 +22,40 @@ __pycache__/
 # Reports
 reports/
 !reports/.gitkeep
+backup_data/
+
+# Dashboard generated JSONs
+dashboard/*.json
+!dashboard/aset_aktif_undip.json
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+# Environments
+.env
+.venv
+env/
+venv/
+venv_linux/
+ENV/
+env.bak/
+venv.bak/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Reports
+reports/
+!reports/.gitkeep
 
 # Dashboard generated JSONs
 dashboard/*.json

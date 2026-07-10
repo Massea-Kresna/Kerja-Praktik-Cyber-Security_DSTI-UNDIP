@@ -21,7 +21,7 @@ import json
 import os
 from typing import Optional
 from datetime import datetime, timedelta, timezone
-from pentest_tools_scheduler import process_domain_scan
+from scanner.pentest_tools_scheduler import process_domain_scan
 
 app = FastAPI(title="DSTI UNDIP Pentest Dashboard API")
 
