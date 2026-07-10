@@ -745,3 +745,119 @@ body {
     opacity: 0.5;
     cursor: not-allowed;
 }
+/* ==========================================================================
+   Multi-Select Dropdown (Chart Filters)
+   ========================================================================== */
+.multi-select-dropdown {
+    position: relative;
+    z-index: 20;
+}
+
+.multi-select-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    height: 36px;
+    font-size: 14px;
+    font-family: var(--font-sans);
+    font-weight: 500;
+    color: #374151;
+    background-color: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    cursor: pointer;
+    outline: none;
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+
+.multi-select-btn:hover {
+    background-color: #e5e7eb;
+}
+
+.multi-select-dropdown.open .multi-select-btn {
+    background-color: white;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.multi-select-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 240px;
+    max-height: 320px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.multi-select-dropdown.open .multi-select-panel {
+    display: flex;
+}
+
+.multi-select-search {
+    padding: 8px 12px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.multi-select-search input {
+    width: 100%;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-family: var(--font-sans);
+    outline: none;
+    background: #f9fafb;
+    transition: all 0.2s;
+}
+
+.multi-select-search input:focus {
+    border-color: var(--primary);
+    background: white;
+    box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.multi-select-items {
+    overflow-y: auto;
+    max-height: 250px;
+    padding: 4px 0;
+}
+
+.multi-select-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 400;
+    color: #374151;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.multi-select-item:hover {
+    background-color: #f3f4f6;
+}
+
+.multi-select-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.sev-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}

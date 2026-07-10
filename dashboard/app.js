@@ -395,16 +395,16 @@ window.renderVulnTrendChart = function () {
     });
 };
 
-window.renderSevTrendChart = function () {
+window.renderSevTrendChart = function() {
     if (!rawSevTrendData) return;
-
+    
     const sevCtx = document.getElementById('sevTrendChart').getContext('2d');
     if (sevChartInstance) sevChartInstance.destroy();
-
+    
     // Get selected severities from checkboxes
     const checkboxes = Array.from(document.querySelectorAll('#sevTrendItems input[type="checkbox"]'));
     const allCb = checkboxes.find(cb => cb.value === 'All');
-
+    
     let selectedSevs = [];
     let allChecked = false;
 
@@ -414,10 +414,10 @@ window.renderSevTrendChart = function () {
         selectedSevs = checkboxes.filter(cb => cb.checked && cb.value !== 'All').map(cb => cb.value);
         if (selectedSevs.length === 0) allChecked = true;
     }
-
+    
     // Update label (handled by onSevFilterChange but good to ensure on initial render)
     updateDropdownLabel('sevTrendDropdown', 'All Severities');
-
+    
     const sevColors = {
         'Critical': '#ef4444',
         'High': '#f97316',
@@ -425,12 +425,12 @@ window.renderSevTrendChart = function () {
         'Low': '#3b82f6',
         'Info': '#22c55e'
     };
-
+    
     let baseDatasets = rawSevTrendData.datasets || [];
     if (!allChecked && selectedSevs.length > 0) {
         baseDatasets = baseDatasets.filter(ds => selectedSevs.includes(ds.label));
     }
-
+    
     const sevDatasets = baseDatasets.map((ds) => {
         const color = sevColors[ds.label] || '#9ca3af';
         return {
@@ -440,7 +440,7 @@ window.renderSevTrendChart = function () {
             borderColor: color,
             backgroundColor: (context) => {
                 const chart = context.chart;
-                const { ctx, chartArea } = chart;
+                const {ctx, chartArea} = chart;
                 if (!chartArea) return color;
                 const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
                 const rgb = hexToRgb(color);
@@ -502,7 +502,7 @@ window.renderSevTrendChart = function () {
                     mode: 'index',
                     intersect: false,
                     callbacks: {
-                        label: function (context) {
+                        label: function(context) {
                             let label = context.dataset.label || '';
                             let val = context.parsed.y;
                             if (label) label += ': ';

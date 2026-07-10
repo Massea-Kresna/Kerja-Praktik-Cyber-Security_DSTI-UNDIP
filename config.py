@@ -78,7 +78,6 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "reports")
 DASHBOARD_DIR = os.path.join(BASE_DIR, "dashboard")
 TRACKER_FILE = os.path.join(BASE_DIR, ".celery_pentest_tracker.json")
 WIB = timezone(timedelta(hours=7))
-SCHEDULED_DIR = os.path.join(BASE_DIR, "scheduled") #folder baru scheduled buat nyimpen tracker.json & targets.json
 
 # Output files
 PORT_SCAN_OUTPUT = os.path.join(OUTPUT_DIR, "port_scan_results.json")
