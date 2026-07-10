@@ -22,6 +22,8 @@ import os
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from scanner.pentest_tools_scheduler import process_domain_scan
+from pydantic import BaseModel
+from typing import List
 
 app = FastAPI(title="DSTI UNDIP Pentest Dashboard API")
 
@@ -520,6 +522,35 @@ async def run_pentest_tools_background(domain_name: str):
         await process_domain_scan(session, domain_name, semaphore)
     print(f"[+] [BACKGROUND] Scan Pentest-Tools selesai untuk: {domain_name}")
 
+# ===================================================================
+# Simpan Jadwal
+# ===================================================================
+class SchedulePayload(BaseModel):
+    targets: List[str]
+
+@app.post("/api/schedule-scan")
+async def schedule_scan(payload: SchedulePayload):
+    """Memprioritaskan domain ke dalam antrean Supabase untuk dieksekusi Celery Beat"""
+    supabase = _get_supabase_or_none()
+    
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database Supabase belum terkoneksi!")
+
+    try:
+        # Kita tidak lagi menggunakan JSON lokal.
+        # Langsung update status 'is_active' menjadi True di database 
+        # agar Celery otomatis menangkapnya di siklus berikutnya.
+        for domain in payload.targets:
+            supabase.table("domains").update({"is_active": True}).eq("domain_name", domain).execute()
+            
+        print(f"[!] MARKAS: {len(payload.targets)} target dimasukkan ke radar aktif Celery.")
+        
+        return {
+            "status": "success", 
+            "message": f"{len(payload.targets)} target disiapkan dalam antrean rotasi Celery."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/trigger-pentest")
 async def trigger_pentest(domain_name: str, background_tasks: BackgroundTasks):

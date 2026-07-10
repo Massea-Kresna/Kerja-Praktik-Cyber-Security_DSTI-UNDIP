@@ -133,10 +133,19 @@
                         <input type="text" id="domainSearchInput" placeholder="Search domains or IP...">
                     </div>
                 </div>
+                <div style="margin-bottom: 15px; display: flex; justify-content: flex-end; gap: 10px;">
+                    <button id="btn-save-target" class="btn btn-outline" style="border: 1px solid var(--primary); color: var(--primary); background: transparent;" disabled onclick="simpanJadwalScan()">
+                        Simpan Jadwal (0/5)
+                    </button>
+                    <button id="btn-scan-now" class="btn btn-primary" disabled onclick="eksekusiScan()">
+                        Scan Sekarang (0/5)
+                    </button>
+                </div>
                 <div class="table-card">
                     <table class="modern-table">
                         <thead>
                             <tr>
+                                <th style="width: 50px; text-align: center;">Pilih</th>
                                 <th>Domain</th>
                                 <th>IP Address</th>
                                 <th>Status</th>

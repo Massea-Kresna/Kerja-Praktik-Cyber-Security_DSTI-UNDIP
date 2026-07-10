@@ -4,6 +4,7 @@
 
 import os
 from dotenv import load_dotenv
+from datetime import timezone, timedelta
 
 # Load API keys and secrets dari .env
 load_dotenv()
@@ -75,6 +76,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_FILE = os.path.join(BASE_DIR, "aset_aktif_undip.json")
 OUTPUT_DIR = os.path.join(BASE_DIR, "reports")
 DASHBOARD_DIR = os.path.join(BASE_DIR, "dashboard")
+TRACKER_FILE = os.path.join(BASE_DIR, ".celery_pentest_tracker.json")
+WIB = timezone(timedelta(hours=7))
 
 # Output files
 PORT_SCAN_OUTPUT = os.path.join(OUTPUT_DIR, "port_scan_results.json")

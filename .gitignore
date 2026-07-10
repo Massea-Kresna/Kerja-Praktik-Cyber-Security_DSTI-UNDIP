@@ -34,3 +34,5 @@ dashboard/*.json
 *.swo
 celerybeat-schedule
 .celery_pentest_tracker.json
+*.swocelerybeat-schedule
+.celery_pentest_tracker.json

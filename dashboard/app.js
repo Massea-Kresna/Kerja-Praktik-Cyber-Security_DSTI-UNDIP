@@ -595,11 +595,16 @@ function renderInventoryList() {
     
     tbody.innerHTML = filtered.map(d => `
         <tr>
+            <td style="text-align: center;">
+                <input type="checkbox" class="domain-cb" value="${escapeHtml(d.domain_name)}">
+            </td>
             <td style="font-weight:500; color:var(--primary)">${escapeHtml(d.domain_name)}</td>
             <td style="font-family:var(--font-mono); color:var(--text-secondary)">${escapeHtml(d.ip_address || '-')}</td>
             <td><span class="badge ${d.is_active ? 'badge-safe' : 'badge-medium'}">${d.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
         </tr>
     `).join('');
+
+    updateCheckboxLogic();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -818,4 +823,101 @@ function getMockCVSS(sev) {
     if (s === 'MEDIUM') return '5.0';
     if (s === 'LOW') return '2.5';
     return '0.0';
+}
+
+// ==========================================================================
+// Logika Checkbox, Penjadwalan, & Pentest Execution
+// ==========================================================================
+const MAKSIMAL_PILIHAN = 5;
+
+function updateCheckboxLogic() {
+    const kotakTercentang = document.querySelectorAll('.domain-cb:checked');
+    const semuaCheckbox = document.querySelectorAll('.domain-cb');
+    const btnSave = document.getElementById('btn-save-target');
+    const btnScan = document.getElementById('btn-scan-now');
+
+    // Update teks dan status kedua tombol
+    if(btnSave && btnScan) {
+        btnSave.innerText = `Simpan Jadwal (${kotakTercentang.length}/${MAKSIMAL_PILIHAN})`;
+        btnScan.innerText = `Scan Sekarang (${kotakTercentang.length}/${MAKSIMAL_PILIHAN})`;
+        
+        const isKosong = kotakTercentang.length === 0;
+        btnSave.disabled = isKosong;
+        btnScan.disabled = isKosong;
+    }
+
+    // Gembok sisa kotak jika sudah 5
+    if (kotakTercentang.length >= MAKSIMAL_PILIHAN) {
+        semuaCheckbox.forEach(box => {
+            if (!box.checked) box.disabled = true;
+        });
+    } else {
+        semuaCheckbox.forEach(box => box.disabled = false);
+    }
+}
+
+// Memantau klik checkbox
+document.addEventListener('change', function(e) {
+    if (e.target && e.target.classList.contains('domain-cb')) {
+        updateCheckboxLogic();
+    }
+});
+
+// FUNGSI 1: Eksekusi Langsung (Saat itu juga)
+async function eksekusiScan() {
+    const kotakTercentang = document.querySelectorAll('.domain-cb:checked');
+    const daftarTarget = Array.from(kotakTercentang).map(cb => cb.value);
+
+    if (daftarTarget.length === 0) return;
+
+    const btnScan = document.getElementById('btn-scan-now');
+    btnScan.innerText = "Memproses...";
+    btnScan.disabled = true;
+
+    alert(`Memulai operasi pentest langsung untuk ${daftarTarget.length} domain.`);
+
+    for (const domain of daftarTarget) {
+        try {
+            await fetch(`${API_BASE}/api/trigger-pentest?domain_name=${domain}`, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' }
+            });
+        } catch (error) {
+            console.error(`[-] Gagal men-trigger scan untuk ${domain}`, error);
+        }
+    }
+
+    document.querySelectorAll('.domain-cb').forEach(cb => cb.checked = false);
+    updateCheckboxLogic();
+}
+
+// FUNGSI 2: Simpan untuk Scan Interval
+async function simpanJadwalScan() {
+    const kotakTercentang = document.querySelectorAll('.domain-cb:checked');
+    const daftarTarget = Array.from(kotakTercentang).map(cb => cb.value);
+
+    if (daftarTarget.length === 0) return;
+
+    const btnSave = document.getElementById('btn-save-target');
+    btnSave.innerText = "Menyimpan...";
+    btnSave.disabled = true;
+
+    try {
+        // Menembak endpoint baru yang akan kita buat di FastAPI
+        const response = await fetch(`${API_BASE}/api/schedule-scan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targets: daftarTarget })
+        });
+        
+        if(response.ok) {
+            alert(`Berhasil menyimpan ${daftarTarget.length} domain ke dalam antrean jadwal! Celery Beat akan mengeksekusinya secara interval.`);
+        }
+    } catch (error) {
+        console.error("[-] Gagal menyimpan jadwal", error);
+        alert("Terjadi kesalahan saat menyimpan jadwal.");
+    }
+
+    document.querySelectorAll('.domain-cb').forEach(cb => cb.checked = false);
+    updateCheckboxLogic();
 }
