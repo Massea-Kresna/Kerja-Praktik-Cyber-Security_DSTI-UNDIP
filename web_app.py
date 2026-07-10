@@ -9,21 +9,139 @@ FastAPI backend yang melayani:
 =======================================================================
 """
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Query
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Query, Depends, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import db_manager
 import config
 import asyncio
 import aiohttp
 import json
 import os
+import uuid
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from scanner.pentest_tools_scheduler import process_domain_scan
 
 app = FastAPI(title="DSTI UNDIP Pentest Dashboard API")
+
+# Seeding admin secara otomatis saat file dimuat
+db_manager.seed_default_admin()
+
+# ===================================================================
+# WebSocket Connection Manager untuk Admin & Session Live Updates
+# ===================================================================
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+        self.user_info: dict[WebSocket, dict] = {}
+
+    def connect_user(self, websocket: WebSocket, username: str, role: str):
+        self.active_connections.append(websocket)
+        self.user_info[websocket] = {"username": username, "role": role}
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        if websocket in self.user_info:
+            del self.user_info[websocket]
+
+    async def broadcast_to_admins(self, message: dict):
+        for conn in list(self.active_connections):
+            info = self.user_info.get(conn)
+            if info and info.get("role") == "admin":
+                try:
+                    await conn.send_json(message)
+                except Exception:
+                    pass
+
+    async def kick_user(self, username: str, reason: str = "force_logout"):
+        for conn in list(self.active_connections):
+            info = self.user_info.get(conn)
+            if info and info.get("username") == username:
+                try:
+                    await conn.send_json({"event": reason})
+                    await conn.close(code=4000)
+                except Exception:
+                    pass
+
+manager = ConnectionManager()
+
+# ===================================================================
+# Pydantic Schemas untuk Auth
+# ===================================================================
+class UserRegister(BaseModel):
+    username: str
+    password: str
+    role: str = "user"
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+# ===================================================================
+# Auth Dependencies
+# ===================================================================
+def get_current_user(request: Request):
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=401, detail="Session tidak ditemukan. Silakan login kembali.")
+    
+    # Cari user berdasarkan session_id
+    user = None
+    supabase = db_manager.get_supabase_client()
+    if supabase:
+        try:
+            resp = supabase.table("users").select("*").eq("session_id", session_id).limit(1).execute()
+            if resp.data:
+                user = resp.data[0]
+        except Exception:
+            pass
+            
+    if not user:
+        users = db_manager._read_local_users()
+        for u in users:
+            if u.get("session_id") == session_id:
+                user = u
+                break
+                
+    if not user:
+        raise HTTPException(status_code=401, detail="Session tidak valid atau telah berakhir. Silakan login kembali.")
+        
+    # Cek apakah user sedang dalam timeout
+    timeout_until_str = user.get("timeout_until")
+    if timeout_until_str:
+        try:
+            # Menggunakan timezone-aware datetime parsing
+            # Python 3.11+ mendukung format ISO dengan offset Z/+07:00 via fromisoformat
+            timeout_until = datetime.fromisoformat(timeout_until_str.replace('Z', '+00:00'))
+            now = datetime.now(timezone.utc)
+            if timeout_until > now:
+                # Force logout
+                db_manager.update_user_session(user["username"], None, False)
+                
+                # Format waktu sisa penangguhan untuk respon yang ramah
+                sisa_detik = int((timeout_until - now).total_seconds())
+                menit = sisa_detik // 60
+                detik = sisa_detik % 60
+                detail_msg = f"Akun Anda ditangguhkan. Silakan coba lagi dalam {menit} menit {detik} detik."
+                raise HTTPException(status_code=403, detail=detail_msg)
+        except HTTPException as he:
+            raise he
+        except Exception as e:
+            print(f"[-] Parse timeout_until error: {e}")
+            
+    # Perbarui last_online ke waktu sekarang
+    db_manager.update_user_session(user["username"], session_id, True)
+    return user
+
+def get_current_admin(user = Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Akses ditolak. Endpoint ini hanya untuk Admin.")
+    return user
+
 
 # ===================================================================
 # CORS Middleware — agar frontend bisa mengakses API
@@ -50,6 +168,175 @@ def _get_supabase_or_none():
     except Exception:
         return None
 
+
+# ===================================================================
+# API: Authentication & Session Endpoints
+# ===================================================================
+@app.post("/api/auth/register")
+def register_user(user_data: UserRegister, admin_user = Depends(get_current_admin)):
+    """Mendaftarkan user baru"""
+    # Cek apakah username sudah ada
+    existing = db_manager.get_user_by_username(user_data.username)
+    if existing:
+        raise HTTPException(status_code=400, detail="Username sudah terdaftar.")
+        
+    try:
+        db_manager.create_user(user_data.username, user_data.password, user_data.role)
+        return {"status": "ok", "message": "Pendaftaran berhasil."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal melakukan registrasi: {str(e)}")
+
+@app.post("/api/auth/login")
+async def login_user(user_data: UserLogin, response: Response):
+    """Proses login user, menghasilkan cookie session_id"""
+    user = db_manager.get_user_by_username(user_data.username)
+    if not user or not db_manager.verify_password(user_data.password, user["password"]):
+        raise HTTPException(status_code=401, detail="Username atau password salah.")
+        
+    # Cek timeout
+    timeout_until_str = user.get("timeout_until")
+    if timeout_until_str:
+        try:
+            timeout_until = datetime.fromisoformat(timeout_until_str.replace('Z', '+00:00'))
+            now = datetime.now(timezone.utc)
+            if timeout_until > now:
+                sisa_detik = int((timeout_until - now).total_seconds())
+                menit = sisa_detik // 60
+                detik = sisa_detik % 60
+                raise HTTPException(status_code=403, detail=f"Akun Anda sedang ditangguhkan. Sisa waktu: {menit} menit {detik} detik.")
+        except HTTPException as he:
+            raise he
+        except Exception:
+            pass
+            
+    # Buat session baru
+    session_id = str(uuid.uuid4())
+    db_manager.update_user_session(user["username"], session_id, True)
+    
+    # Simpan di cookie (maksimal aktif 24 jam)
+    response.set_cookie(
+        key="session_id", 
+        value=session_id, 
+        httponly=True, 
+        max_age=86400, 
+        samesite="lax",
+        path="/"
+    )
+    
+    # Kirim notifikasi real-time via WebSocket ke semua admin yang terkoneksi
+    await manager.broadcast_to_admins({
+        "event": "user_login",
+        "username": user["username"],
+        "role": user["role"],
+        "time": datetime.now(timezone(timedelta(hours=7))).strftime("%H:%M:%S")
+    })
+    
+    return {"username": user["username"], "role": user["role"], "session_id": session_id}
+
+@app.post("/api/auth/logout")
+def logout_user(response: Response, current_user = Depends(get_current_user)):
+    """Mengakhiri session login user"""
+    db_manager.update_user_session(current_user["username"], None, False)
+    response.delete_cookie(key="session_id", path="/")
+    return {"status": "ok", "message": "Logout berhasil."}
+
+@app.get("/api/auth/me")
+def get_me(current_user = Depends(get_current_user)):
+    """Mendapatkan profil login aktif"""
+    return {
+        "username": current_user["username"],
+        "role": current_user["role"],
+        "session_id": current_user["session_id"]
+    }
+
+# ===================================================================
+# API: Admin Panel Endpoints (Hanya untuk Admin)
+# ===================================================================
+@app.get("/api/admin/users")
+def get_users(admin_user = Depends(get_current_admin)):
+    """Mendapatkan daftar seluruh user untuk Admin Page"""
+    users = db_manager.list_all_users()
+    return {"status": "ok", "data": users}
+
+@app.post("/api/admin/users/{target_username}/force-logout")
+async def force_logout(target_username: str, admin_user = Depends(get_current_admin)):
+    """Memaksa logout salah satu user"""
+    db_manager.update_user_session(target_username, None, False)
+    await manager.kick_user(target_username, "force_logout")
+    return {"status": "ok", "message": f"User '{target_username}' berhasil di-force logout."}
+
+@app.post("/api/admin/users/{target_username}/timeout")
+async def put_user_timeout(target_username: str, admin_user = Depends(get_current_admin)):
+    """Menangguhkan user selama 2 jam"""
+    # 2 jam dari sekarang
+    timeout_time = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+    db_manager.update_user_timeout(target_username, timeout_time)
+    await manager.kick_user(target_username, "timeout")
+    return {"status": "ok", "message": f"User '{target_username}' ditangguhkan selama 2 jam."}
+
+@app.post("/api/admin/users/{target_username}/remove-timeout")
+def remove_user_timeout(target_username: str, admin_user = Depends(get_current_admin)):
+    """Mencabut penangguhan (timeout) user"""
+    db_manager.update_user_timeout(target_username, None)
+    return {"status": "ok", "message": f"Timeout untuk user '{target_username}' berhasil dicabut."}
+
+@app.delete("/api/admin/users/{target_username}")
+async def delete_user_endpoint(target_username: str, admin_user = Depends(get_current_admin)):
+    """Menghapus user secara permanen"""
+    if target_username == admin_user["username"]:
+        raise HTTPException(status_code=400, detail="Anda tidak dapat menghapus akun Anda sendiri.")
+        
+    success = db_manager.delete_user(target_username)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"User '{target_username}' tidak ditemukan.")
+        
+    # Kick target user out immediately if they are online
+    await manager.kick_user(target_username, "force_logout")
+    return {"status": "ok", "message": f"User '{target_username}' berhasil dihapus."}
+
+# ===================================================================
+# WebSocket: Real-time Live Session Updates (Admin & Users)
+# ===================================================================
+@app.websocket("/ws/live")
+async def websocket_live(websocket: WebSocket, session_id: Optional[str] = Query(None)):
+    """Koneksi WebSocket untuk real-time updates (admin notif & user force logout/timeout)"""
+    await websocket.accept()
+    
+    if not session_id:
+        await websocket.close(code=4003)
+        return
+        
+    # Validasi session_id
+    user = None
+    supabase = db_manager.get_supabase_client()
+    if supabase:
+        try:
+            resp = supabase.table("users").select("*").eq("session_id", session_id).limit(1).execute()
+            if resp.data:
+                user = resp.data[0]
+        except Exception:
+            pass
+            
+    if not user:
+        users = db_manager._read_local_users()
+        for u in users:
+            if u.get("session_id") == session_id:
+                user = u
+                break
+                
+    if not user:
+        await websocket.close(code=4003)
+        return
+        
+    manager.connect_user(websocket, user["username"], user["role"])
+    try:
+        while True:
+            # Jaga agar WebSocket tetap terbuka (ping/pong)
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception:
+        manager.disconnect(websocket)
 
 # ===================================================================
 # ROOT — Redirect ke dashboard
@@ -92,7 +379,7 @@ def health_check():
 # API: Dashboard Stats (dari Supabase, fallback ke lokal)
 # ===================================================================
 @app.get("/api/dashboard-stats")
-def get_dashboard_stats():
+def get_dashboard_stats(current_user = Depends(get_current_user)):
     """Mengambil statistik dasar dan riwayat scan terbaru"""
     supabase = _get_supabase_or_none()
 
@@ -147,7 +434,7 @@ def get_dashboard_stats():
 # API: Trend Stats (Line Chart) - By Domain
 # ===================================================================
 @app.get("/api/trend-stats")
-def get_trend_stats():
+def get_trend_stats(current_user = Depends(get_current_user)):
     """Mengambil data tren kerentanan per domain (24 jam terakhir, interval 30 menit)"""
     supabase = _get_supabase_or_none()
 
@@ -227,7 +514,7 @@ def get_trend_stats():
 # API: Severity Trend Stats (Line Chart)
 # ===================================================================
 @app.get("/api/severity-trend-stats")
-def get_severity_trend_stats():
+def get_severity_trend_stats(current_user = Depends(get_current_user)):
     """Mengambil data tren kerentanan berdasarkan severity (24 jam terakhir, interval 30 menit)"""
     supabase = _get_supabase_or_none()
 
@@ -305,7 +592,7 @@ def get_severity_trend_stats():
 # API: Daftar Semua Domain (dari Supabase)
 # ===================================================================
 @app.get("/api/domains")
-def get_domains(search: Optional[str] = Query(None, description="Filter domain by name")):
+def get_domains(search: Optional[str] = Query(None, description="Filter domain by name"), current_user = Depends(get_current_user)):
     """Mengambil daftar semua domain dari database"""
     supabase = _get_supabase_or_none()
 
@@ -330,7 +617,7 @@ def get_domains(search: Optional[str] = Query(None, description="Filter domain b
 # API: Detail Domain (scan history, ports, tech, vulns dari Supabase)
 # ===================================================================
 @app.get("/api/domains/{domain_name}/detail")
-def get_domain_detail(domain_name: str):
+def get_domain_detail(domain_name: str, current_user = Depends(get_current_user)):
     """Mengambil detail lengkap 1 domain: scan history, ports, teknologi, kerentanan"""
     supabase = _get_supabase_or_none()
 
@@ -473,7 +760,7 @@ async def run_pentest_tools_background(domain_name: str):
 
 
 @app.post("/api/trigger-pentest")
-async def trigger_pentest(domain_name: str, background_tasks: BackgroundTasks):
+async def trigger_pentest(domain_name: str, background_tasks: BackgroundTasks, current_user = Depends(get_current_user)):
     """Men-trigger scan Pentest-Tools untuk domain tertentu"""
     if not domain_name:
         raise HTTPException(status_code=400, detail="Domain name is required")

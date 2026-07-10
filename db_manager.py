@@ -1,5 +1,9 @@
 import config
 from datetime import datetime, timezone, timedelta
+import hashlib
+import json
+import os
+import uuid
 try:
     from supabase import create_client, Client
 except ImportError:
@@ -261,3 +265,216 @@ def save_pentest_tools_result(domain_name, report_json):
     except Exception as e:
         print(f"  [-] ERROR saat mem-parsing hasil Pentest-Tools ke Supabase: {e}")
         return False
+
+# ==============================================================================
+# USER MANAGEMENT & MULTI-ROLE METHODS (SUPABASE / LOCAL JSON FALLBACK)
+# ==============================================================================
+
+LOCAL_USERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users_db.json")
+
+def hash_password(password: str, salt: str = None) -> str:
+    """Hash password menggunakan SHA-256 dan salt unik"""
+    if not salt:
+        salt = uuid.uuid4().hex
+    hashed = hashlib.sha256((password + salt).encode('utf-8')).hexdigest()
+    return f"{salt}${hashed}"
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    """Verifikasi kecocokan password dengan hash yang disimpan"""
+    try:
+        if not stored_hash or "$" not in stored_hash:
+            return False
+        salt, hashed = stored_hash.split('$', 1)
+        return hash_password(password, salt) == stored_hash
+    except Exception:
+        return False
+
+def _read_local_users():
+    """Membaca daftar user dari file JSON lokal"""
+    if not os.path.exists(LOCAL_USERS_FILE):
+        return []
+    try:
+        with open(LOCAL_USERS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def _write_local_users(users):
+    """Menyimpan daftar user ke file JSON lokal"""
+    try:
+        with open(LOCAL_USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(users, f, indent=4, default=str)
+        return True
+    except Exception:
+        return False
+
+def get_user_by_username(username: str):
+    """Mendapatkan data user berdasarkan username"""
+    supabase = get_supabase_client()
+    if supabase:
+        try:
+            resp = supabase.table("users").select("*").eq("username", username).limit(1).execute()
+            if resp.data:
+                return resp.data[0]
+        except Exception as e:
+            print(f"[-] Supabase get_user error, fallback ke lokal: {e}")
+    
+    # Fallback lokal
+    users = _read_local_users()
+    for u in users:
+        if u["username"] == username:
+            return u
+    return None
+
+def create_user(username: str, password_plain: str, role: str):
+    """Membuat user baru"""
+    hashed_pw = hash_password(password_plain)
+    
+    supabase = get_supabase_client()
+    if supabase:
+        try:
+            data = {
+                "username": username,
+                "password": hashed_pw,
+                "role": role,
+                "is_online": False,
+                "last_online": None,
+                "timeout_until": None,
+                "session_id": None
+            }
+            resp = supabase.table("users").insert(data).execute()
+            if resp.data:
+                return resp.data[0]
+        except Exception as e:
+            print(f"[-] Supabase create_user error, fallback ke lokal: {e}")
+            
+    # Fallback lokal
+    users = _read_local_users()
+    for u in users:
+        if u["username"] == username:
+            raise Exception("Username sudah digunakan")
+            
+    new_user = {
+        "username": username,
+        "password": hashed_pw,
+        "role": role,
+        "is_online": False,
+        "last_online": None,
+        "timeout_until": None,
+        "session_id": None,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    users.append(new_user)
+    _write_local_users(users)
+    return new_user
+
+def update_user_session(username: str, session_id: str or None, is_online: bool):
+    """Memperbarui status session dan online/offline user"""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    
+    supabase = get_supabase_client()
+    if supabase:
+        try:
+            data = {
+                "session_id": session_id,
+                "is_online": is_online
+            }
+            if is_online:
+                data["last_online"] = now_iso
+            resp = supabase.table("users").update(data).eq("username", username).execute()
+            if resp.data:
+                return resp.data[0]
+        except Exception as e:
+            print(f"[-] Supabase update_user_session error, fallback ke lokal: {e}")
+            
+    # Fallback lokal
+    users = _read_local_users()
+    for u in users:
+        if u["username"] == username:
+            u["session_id"] = session_id
+            u["is_online"] = is_online
+            if is_online:
+                u["last_online"] = now_iso
+            _write_local_users(users)
+            return u
+    return None
+
+def update_user_timeout(username: str, timeout_until: str or None):
+    """Menyetel waktu timeout (tangguh) untuk user dan men-force logout mereka"""
+    supabase = get_supabase_client()
+    if supabase:
+        try:
+            data = {
+                "timeout_until": timeout_until,
+                "session_id": None,
+                "is_online": False
+            }
+            resp = supabase.table("users").update(data).eq("username", username).execute()
+            if resp.data:
+                return resp.data[0]
+        except Exception as e:
+            print(f"[-] Supabase update_user_timeout error, fallback ke lokal: {e}")
+            
+    # Fallback lokal
+    users = _read_local_users()
+    for u in users:
+        if u["username"] == username:
+            u["timeout_until"] = timeout_until
+            u["session_id"] = None
+            u["is_online"] = False
+            _write_local_users(users)
+            return u
+    return None
+
+def list_all_users():
+    """Mengambil daftar seluruh user (kecuali password)"""
+    supabase = get_supabase_client()
+    if supabase:
+        try:
+            resp = supabase.table("users").select("id, username, role, is_online, last_online, timeout_until, created_at").execute()
+            if resp.data:
+                return sorted(resp.data, key=lambda x: x["username"])
+        except Exception as e:
+            print(f"[-] Supabase list_all_users error, fallback ke lokal: {e}")
+            
+    # Fallback lokal
+    users = _read_local_users()
+    filtered = []
+    for u in users:
+        filtered.append({
+            "username": u["username"],
+            "role": u["role"],
+            "is_online": u["is_online"],
+            "last_online": u.get("last_online"),
+            "timeout_until": u.get("timeout_until"),
+            "created_at": u.get("created_at")
+        })
+    return sorted(filtered, key=lambda x: x["username"])
+
+def delete_user(username: str) -> bool:
+    """Menghapus user berdasarkan username"""
+    supabase = get_supabase_client()
+    if supabase:
+        try:
+            resp = supabase.table("users").delete().eq("username", username).execute()
+            if resp.data:
+                return True
+        except Exception as e:
+            print(f"[-] Supabase delete_user error, fallback ke lokal: {e}")
+            
+    # Fallback lokal
+    users = _read_local_users()
+    filtered_users = [u for u in users if u["username"] != username]
+    if len(users) != len(filtered_users):
+        return _write_local_users(filtered_users)
+    return False
+
+def seed_default_admin():
+    """Melakukan seeding admin default (admin / admin123) jika database masih kosong"""
+    try:
+        admin_user = get_user_by_username("admin")
+        if not admin_user:
+            create_user("admin", "admin123", "admin")
+            print("[+] Seeding Sukses: User default 'admin' dengan password 'admin123' telah ditambahkan.")
+    except Exception as e:
+        print(f"[-] Gagal melakukan seeding admin: {e}")
