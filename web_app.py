@@ -188,7 +188,12 @@ def get_trend_stats():
             bucket_time_wib = start_time_wib + timedelta(minutes=i*30)
             labels.append(bucket_time_wib.strftime("%H:%M"))
             
-        domains_data = {}
+        # Ambil daftar semua domain agar yang tidak discan tetap bernilai 0
+        domains_resp = supabase.table("domains").select("domain_name").execute()
+        all_domains = [d.get("domain_name") for d in domains_resp.data if d.get("domain_name")]
+            
+        domains_data = {domain: [0] * 49 for domain in all_domains}
+        
         for scan in scans:
             domain_name = scan.get("domains", {}).get("domain_name", "Unknown")
             scan_date_str = scan.get("scan_date")
@@ -205,7 +210,7 @@ def get_trend_stats():
             
             if 0 <= bucket_index < 49:
                 if domain_name not in domains_data:
-                    domains_data[domain_name] = [None] * 49
+                    domains_data[domain_name] = [0] * 49
                 
                 vuln_count = len(scan.get("vulnerabilities") or [])
                 raw_json = scan.get("raw_json")
@@ -253,7 +258,7 @@ def get_severity_trend_stats():
         
         resp = (
             supabase.table("scan_history")
-            .select("id, scan_date, raw_json, vulnerabilities(severity)")
+            .select("id, scan_date, raw_json, vulnerabilities(severity), domains(domain_name)")
             .gte("scan_date", start_time_iso)
             .order("scan_date", desc=False)
             .execute()
@@ -273,7 +278,16 @@ def get_severity_trend_stats():
             "INFO": [0] * 49,
         }
         
+        domains_by_sev = {
+            "CRITICAL": [set() for _ in range(49)],
+            "HIGH": [set() for _ in range(49)],
+            "MEDIUM": [set() for _ in range(49)],
+            "LOW": [set() for _ in range(49)],
+            "INFO": [set() for _ in range(49)],
+        }
+        
         for scan in scans:
+            domain_name = scan.get("domains", {}).get("domain_name", "Unknown")
             scan_date_str = scan.get("scan_date")
             if not scan_date_str:
                 continue
@@ -293,6 +307,7 @@ def get_severity_trend_stats():
                     sev = (v.get("severity") or "").upper()
                     if sev in severities_data:
                         severities_data[sev][bucket_index] += 1
+                        domains_by_sev[sev][bucket_index].add(domain_name)
                         
                 # Hitung dari raw_json (Low/Info)
                 raw_json = scan.get("raw_json")
@@ -301,6 +316,7 @@ def get_severity_trend_stats():
                         sev = (v.get("severity") or "").upper()
                         if sev in severities_data:
                             severities_data[sev][bucket_index] += 1
+                            domains_by_sev[sev][bucket_index].add(domain_name)
 
         return {
             "source": "supabase",
@@ -309,6 +325,7 @@ def get_severity_trend_stats():
                 {
                     "label": sev.capitalize(),
                     "data": data,
+                    "domains": [list(d_set) for d_set in domains_by_sev[sev]]
                 }
                 for sev, data in severities_data.items()
             ]

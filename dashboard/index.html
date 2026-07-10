@@ -57,14 +57,54 @@
                 </div>
 
                 <div class="table-card" style="padding: 20px; margin-bottom: 24px;">
-                    <h3 style="margin-bottom: 20px; font-weight: 500;">Vulnerability Trend by Domain (Last 24 Hours)</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                        <div>
+                            <h3 style="font-weight: 600; font-size: 18px; margin: 0 0 4px 0;">Vulnerability Trend</h3>
+                            <p style="color: #6b7280; font-size: 14px; margin: 0;">Visualisasi kerentanan berdasarkan domain</p>
+                        </div>
+                        <div class="multi-select-dropdown" id="vulnTrendDropdown">
+                            <button class="multi-select-btn" onclick="toggleDropdown('vulnTrendDropdown')">
+                                <span class="multi-select-label">All Domains</span>
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </button>
+                            <div class="multi-select-panel">
+                                <div class="multi-select-search">
+                                    <input type="text" placeholder="Cari domain..." oninput="filterDropdownItems('vulnTrendDropdown', this.value)" />
+                                </div>
+                                <div class="multi-select-items" id="vulnTrendItems">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div style="position: relative; height: 300px; width: 100%;">
                         <canvas id="vulnBarChart"></canvas>
                     </div>
                 </div>
 
                 <div class="table-card" style="padding: 20px;">
-                    <h3 style="margin-bottom: 20px; font-weight: 500;">Severity Trend (Last 24 Hours)</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                        <div>
+                            <h3 style="font-weight: 600; font-size: 18px; margin: 0 0 4px 0;">Severity Trend</h3>
+                            <p style="color: #6b7280; font-size: 14px; margin: 0;">Distribusi tingkat risiko 24 jam terakhir</p>
+                        </div>
+                        <div class="multi-select-dropdown" id="sevTrendDropdown">
+                            <button class="multi-select-btn" onclick="toggleDropdown('sevTrendDropdown')">
+                                <span class="multi-select-label">All Severities</span>
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </button>
+                            <div class="multi-select-panel">
+                                <div class="multi-select-items" id="sevTrendItems">
+                                    <label class="multi-select-item"><input type="checkbox" value="All" checked onchange="onSevFilterChange(this)"><b>All Severities</b></label>
+                                    <label class="multi-select-item"><input type="checkbox" value="Critical" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#ef4444"></span>Critical</label>
+                                    <label class="multi-select-item"><input type="checkbox" value="High" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#f97316"></span>High</label>
+                                    <label class="multi-select-item"><input type="checkbox" value="Medium" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#eab308"></span>Medium</label>
+                                    <label class="multi-select-item"><input type="checkbox" value="Low" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#3b82f6"></span>Low</label>
+                                    <label class="multi-select-item"><input type="checkbox" value="Info" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#22c55e"></span>Info</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div style="position: relative; height: 300px; width: 100%;">
                         <canvas id="sevTrendChart"></canvas>
                     </div>
@@ -129,7 +169,10 @@
                     <h2 id="scanModalTitle">Scan Details</h2>
                     <span class="badge badge-medium">Scan Result</span>
                 </div>
-                <div class="modal-actions">
+                <div class="modal-actions" style="display: flex; gap: 12px; align-items: center;">
+                    <a id="btnDownloadReport" href="#" target="_blank" class="badge badge-high" style="text-decoration: none; display: none; cursor: pointer; border: 1px solid rgba(255,255,255,0.2);">
+                        📄 Download PDF Report
+                    </a>
                     <button class="icon-btn" onclick="closeScanModal()">✕</button>
                 </div>
             </div>
@@ -227,12 +270,16 @@
                             <div class="meta-label">SUGGESTED SEVERITY</div>
                             <div class="meta-value" id="modalSeverity">High</div>
                         </div>
-                    <div class="meta-label mt-3">THREAT TYPE</div>
-                    <div class="meta-value">web_scanner</div>
+                        <div>
+                            <div class="meta-label">THREAT TYPE</div>
+                            <div class="meta-value">web_scanner</div>
+                        </div>
+                    </div>
                     
-                    <div class="meta-label mt-3">RECOMMENDATION</div>
-                    <div class="meta-value" id="modalRecommendation">Investigate and patch.</div>
-                </div>
+                    <div class="mt-4">
+                        <div class="meta-label">RECOMMENDATION</div>
+                        <div class="meta-value" id="modalRecommendation">Investigate and patch.</div>
+                    </div>
 
                 <div class="evidence-section mt-4">
                     <div class="meta-label mb-2">EVIDENCE LOGS (1 disimpan)</div>
