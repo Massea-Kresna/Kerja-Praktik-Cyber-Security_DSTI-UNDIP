@@ -699,7 +699,7 @@ def get_domain_detail(domain_name: str, current_user = Depends(get_current_user)
 # API: Scan History (dari Supabase)
 # ===================================================================
 @app.get("/api/scan-history")
-def get_scan_history(limit: int = Query(20, ge=1, le=100)):
+def get_scan_history(limit: int = Query(20, ge=1, le=1000)):
     """Mengambil histori scan terbaru dari database"""
     supabase = _get_supabase_or_none()
 

@@ -6,8 +6,18 @@ const API_BASE = window.location.origin;
 
 // State
 let allDomains = [];
+let filteredDomains = [];
 let allVulns = [];
+let filteredVulns = [];
 let currentDomainData = null;
+
+// Pagination State for Scan History
+let vulnCurrentPage = 1;
+let vulnRowsPerPage = 15;
+
+// Pagination State for Domains
+let domainCurrentPage = 1;
+let domainRowsPerPage = 15;
 
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
@@ -24,6 +34,114 @@ document.addEventListener('DOMContentLoaded', () => {
     const createForm = document.getElementById('createUserForm');
     if (createForm) {
         createForm.addEventListener('submit', handleCreateUserSubmit);
+    }
+
+    // Bind scan history pagination events
+    const vulnRowsSelect = document.getElementById('vulnRowsSelect');
+    if (vulnRowsSelect) {
+        vulnRowsSelect.addEventListener('change', (e) => {
+            vulnRowsPerPage = parseInt(e.target.value);
+            vulnCurrentPage = 1;
+            renderVulnerabilitiesList();
+        });
+    }
+    const vulnPrevBtn = document.getElementById('vulnPrevPageBtn');
+    if (vulnPrevBtn) {
+        vulnPrevBtn.addEventListener('click', () => {
+            if (vulnCurrentPage > 1) {
+                vulnCurrentPage--;
+                renderVulnerabilitiesList();
+            }
+        });
+    }
+    const vulnNextBtn = document.getElementById('vulnNextPageBtn');
+    if (vulnNextBtn) {
+        vulnNextBtn.addEventListener('click', () => {
+            const totalPages = Math.ceil(filteredVulns.length / vulnRowsPerPage);
+            if (vulnCurrentPage < totalPages) {
+                vulnCurrentPage++;
+                renderVulnerabilitiesList();
+            }
+        });
+    }
+    
+    // Bind page input jumps
+    const vulnPageInput = document.getElementById('vulnPageInput');
+    if (vulnPageInput) {
+        vulnPageInput.addEventListener('change', (e) => {
+            const totalPages = Math.ceil(filteredVulns.length / vulnRowsPerPage) || 1;
+            let val = parseInt(e.target.value);
+            if (isNaN(val)) val = 1;
+            if (val < 1) val = 1;
+            if (val > totalPages) val = totalPages;
+            
+            vulnCurrentPage = val;
+            renderVulnerabilitiesList();
+        });
+        vulnPageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                vulnPageInput.blur();
+            }
+        });
+    }
+
+    // Bind date filter buttons
+    const filterBtn = document.getElementById('vulnFilterBtn');
+    if (filterBtn) {
+        filterBtn.addEventListener('click', applyVulnFilters);
+    }
+    const resetFilterBtn = document.getElementById('vulnResetFilterBtn');
+    if (resetFilterBtn) {
+        resetFilterBtn.addEventListener('click', resetVulnFilters);
+    }
+
+    // Bind domain pagination events
+    const domainRowsSelect = document.getElementById('domainRowsSelect');
+    if (domainRowsSelect) {
+        domainRowsSelect.addEventListener('change', (e) => {
+            domainRowsPerPage = parseInt(e.target.value);
+            domainCurrentPage = 1;
+            renderInventoryList();
+        });
+    }
+    const domainPrevBtn = document.getElementById('domainPrevPageBtn');
+    if (domainPrevBtn) {
+        domainPrevBtn.addEventListener('click', () => {
+            if (domainCurrentPage > 1) {
+                domainCurrentPage--;
+                renderInventoryList();
+            }
+        });
+    }
+    const domainNextBtn = document.getElementById('domainNextPageBtn');
+    if (domainNextBtn) {
+        domainNextBtn.addEventListener('click', () => {
+            const totalPages = Math.ceil(filteredDomains.length / domainRowsPerPage);
+            if (domainCurrentPage < totalPages) {
+                domainCurrentPage++;
+                renderInventoryList();
+            }
+        });
+    }
+    const domainPageInput = document.getElementById('domainPageInput');
+    if (domainPageInput) {
+        domainPageInput.addEventListener('change', (e) => {
+            const totalPages = Math.ceil(filteredDomains.length / domainRowsPerPage) || 1;
+            let val = parseInt(e.target.value);
+            if (isNaN(val)) val = 1;
+            if (val < 1) val = 1;
+            if (val > totalPages) val = totalPages;
+            
+            domainCurrentPage = val;
+            renderInventoryList();
+        });
+        domainPageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                domainPageInput.blur();
+            }
+        });
     }
 });
 
@@ -248,23 +366,77 @@ async function loadOverview() {
 // ==========================================================================
 async function loadVulnerabilities() {
     try {
-        const resp = await fetch(`${API_BASE}/api/scan-history?limit=100`);
+        const resp = await fetch(`${API_BASE}/api/scan-history?limit=1000`);
         const data = await resp.json();
         allVulns = data.data || [];
-        renderVulnerabilitiesList();
+        applyVulnFilters();
     } catch (err) {
         console.error('Error loading scans:', err);
     }
 }
 
+function applyVulnFilters() {
+    const startInput = document.getElementById('vulnStartDate')?.value;
+    const endInput = document.getElementById('vulnEndDate')?.value;
+    
+    let startDate = null;
+    let endDate = null;
+    
+    if (startInput) {
+        startDate = new Date(startInput);
+        startDate.setHours(0, 0, 0, 0);
+    }
+    
+    if (endInput) {
+        endDate = new Date(endInput);
+        endDate.setHours(23, 59, 59, 999);
+    }
+    
+    filteredVulns = allVulns.filter(scan => {
+        if (!scan.scan_date) return false;
+        const scanDate = new Date(scan.scan_date);
+        
+        if (startDate && scanDate < startDate) return false;
+        if (endDate && scanDate > endDate) return false;
+        
+        return true;
+    });
+    
+    vulnCurrentPage = 1;
+    renderVulnerabilitiesList();
+}
+
+function resetVulnFilters() {
+    const startInput = document.getElementById('vulnStartDate');
+    const endInput = document.getElementById('vulnEndDate');
+    if (startInput) startInput.value = '';
+    if (endInput) endInput.value = '';
+    
+    filteredVulns = [...allVulns];
+    vulnCurrentPage = 1;
+    renderVulnerabilitiesList();
+}
+
 function renderVulnerabilitiesList() {
     const container = document.getElementById('vulnListContainer');
-    if (!allVulns || allVulns.length === 0) {
-        container.innerHTML = `<div class="empty-state">No scan history found.</div>`;
+    const paginationControls = document.getElementById('vulnPaginationControls');
+    
+    if (!filteredVulns || filteredVulns.length === 0) {
+        container.innerHTML = `<div class="empty-state">No scan history found for the selected filter.</div>`;
+        if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
     
-    container.innerHTML = allVulns.map((scan, i) => {
+    const totalPages = Math.ceil(filteredVulns.length / vulnRowsPerPage);
+    if (vulnCurrentPage > totalPages) vulnCurrentPage = totalPages;
+    if (vulnCurrentPage < 1) vulnCurrentPage = 1;
+    
+    const startIdx = (vulnCurrentPage - 1) * vulnRowsPerPage;
+    const endIdx = startIdx + vulnRowsPerPage;
+    const paginatedVulns = filteredVulns.slice(startIdx, endIdx);
+    
+    container.innerHTML = paginatedVulns.map((scan, i) => {
+        const actualIndex = startIdx + i;
         const domainName = scan.domains?.domain_name || 'Unknown Target';
         const riskLevel = scan.risk_level || 'SAFE';
         const sevClass = getSeverityClass(riskLevel);
@@ -272,8 +444,8 @@ function renderVulnerabilitiesList() {
         const numVulns = scan.vulnerabilities ? scan.vulnerabilities.length : 0;
         
         return `
-            <div class="vuln-row" onclick="openScanModalIndex(${i})">
-                <div class="vuln-id">SCAN-${String(scan.id || i+1).padStart(4, '0')}</div>
+            <div class="vuln-row" onclick="openScanModalIndex(${actualIndex})">
+                <div class="vuln-id">SCAN-${String(scan.id || actualIndex+1).padStart(4, '0')}</div>
                 <div class="vuln-title">Automated Scan on ${escapeHtml(domainName)}</div>
                 <div class="vuln-path">${date}</div>
                 <div class="vuln-score ${sevClass}">Vulns: ${numVulns}</div>
@@ -281,11 +453,39 @@ function renderVulnerabilitiesList() {
             </div>
         `;
     }).join('');
+    
+    if (paginationControls) {
+        paginationControls.style.display = 'flex';
+        
+        const pageInput = document.getElementById('vulnPageInput');
+        if (pageInput) {
+            pageInput.value = vulnCurrentPage;
+        }
+        
+        const totalPagesSpan = document.getElementById('vulnTotalPages');
+        if (totalPagesSpan) {
+            totalPagesSpan.textContent = totalPages || 1;
+        }
+        
+        const prevBtn = document.getElementById('vulnPrevPageBtn');
+        if (prevBtn) {
+            prevBtn.disabled = (vulnCurrentPage === 1);
+            prevBtn.style.opacity = (vulnCurrentPage === 1) ? '0.5' : '1';
+            prevBtn.style.cursor = (vulnCurrentPage === 1) ? 'not-allowed' : 'pointer';
+        }
+        
+        const nextBtn = document.getElementById('vulnNextPageBtn');
+        if (nextBtn) {
+            nextBtn.disabled = (vulnCurrentPage === totalPages || totalPages === 0);
+            nextBtn.style.opacity = (vulnCurrentPage === totalPages || totalPages === 0) ? '0.5' : '1';
+            nextBtn.style.cursor = (vulnCurrentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer';
+        }
+    }
 }
 
 // Function helper untuk membuka modal dari index
 function openScanModalIndex(index) {
-    const scan = allVulns[index];
+    const scan = filteredVulns[index];
     if (scan) {
         openScanModal(scan);
     }
@@ -299,6 +499,7 @@ async function loadDomains() {
         const resp = await fetch(`${API_BASE}/api/domains`);
         const data = await resp.json();
         allDomains = data.data || [];
+        domainCurrentPage = 1;
         renderInventoryList();
     } catch (err) {
         console.error('Error loading domains:', err);
@@ -307,37 +508,79 @@ async function loadDomains() {
 
 function renderInventoryList() {
     const tbody = document.getElementById('inventoryTableBody');
+    const paginationControls = document.getElementById('domainPaginationControls');
+    
     if (!allDomains || allDomains.length === 0) {
         tbody.innerHTML = `<tr><td colspan="3" class="empty-state">No domains found.</td></tr>`;
+        if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
     
     // Filtering logic
     const searchVal = (document.getElementById('domainSearchInput')?.value || '').toLowerCase();
-    const filtered = allDomains.filter(d => 
+    filteredDomains = allDomains.filter(d => 
         (d.domain_name || '').toLowerCase().includes(searchVal) ||
         (d.ip_address || '').toLowerCase().includes(searchVal)
     );
     
-    if (filtered.length === 0) {
+    if (filteredDomains.length === 0) {
         tbody.innerHTML = `<tr><td colspan="3" class="empty-state">No domains match your search.</td></tr>`;
+        if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
     
-    tbody.innerHTML = filtered.map(d => `
+    const totalPages = Math.ceil(filteredDomains.length / domainRowsPerPage);
+    if (domainCurrentPage > totalPages) domainCurrentPage = totalPages;
+    if (domainCurrentPage < 1) domainCurrentPage = 1;
+    
+    const startIdx = (domainCurrentPage - 1) * domainRowsPerPage;
+    const endIdx = startIdx + domainRowsPerPage;
+    const paginatedDomains = filteredDomains.slice(startIdx, endIdx);
+    
+    tbody.innerHTML = paginatedDomains.map(d => `
         <tr>
             <td style="font-weight:500; color:var(--primary)">${escapeHtml(d.domain_name)}</td>
             <td style="font-family:var(--font-mono); color:var(--text-secondary)">${escapeHtml(d.ip_address || '-')}</td>
             <td><span class="badge ${d.is_active ? 'badge-safe' : 'badge-medium'}">${d.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
         </tr>
     `).join('');
+    
+    if (paginationControls) {
+        paginationControls.style.display = 'flex';
+        
+        const pageInput = document.getElementById('domainPageInput');
+        if (pageInput) {
+            pageInput.value = domainCurrentPage;
+        }
+        
+        const totalPagesSpan = document.getElementById('domainTotalPages');
+        if (totalPagesSpan) {
+            totalPagesSpan.textContent = totalPages || 1;
+        }
+        
+        const prevBtn = document.getElementById('domainPrevPageBtn');
+        if (prevBtn) {
+            prevBtn.disabled = (domainCurrentPage === 1);
+            prevBtn.style.opacity = (domainCurrentPage === 1) ? '0.5' : '1';
+            prevBtn.style.cursor = (domainCurrentPage === 1) ? 'not-allowed' : 'pointer';
+        }
+        
+        const nextBtn = document.getElementById('domainNextPageBtn');
+        if (nextBtn) {
+            nextBtn.disabled = (domainCurrentPage === totalPages || totalPages === 0);
+            nextBtn.style.opacity = (domainCurrentPage === totalPages || totalPages === 0) ? '0.5' : '1';
+            nextBtn.style.cursor = (domainCurrentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer';
+        }
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Other init code is at the top of app.js. Adding search listener here.
     const searchInput = document.getElementById('domainSearchInput');
     if (searchInput) {
-        searchInput.addEventListener('input', renderInventoryList);
+        searchInput.addEventListener('input', () => {
+            domainCurrentPage = 1;
+            renderInventoryList();
+        });
     }
 });
 

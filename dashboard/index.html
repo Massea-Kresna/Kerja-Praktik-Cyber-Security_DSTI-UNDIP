@@ -141,12 +141,48 @@
 
             <!-- VIEW: Vulnerabilities List (Automated Pentests) -->
             <div id="view-vulnerabilities" class="view-container hidden">
-                <div class="view-header">
-                    <h1>Scan History</h1>
+                <div class="view-header" style="display: flex; flex-direction: column; align-items: flex-start; gap: 16px; margin-bottom: 24px;">
+                    <h1 style="margin: 0;">Scan History</h1>
+                    
+                    <!-- Date Range Filter -->
+                    <div style="display: flex; gap: 16px; align-items: center; padding: 12px 16px; background: white; border-radius: var(--radius-lg); border: 1px solid var(--border-color); flex-wrap: wrap; width: 100%; box-sizing: border-box;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 13px; color: var(--text-secondary); font-weight: 500;">Dari:</span>
+                            <input type="date" id="vulnStartDate" style="padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);">
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 13px; color: var(--text-secondary); font-weight: 500;">Sampai:</span>
+                            <input type="date" id="vulnEndDate" style="padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);">
+                        </div>
+                        <button class="btn btn-primary btn-sm" id="vulnFilterBtn" style="padding: 6px 16px; font-size: 13px; min-width: auto; height: 32px; display: inline-flex; align-items: center; justify-content: center;">Filter</button>
+                        <button class="btn btn-outline btn-sm" id="vulnResetFilterBtn" style="padding: 6px 16px; font-size: 13px; min-width: auto; height: 32px; border-color: var(--border-color); color: var(--text-secondary); display: inline-flex; align-items: center; justify-content: center;">Reset</button>
+                    </div>
                 </div>
 
                 <div class="vuln-list-container" id="vulnListContainer">
                     <div class="empty-state">Loading vulnerabilities...</div>
+                </div>
+
+                <!-- Pagination Controls -->
+                <div class="pagination-controls" id="vulnPaginationControls" style="display: none; justify-content: space-between; align-items: center; margin-top: 20px; padding: 16px; background: white; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
+                    <div class="pagination-left">
+                        <span style="font-size: 13px; color: var(--text-secondary);">Tampilkan per halaman:</span>
+                        <select id="vulnRowsSelect" style="margin-left: 8px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);">
+                            <option value="15" selected>15</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+                    <div class="pagination-right" style="display: flex; align-items: center; gap: 12px;">
+                        <button class="btn btn-outline btn-sm" id="vulnPrevPageBtn" style="padding: 6px 12px; min-width: auto;">Sebelumnya</button>
+                        <span id="vulnPageInfo" style="font-size: 13px; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                            Halaman 
+                            <input type="number" id="vulnPageInput" min="1" value="1" style="width: 45px; text-align: center; padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);"> 
+                            dari 
+                            <span id="vulnTotalPages">1</span>
+                        </span>
+                        <button class="btn btn-outline btn-sm" id="vulnNextPageBtn" style="padding: 6px 12px; min-width: auto;">Selanjutnya</button>
+                    </div>
                 </div>
             </div>
 
@@ -174,6 +210,28 @@
                             <tr><td colspan="4" class="empty-state">Loading domains...</td></tr>
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Domain Pagination Controls -->
+                <div class="pagination-controls" id="domainPaginationControls" style="display: none; justify-content: space-between; align-items: center; margin-top: 20px; padding: 16px; background: white; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
+                    <div class="pagination-left">
+                        <span style="font-size: 13px; color: var(--text-secondary);">Tampilkan per halaman:</span>
+                        <select id="domainRowsSelect" style="margin-left: 8px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);">
+                            <option value="15" selected>15</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+                    <div class="pagination-right" style="display: flex; align-items: center; gap: 12px;">
+                        <button class="btn btn-outline btn-sm" id="domainPrevPageBtn" style="padding: 6px 12px; min-width: auto;">Sebelumnya</button>
+                        <span id="domainPageInfo" style="font-size: 13px; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                            Halaman 
+                            <input type="number" id="domainPageInput" min="1" value="1" style="width: 45px; text-align: center; padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);"> 
+                            dari 
+                            <span id="domainTotalPages">1</span>
+                        </span>
+                        <button class="btn btn-outline btn-sm" id="domainNextPageBtn" style="padding: 6px 12px; min-width: auto;">Selanjutnya</button>
+                    </div>
                 </div>
             </div>
 
@@ -379,6 +437,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=15"></script>
+    <script src="app.js?v=18"></script>
 </body>
 </html>
