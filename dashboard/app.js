@@ -166,7 +166,9 @@ async function loadOverview() {
         const sevColors = {
             'Critical': '#ef4444',
             'High': '#f97316',
-            'Medium': '#eab308'
+            'Medium': '#eab308',
+            'Low': '#3b82f6',
+            'Info': '#22c55e'
         };
         
         const sevDatasets = (sevTrendData.datasets || []).map((ds, idx) => {

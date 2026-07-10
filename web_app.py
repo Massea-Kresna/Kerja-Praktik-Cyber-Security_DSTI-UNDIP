@@ -173,7 +173,7 @@ def get_trend_stats():
         
         resp = (
             supabase.table("scan_history")
-            .select("id, scan_date, domains(domain_name), vulnerabilities(id)")
+            .select("id, scan_date, raw_json, domains(domain_name), vulnerabilities(id)")
             .gte("scan_date", start_time_iso)
             .order("scan_date", desc=False)
             .execute()
@@ -205,7 +205,10 @@ def get_trend_stats():
                 if domain_name not in domains_data:
                     domains_data[domain_name] = [None] * 49
                 
-                vuln_count = len(scan.get("vulnerabilities", []))
+                vuln_count = len(scan.get("vulnerabilities") or [])
+                raw_json = scan.get("raw_json")
+                if isinstance(raw_json, list):
+                    vuln_count += len(raw_json)
                 domains_data[domain_name][bucket_index] = vuln_count
 
         return {
@@ -248,7 +251,7 @@ def get_severity_trend_stats():
         
         resp = (
             supabase.table("scan_history")
-            .select("id, scan_date, vulnerabilities(severity)")
+            .select("id, scan_date, raw_json, vulnerabilities(severity)")
             .gte("scan_date", start_time_iso)
             .order("scan_date", desc=False)
             .execute()
@@ -264,6 +267,8 @@ def get_severity_trend_stats():
             "CRITICAL": [0] * 49,
             "HIGH": [0] * 49,
             "MEDIUM": [0] * 49,
+            "LOW": [0] * 49,
+            "INFO": [0] * 49,
         }
         
         for scan in scans:
@@ -280,11 +285,20 @@ def get_severity_trend_stats():
             bucket_index = int(delta.total_seconds() // 1800)
             
             if 0 <= bucket_index < 49:
+                # Hitung dari tabel vulnerabilities (Medium/High/Critical)
                 vulns = scan.get("vulnerabilities") or []
                 for v in vulns:
                     sev = (v.get("severity") or "").upper()
                     if sev in severities_data:
                         severities_data[sev][bucket_index] += 1
+                        
+                # Hitung dari raw_json (Low/Info)
+                raw_json = scan.get("raw_json")
+                if isinstance(raw_json, list):
+                    for v in raw_json:
+                        sev = (v.get("severity") or "").upper()
+                        if sev in severities_data:
+                            severities_data[sev][bucket_index] += 1
 
         return {
             "source": "supabase",
@@ -390,11 +404,19 @@ def get_domain_detail(domain_name: str):
                 .execute()
             )
 
+            # Ambil low/info vulnerabilities dari raw_json
+            low_info_vulns = scan.get("raw_json", [])
+            if not isinstance(low_info_vulns, list):
+                low_info_vulns = []
+                
+            all_vulns = (vulns_resp.data or []) + low_info_vulns
+            scan.pop("raw_json", None)
+
             scans.append({
                 **scan,
                 "open_ports": ports_resp.data,
                 "technologies": tech_resp.data[0] if tech_resp.data else {},
-                "vulnerabilities": vulns_resp.data
+                "vulnerabilities": all_vulns
             })
 
         return {
@@ -427,7 +449,17 @@ def get_scan_history(limit: int = Query(20, ge=1, le=100)):
             .limit(limit)
             .execute()
         )
-        return {"source": "supabase", "data": resp.data, "total": len(resp.data)}
+        
+        data = resp.data
+        for scan in data:
+            if scan.get("raw_json") and isinstance(scan["raw_json"], list):
+                if not scan.get("vulnerabilities"):
+                    scan["vulnerabilities"] = []
+                scan["vulnerabilities"].extend(scan["raw_json"])
+            # Hapus raw_json agar payload lebih ringan
+            scan.pop("raw_json", None)
+            
+        return {"source": "supabase", "data": data, "total": len(data)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

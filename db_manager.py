@@ -127,13 +127,22 @@ def save_all_results(domain_list, port_results, tech_results, vuln_results):
             risk_level = v_data.get("risk_level", "SAFE")
             vulns_list = v_data.get("vulnerabilities", [])
             
-            # Filter: Hanya simpan jika risk_level adalah MEDIUM ke atas
-            if risk_level not in ["MEDIUM", "HIGH", "CRITICAL"]:
-                print(f"  [-] Skip {domain_name} ke Supabase (Risk Level: {risk_level} - filter aktif)")
-                continue
+            # Pisahkan LOW/INFO untuk disimpan di raw_json
+            low_info_vulns = []
+            for v in vulns_list:
+                if v.get("severity", "").upper() not in ["MEDIUM", "HIGH", "CRITICAL"]:
+                    # Format ulang sedikit agar sesuai dengan struktur kolom di tabel vulnerabilities
+                    low_info_vulns.append({
+                        "severity": v.get("severity", "LOW"),
+                        "check_type": v.get("check", "UNKNOWN"),
+                        "title": v.get("title", ""),
+                        "description": v.get("detail", ""),
+                        "recommendation": v.get("recommendation", "")
+                    })
             
-            # 3. Buat History
-            raw_v_data = v_data if v_data else None
+            # 3. Buat History (Simpan list LOW/INFO ke raw_json)
+            # Dump list low_info_vulns ke raw_json (disimpan sebagai object JSON agar bisa diparsing)
+            raw_v_data = low_info_vulns if low_info_vulns else None
             history_id = create_scan_history(supabase, domain_id, risk_score, risk_level, raw_v_data)
             if not history_id:
                 continue
@@ -193,6 +202,7 @@ def save_pentest_tools_result(domain_name, report_json):
         
         # Menerjemahkan findings ke struktur database kita
         vulnerabilities = []
+        low_info_vulns = []
         for f in findings:
             # Pentest-Tools v2 memakai integer risk_level (0=INFO, 1=LOW, 2=MED, 3=HIGH, 4=CRIT)
             severity = str(f.get("severity", "")).upper()
@@ -206,17 +216,26 @@ def save_pentest_tools_result(domain_name, report_json):
             desc = f.get("description", "")
             recom = f.get("remediation", f.get("recommendation", ""))
             
-            # Filter: Hanya masukkan vulnerability dengan severity MEDIUM ke atas
-            if severity not in ["MEDIUM", "HIGH", "CRITICAL"]:
-                continue
-            
-            vulnerabilities.append({
+            vuln_obj = {
                 "severity": severity,
                 "check": "Pentest-Tools",
                 "title": title,
                 "detail": desc,
                 "recommendation": recom
-            })
+            }
+            
+            # Filter: Pisahkan MEDIUM+ dan LOW/INFO
+            if severity in ["MEDIUM", "HIGH", "CRITICAL"]:
+                vulnerabilities.append(vuln_obj)
+            else:
+                # Format untuk raw_json (disamakan dengan response web_app.py)
+                low_info_vulns.append({
+                    "severity": severity,
+                    "check_type": "Pentest-Tools",
+                    "title": title,
+                    "description": desc,
+                    "recommendation": recom
+                })
             
             if severity in ["HIGH", "CRITICAL"]:
                 risk_score += 3.0
@@ -241,13 +260,11 @@ def save_pentest_tools_result(domain_name, report_json):
         # Batasi max risk score ke 10.0
         final_risk_score = min(risk_score, 10.0)
             
-        # Filter: Hanya simpan jika risk_level adalah MEDIUM ke atas
         if risk_level not in ["MEDIUM", "HIGH", "CRITICAL"]:
-            print(f"  [-] Skip penyimpanan ke Supabase (Risk Level: {risk_level} - di bawah batas minimum MEDIUM)")
-            return True
+            print(f"  [*] Menyimpan history ke Supabase tanpa detail vulnerabilities DB (Risk Level: {risk_level})")
             
-        # 3. Buat History (Simpan raw JSON)
-        history_id = create_scan_history(supabase, domain_id, final_risk_score, risk_level, report_json)
+        # 3. Buat History (Simpan LOW/INFO ke raw_json)
+        history_id = create_scan_history(supabase, domain_id, final_risk_score, risk_level, low_info_vulns if low_info_vulns else None)
         if not history_id:
             return False
             
