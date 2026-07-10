@@ -31,5 +31,6 @@ dashboard/*.json
 .idea/
 .vscode/
 *.swp
-*.swocelerybeat-schedule
+*.swo
+celerybeat-schedule
 .celery_pentest_tracker.json
