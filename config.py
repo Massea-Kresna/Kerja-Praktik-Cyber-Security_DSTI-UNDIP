@@ -11,7 +11,7 @@ load_dotenv()
 TARGET_DOMAIN = "undip.ac.id"
 
 # --- Pengaturan Koneksi ---
-MAX_CONCURRENT_CONNECTIONS = 50     # Batas koneksi serentak (Semaphore)
+MAX_CONCURRENT_CONNECTIONS = 3     # Batas koneksi serentak (Semaphore) jadi 50 domain masuk buat di scan, trus sisanya (50++) nunggu dari 50 domain selesai dulu baru bisa masuk satu satu
 PORT_SCAN_TIMEOUT = 3               # Timeout per port (detik)
 BANNER_GRAB_TIMEOUT = 2             # Timeout banner grabbing (detik)
 HTTP_TIMEOUT = 10                   # Timeout per HTTP request (detik)
