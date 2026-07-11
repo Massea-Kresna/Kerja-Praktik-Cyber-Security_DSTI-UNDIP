@@ -8,7 +8,7 @@ const API_BASE = window.location.origin;
 let allDomains = [];
 let filteredDomains = [];
 let allVulns = [];
-let filteredVulns = [];
+let filteredVulns = null;
 let currentDomainData = null;
 
 // Pagination State for Scan History
@@ -19,9 +19,98 @@ let vulnRowsPerPage = 15;
 let domainCurrentPage = 1;
 let domainRowsPerPage = 15;
 
+let selectedDomains = new Set(JSON.parse(localStorage.getItem('dsti_saved_targets') || '[]'));
+
 document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('domainSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            domainCurrentPage = 1;
+            renderInventoryList();
+        });
+    }
+
     checkAuth();
     setupTabs();
+    // -- (Taruh di dalam blok DOMContentLoaded) --
+    const saveBtn = document.getElementById('saveTargetsBtn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', async () => {
+            const domainsToSave = [...selectedDomains];
+            if (domainsToSave.length === 0) {
+                showToast('Peringatan', 'Pilih minimal satu domain untuk disimpan.', '⚠️');
+                return;
+            }
+
+            // Simpan di memori browser
+            localStorage.setItem('dsti_saved_targets', JSON.stringify(domainsToSave));
+            
+            // Tembakkan API ke Backend
+            try {
+                // Diubah ke endpoint /api/schedule-scan dan mengubah key "domains" menjadi "targets"
+                const resp = await fetch(`${API_BASE}/api/schedule-scan`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ targets: domainsToSave })
+                });
+
+                if (resp.status === 200) {
+                    showToast('Tersimpan', `${domainsToSave.length} domain berhasil disimpan untuk scan interval.`, '💾');
+                } else {
+                    const data = await resp.json();
+                    showToast('Gagal Menyimpan', data.detail || 'Terjadi kesalahan di server.', '❌');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Koneksi Gagal', 'Gagal menghubungi server.', '🔌');
+            }
+        });
+    }
+
+    const runBtn = document.getElementById('runScanBtn');
+    if (runBtn) {
+        runBtn.addEventListener('click', async () => {
+            const domainsToScan = [...selectedDomains];
+            if (domainsToScan.length === 0) return;
+
+            showToast('Scan Dimulai', `Memerintahkan backend untuk memulai scan pada ${domainsToScan.length} domain...`, '🚀');
+            
+            // Kunci tombol agar tidak di-klik dua kali (spam)
+            runBtn.disabled = true;
+            runBtn.style.opacity = '0.5';
+            runBtn.innerHTML = 'Memproses...';
+
+            try {
+                // Karena /api/trigger-pentest hanya menerima 1 domain, kita gunakan Promise.all untuk mengirim banyak permintaan sekaligus
+                const scanPromises = domainsToScan.map(domain => {
+                    return fetch(`${API_BASE}/api/trigger-pentest?domain_name=${encodeURIComponent(domain)}`, {
+                        method: 'POST'
+                    });
+                });
+
+                const responses = await Promise.all(scanPromises);
+                
+                // Cek apakah ada request yang gagal
+                const allSuccess = responses.every(resp => resp.status === 200 || resp.status === 202);
+
+                if (allSuccess) {
+                    showToast('Scan Berhasil Diantrekan', 'Proses scan instan sedang berjalan di latar belakang.', '✅');
+                } else {
+                    showToast('Peringatan', 'Beberapa scan mungkin gagal dijalankan. Cek log server.', '⚠️');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Koneksi Gagal', 'Server tidak merespons proses scan.', '🔌');
+            } finally {
+                // Kembalikan status tombol seperti semula
+                refreshCheckboxUI();
+                runBtn.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    Scan Sekarang
+                `;
+            }
+        });
+    }
     
 const openBtn = document.getElementById('openCreateUserModalBtn');
     if (openBtn) {
@@ -145,7 +234,7 @@ const openBtn = document.getElementById('openCreateUserModalBtn');
     }
 
     // Refresh otomatis setiap 5 detik
-    setInterval(refreshData, 5000);
+    // setInterval(refreshData, 5000);
 });
 
 // ==========================================================================
@@ -676,10 +765,6 @@ async function loadVulnerabilities() {
     }
 }
 
-let filteredVulns = null;
-let vulnCurrentPage = 1;
-let vulnRowsPerPage = 15;
-
 function applyVulnFilters() {
     const startInput = document.getElementById('vulnStartDate')?.value;
     const endInput = document.getElementById('vulnEndDate')?.value;
@@ -752,17 +837,10 @@ function renderVulnerabilitiesList() {
     const pageInput = document.getElementById('vulnPageInput');
     if (pageInput) pageInput.value = vulnCurrentPage;
     
-    container.innerHTML = paginatedVulns.map((scan) => {
+container.innerHTML = paginatedVulns.map((scan) => {
         // PENTING: Cari indeks asli dari allVulns agar pop-up detail tidak tertukar saat difilter
         const actualIndex = allVulns.indexOf(scan);
         const domainName = scan.domains?.domain_name || 'Unknown Target';
-        const riskLevel = scan.risk_level || 'SAFE';
-        const sevClass = getSeverityClass(riskLevel);
-        const date = formatDate(scan.scan_date);
-        const numVulns = scan.vulnerabilities ? scan.vulnerabilities.length : 0;
-
-        return `
-const domainName = scan.domains?.domain_name || 'Unknown Target';
         const riskLevel = scan.risk_level || 'SAFE';
         const sevClass = getSeverityClass(riskLevel);
         const date = formatDate(scan.scan_date);
@@ -955,9 +1033,6 @@ function renderLowerGrid() {
         }
     }
 }
-        }
-    }
-}
 
 // Function helper untuk membuka modal dari index
 function openScanModalIndex(index) {
@@ -994,21 +1069,21 @@ function renderInventoryList() {
     const tbody = document.getElementById('inventoryTableBody');
     const paginationControls = document.getElementById('domainPaginationControls');
     
+    // Perbaikan Bug: Render UI Kosong dengan benar jika tidak ada data dari backend
     if (!allDomains || allDomains.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="3" class="empty-state">No domains found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" class="empty-state">No domains found.</td></tr>`;
         if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
 
     // Filtering logic
     const searchVal = (document.getElementById('domainSearchInput')?.value || '').toLowerCase();
-filteredDomains = allDomains.filter(d => 
+    filteredDomains = allDomains.filter(d => 
         (d.domain_name || '').toLowerCase().includes(searchVal) ||
         (d.ip_address || '').toLowerCase().includes(searchVal)
     );
     
     if (filteredDomains.length === 0) {
-        // colspan diubah menjadi 4 karena sekarang ada kolom Checkbox
         tbody.innerHTML = `<tr><td colspan="4" class="empty-state">No domains match your search.</td></tr>`;
         if (paginationControls) paginationControls.style.display = 'none';
         return;
@@ -1025,26 +1100,30 @@ filteredDomains = allDomains.filter(d =>
     const endIdx = Math.min(startIdx + domainRowsPerPage, totalItems);
     const paginatedDomains = filteredDomains.slice(startIdx, endIdx);
     
-    tbody.innerHTML = paginatedDomains.map(d => `
+    // Cetak Tabel dengan pengecekan state "selectedDomains"
+    tbody.innerHTML = paginatedDomains.map(d => {
+        // Cek apakah domain ini ada di memori yang tersimpan
+        const isChecked = selectedDomains.has(d.domain_name) ? 'checked' : '';
+        return `
         <tr>
-            <td style="font-weight:500; color:var(--primary)">${escapeHtml(d.domain_name)}</td>
+            <td style="text-align: center;">
+                <input type="checkbox" class="domain-checkbox" value="${escapeHtml(d.domain_name)}" ${isChecked} style="cursor: pointer;">
+            </td>
+            <td style="font-weight:500; color:var(--primary)">
+                <a href="http://${escapeHtml(d.domain_name)}" target="_blank" style="text-decoration: none; color: inherit;">${escapeHtml(d.domain_name)}</a>
+            </td>
             <td style="font-family:var(--font-mono); color:var(--text-secondary)">${escapeHtml(d.ip_address || '-')}</td>
             <td><span class="badge ${d.is_active ? 'badge-active' : 'badge-inactive'}">${d.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
     
-if (paginationControls) {
-        paginationControls.style.display = 'flex';
-        
+    if (paginationControls) {
         const pageInput = document.getElementById('domainPageInput');
-        if (pageInput) {
-            pageInput.value = domainCurrentPage;
-        }
+        if (pageInput) pageInput.value = domainCurrentPage;
         
         const totalPagesSpan = document.getElementById('domainTotalPages');
-        if (totalPagesSpan) {
-            totalPagesSpan.textContent = totalPages || 1;
-        }
+        if (totalPagesSpan) totalPagesSpan.textContent = totalPages || 1;
         
         const prevBtn = document.getElementById('domainPrevPageBtn');
         if (prevBtn) {
@@ -1061,23 +1140,125 @@ if (paginationControls) {
         }
     }
 
-    // PENTING: Panggil ulang logika pengunci checkbox setiap kali tabel dirender ulang
     if (typeof updateCheckboxLogic === 'function') {
         updateCheckboxLogic();
     }
 }
+
+function updateCheckboxLogic() {
+    const checkboxes = document.querySelectorAll('.domain-checkbox');
+    const selectAll = document.getElementById('selectAllDomains');
+    
+    // 1. Re-bind listeners ke setiap checkbox baris
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                // Cegah jika sudah 5 domain
+                if (selectedDomains.size >= 5) {
+                    e.target.checked = false; // Batalkan centangan otomatis
+                    showToast('Batas Maksimal', 'Anda hanya dapat memilih maksimal 5 domain sekaligus.', '⚠️');
+                    refreshCheckboxUI();
+                    return;
+                }
+                selectedDomains.add(e.target.value);
+            } else {
+                selectedDomains.delete(e.target.value);
+            }
+            refreshCheckboxUI();
+        });
+    });
+    
+    // 2. Logika Select All yang disesuaikan dengan limit 5
+    if (selectAll) {
+        selectAll.onclick = (e) => {
+            const isChecked = e.target.checked;
+            
+            if (isChecked) {
+                let addedCount = 0;
+                checkboxes.forEach(cb => {
+                    // Hanya centang jika belum dicentang DAN keranjang belum penuh (limit 5)
+                    if (!cb.checked && selectedDomains.size < 5) {
+                        cb.checked = true;
+                        selectedDomains.add(cb.value);
+                        addedCount++;
+                    }
+                });
+                
+                // Beri tahu pengguna jika terpotong oleh limit
+                if (selectedDomains.size >= 5 && addedCount > 0) {
+                    showToast('Batas Tercapai', 'Hanya dipilih sampai batas maksimal 5 domain.', '⚠️');
+                }
+            } else {
+                // Jika Select All dihapus, buang centang dari semua domain di halaman ini
+                checkboxes.forEach(cb => {
+                    cb.checked = false;
+                    selectedDomains.delete(cb.value);
+                });
+            }
+            refreshCheckboxUI();
+        };
     }
+    
+    // Perbarui teks dan tombol UI pertama kali tabel dimuat
+    refreshCheckboxUI();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    const searchInput = document.getElementById('domainSearchInput');
-    if (searchInput) {
-        searchInput.addEventListener('input', () => {
-            domainCurrentPage = 1;
-            renderInventoryList();
-        });
+function refreshCheckboxUI() {
+    const countText = document.getElementById('selectedDomainCount');
+    const runBtn = document.getElementById('runScanBtn');
+    const checkboxes = document.querySelectorAll('.domain-checkbox');
+    const selectAll = document.getElementById('selectAllDomains');
+    
+    const count = selectedDomains.size;
+    
+    // Update teks indikator
+    if (countText) {
+        countText.textContent = `${count} dari maksimal 5 domain dipilih`;
     }
-});
+    
+    // Update tombol "Scan Sekarang"
+    if (runBtn) {
+        if (count > 0) {
+            runBtn.disabled = false;
+            runBtn.style.opacity = '1';
+            runBtn.style.cursor = 'pointer';
+        } else {
+            runBtn.disabled = true;
+            runBtn.style.opacity = '0.5';
+            runBtn.style.cursor = 'not-allowed';
+        }
+    }
+
+    // UX Enhancement: Kunci sisa checkbox jika sudah mencapai batas 5
+    checkboxes.forEach(cb => {
+        if (!cb.checked && count >= 5) {
+            cb.disabled = true;
+            cb.style.opacity = '0.4';
+            cb.style.cursor = 'not-allowed';
+        } else {
+            cb.disabled = false;
+            cb.style.opacity = '1';
+            cb.style.cursor = 'pointer';
+        }
+    });
+
+    // Sesuaikan status visual kotak centang "Select All"
+    if (selectAll) {
+        const allDisplayedChecked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
+        selectAll.checked = allDisplayedChecked;
+        
+        // Matikan Select All jika keranjang sudah penuh dari halaman lain
+        if (!selectAll.checked && count >= 5) {
+            selectAll.disabled = true;
+            selectAll.style.opacity = '0.4';
+            selectAll.style.cursor = 'not-allowed';
+        } else {
+            selectAll.disabled = false;
+            selectAll.style.opacity = '1';
+            selectAll.style.cursor = 'pointer';
+        }
+    }
+}
 
 // Tabs Logic
 function setupTabs() {
@@ -1292,6 +1473,7 @@ function getMockCVSS(sev) {
 // ==========================================================================
 // Authentication & Session Management (Admin Restricted Registration)
 // ==========================================================================
+let autoRefreshInterval = null;
 let wsLive = null;
 let currentUser = null;
 let allNotifications = JSON.parse(localStorage.getItem('dsti_notifs') || '[]');
@@ -1321,6 +1503,11 @@ function showLoginOverlay() {
     if (wsLive) {
         wsLive.close();
         wsLive = null;
+    }
+
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
     }
 }
 
@@ -1363,6 +1550,10 @@ function handleSuccessfulLogin(user) {
     document.getElementById('authErrorMsg').style.display = 'none';
     
     refreshData();
+
+    // Mulai refresh otomatis 5 detik HANYA setelah sukses login
+    if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+    autoRefreshInterval = setInterval(refreshData, 5000);
 }
 
 async function handleAuthSubmit(e) {
