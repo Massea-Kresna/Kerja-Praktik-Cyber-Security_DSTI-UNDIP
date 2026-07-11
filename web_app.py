@@ -24,6 +24,8 @@ import uuid
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from scanner.pentest_tools_scheduler import process_domain_scan
+from pydantic import BaseModel
+from typing import List
 
 app = FastAPI(title="DSTI UNDIP Pentest Dashboard API")
 
@@ -460,7 +462,7 @@ def get_trend_stats(current_user = Depends(get_current_user)):
         
         resp = (
             supabase.table("scan_history")
-            .select("id, scan_date, domains(domain_name), vulnerabilities(id)")
+            .select("id, scan_date, raw_json, domains(domain_name), vulnerabilities(id)")
             .gte("scan_date", start_time_iso)
             .order("scan_date", desc=False)
             .execute()
@@ -473,7 +475,12 @@ def get_trend_stats(current_user = Depends(get_current_user)):
             bucket_time_wib = start_time_wib + timedelta(minutes=i*30)
             labels.append(bucket_time_wib.strftime("%H:%M"))
             
-        domains_data = {}
+        # Ambil daftar semua domain agar yang tidak discan tetap bernilai 0
+        domains_resp = supabase.table("domains").select("domain_name").execute()
+        all_domains = [d.get("domain_name") for d in domains_resp.data if d.get("domain_name")]
+            
+        domains_data = {domain: [0] * 49 for domain in all_domains}
+        
         for scan in scans:
             domain_name = scan.get("domains", {}).get("domain_name", "Unknown")
             scan_date_str = scan.get("scan_date")
@@ -490,9 +497,12 @@ def get_trend_stats(current_user = Depends(get_current_user)):
             
             if 0 <= bucket_index < 49:
                 if domain_name not in domains_data:
-                    domains_data[domain_name] = [None] * 49
+                    domains_data[domain_name] = [0] * 49
                 
-                vuln_count = len(scan.get("vulnerabilities", []))
+                vuln_count = len(scan.get("vulnerabilities") or [])
+                raw_json = scan.get("raw_json")
+                if isinstance(raw_json, list):
+                    vuln_count += len(raw_json)
                 domains_data[domain_name][bucket_index] = vuln_count
 
         return {
@@ -535,7 +545,7 @@ def get_severity_trend_stats(current_user = Depends(get_current_user)):
         
         resp = (
             supabase.table("scan_history")
-            .select("id, scan_date, vulnerabilities(severity)")
+            .select("id, scan_date, raw_json, vulnerabilities(severity), domains(domain_name)")
             .gte("scan_date", start_time_iso)
             .order("scan_date", desc=False)
             .execute()
@@ -551,9 +561,20 @@ def get_severity_trend_stats(current_user = Depends(get_current_user)):
             "CRITICAL": [0] * 49,
             "HIGH": [0] * 49,
             "MEDIUM": [0] * 49,
+            "LOW": [0] * 49,
+            "INFO": [0] * 49,
+        }
+        
+        domains_by_sev = {
+            "CRITICAL": [set() for _ in range(49)],
+            "HIGH": [set() for _ in range(49)],
+            "MEDIUM": [set() for _ in range(49)],
+            "LOW": [set() for _ in range(49)],
+            "INFO": [set() for _ in range(49)],
         }
         
         for scan in scans:
+            domain_name = scan.get("domains", {}).get("domain_name", "Unknown")
             scan_date_str = scan.get("scan_date")
             if not scan_date_str:
                 continue
@@ -567,11 +588,22 @@ def get_severity_trend_stats(current_user = Depends(get_current_user)):
             bucket_index = int(delta.total_seconds() // 1800)
             
             if 0 <= bucket_index < 49:
+                # Hitung dari tabel vulnerabilities (Medium/High/Critical)
                 vulns = scan.get("vulnerabilities") or []
                 for v in vulns:
                     sev = (v.get("severity") or "").upper()
                     if sev in severities_data:
                         severities_data[sev][bucket_index] += 1
+                        domains_by_sev[sev][bucket_index].add(domain_name)
+                        
+                # Hitung dari raw_json (Low/Info)
+                raw_json = scan.get("raw_json")
+                if isinstance(raw_json, list):
+                    for v in raw_json:
+                        sev = (v.get("severity") or "").upper()
+                        if sev in severities_data:
+                            severities_data[sev][bucket_index] += 1
+                            domains_by_sev[sev][bucket_index].add(domain_name)
 
         return {
             "source": "supabase",
@@ -580,6 +612,7 @@ def get_severity_trend_stats(current_user = Depends(get_current_user)):
                 {
                     "label": sev.capitalize(),
                     "data": data,
+                    "domains": [list(d_set) for d_set in domains_by_sev[sev]]
                 }
                 for sev, data in severities_data.items()
             ]
@@ -677,11 +710,19 @@ def get_domain_detail(domain_name: str, current_user = Depends(get_current_user)
                 .execute()
             )
 
+            # Ambil low/info vulnerabilities dari raw_json
+            low_info_vulns = scan.get("raw_json", [])
+            if not isinstance(low_info_vulns, list):
+                low_info_vulns = []
+                
+            all_vulns = (vulns_resp.data or []) + low_info_vulns
+            scan.pop("raw_json", None)
+
             scans.append({
                 **scan,
                 "open_ports": ports_resp.data,
                 "technologies": tech_resp.data[0] if tech_resp.data else {},
-                "vulnerabilities": vulns_resp.data
+                "vulnerabilities": all_vulns
             })
 
         return {
@@ -714,7 +755,17 @@ def get_scan_history(limit: int = Query(20, ge=1, le=1000)):
             .limit(limit)
             .execute()
         )
-        return {"source": "supabase", "data": resp.data, "total": len(resp.data)}
+        
+        data = resp.data
+        for scan in data:
+            if scan.get("raw_json") and isinstance(scan["raw_json"], list):
+                if not scan.get("vulnerabilities"):
+                    scan["vulnerabilities"] = []
+                scan["vulnerabilities"].extend(scan["raw_json"])
+            # Hapus raw_json agar payload lebih ringan
+            scan.pop("raw_json", None)
+            
+        return {"source": "supabase", "data": data, "total": len(data)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -758,6 +809,35 @@ async def run_pentest_tools_background(domain_name: str):
         await process_domain_scan(session, domain_name, semaphore)
     print(f"[+] [BACKGROUND] Scan Pentest-Tools selesai untuk: {domain_name}")
 
+# ===================================================================
+# Simpan Jadwal
+# ===================================================================
+class SchedulePayload(BaseModel):
+    targets: List[str]
+
+@app.post("/api/schedule-scan")
+async def schedule_scan(payload: SchedulePayload):
+    """Memprioritaskan domain ke dalam antrean Supabase untuk dieksekusi Celery Beat"""
+    supabase = _get_supabase_or_none()
+    
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database Supabase belum terkoneksi!")
+
+    try:
+        # Kita tidak lagi menggunakan JSON lokal.
+        # Langsung update status 'is_active' menjadi True di database 
+        # agar Celery otomatis menangkapnya di siklus berikutnya.
+        for domain in payload.targets:
+            supabase.table("domains").update({"is_active": True}).eq("domain_name", domain).execute()
+            
+        print(f"[!] MARKAS: {len(payload.targets)} target dimasukkan ke radar aktif Celery.")
+        
+        return {
+            "status": "success", 
+            "message": f"{len(payload.targets)} target disiapkan dalam antrean rotasi Celery."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/trigger-pentest")
 async def trigger_pentest(domain_name: str, background_tasks: BackgroundTasks, current_user = Depends(get_current_user)):
