@@ -6,13 +6,144 @@ const API_BASE = window.location.origin;
 
 // State
 let allDomains = [];
+let filteredDomains = [];
 let allVulns = [];
+let filteredVulns = [];
 let currentDomainData = null;
 
+// Pagination State for Scan History
+let vulnCurrentPage = 1;
+let vulnRowsPerPage = 15;
+
+// Pagination State for Domains
+let domainCurrentPage = 1;
+let domainRowsPerPage = 15;
+
 document.addEventListener('DOMContentLoaded', () => {
-    refreshData();
+    checkAuth();
     setupTabs();
     
+const openBtn = document.getElementById('openCreateUserModalBtn');
+    if (openBtn) {
+        openBtn.addEventListener('click', openCreateUserModal);
+    }
+    const closeBtn = document.getElementById('closeCreateUserModalBtn');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeCreateUserModal);
+    }
+    const createForm = document.getElementById('createUserForm');
+    if (createForm) {
+        createForm.addEventListener('submit', handleCreateUserSubmit);
+    }
+
+    // Bind scan history pagination events
+    const vulnRowsSelect = document.getElementById('vulnRowsSelect');
+    if (vulnRowsSelect) {
+        vulnRowsSelect.addEventListener('change', (e) => {
+            vulnRowsPerPage = parseInt(e.target.value);
+            vulnCurrentPage = 1;
+            renderVulnerabilitiesList();
+        });
+    }
+    const vulnPrevBtn = document.getElementById('vulnPrevPageBtn');
+    if (vulnPrevBtn) {
+        vulnPrevBtn.addEventListener('click', () => {
+            if (vulnCurrentPage > 1) {
+                vulnCurrentPage--;
+                renderVulnerabilitiesList();
+            }
+        });
+    }
+    const vulnNextBtn = document.getElementById('vulnNextPageBtn');
+    if (vulnNextBtn) {
+        vulnNextBtn.addEventListener('click', () => {
+            const totalPages = Math.ceil(filteredVulns.length / vulnRowsPerPage);
+            if (vulnCurrentPage < totalPages) {
+                vulnCurrentPage++;
+                renderVulnerabilitiesList();
+            }
+        });
+    }
+    
+    // Bind page input jumps
+    const vulnPageInput = document.getElementById('vulnPageInput');
+    if (vulnPageInput) {
+        vulnPageInput.addEventListener('change', (e) => {
+            const totalPages = Math.ceil(filteredVulns.length / vulnRowsPerPage) || 1;
+            let val = parseInt(e.target.value);
+            if (isNaN(val)) val = 1;
+            if (val < 1) val = 1;
+            if (val > totalPages) val = totalPages;
+            
+            vulnCurrentPage = val;
+            renderVulnerabilitiesList();
+        });
+        vulnPageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                vulnPageInput.blur();
+            }
+        });
+    }
+
+    // Bind date filter buttons
+    const filterBtn = document.getElementById('vulnFilterBtn');
+    if (filterBtn) {
+        filterBtn.addEventListener('click', applyVulnFilters);
+    }
+    const resetFilterBtn = document.getElementById('vulnResetFilterBtn');
+    if (resetFilterBtn) {
+        resetFilterBtn.addEventListener('click', resetVulnFilters);
+    }
+
+    // Bind domain pagination events
+    const domainRowsSelect = document.getElementById('domainRowsSelect');
+    if (domainRowsSelect) {
+        domainRowsSelect.addEventListener('change', (e) => {
+            domainRowsPerPage = parseInt(e.target.value);
+            domainCurrentPage = 1;
+            renderInventoryList();
+        });
+    }
+    const domainPrevBtn = document.getElementById('domainPrevPageBtn');
+    if (domainPrevBtn) {
+        domainPrevBtn.addEventListener('click', () => {
+            if (domainCurrentPage > 1) {
+                domainCurrentPage--;
+                renderInventoryList();
+            }
+        });
+    }
+    const domainNextBtn = document.getElementById('domainNextPageBtn');
+    if (domainNextBtn) {
+        domainNextBtn.addEventListener('click', () => {
+            const totalPages = Math.ceil(filteredDomains.length / domainRowsPerPage);
+            if (domainCurrentPage < totalPages) {
+                domainCurrentPage++;
+                renderInventoryList();
+            }
+        });
+    }
+    const domainPageInput = document.getElementById('domainPageInput');
+    if (domainPageInput) {
+        domainPageInput.addEventListener('change', (e) => {
+            const totalPages = Math.ceil(filteredDomains.length / domainRowsPerPage) || 1;
+            let val = parseInt(e.target.value);
+            if (isNaN(val)) val = 1;
+            if (val < 1) val = 1;
+            if (val > totalPages) val = totalPages;
+            
+            domainCurrentPage = val;
+            renderInventoryList();
+        });
+        domainPageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                domainPageInput.blur();
+            }
+        });
+    }
+
     // Refresh otomatis setiap 5 detik
     setInterval(refreshData, 5000);
 });
@@ -22,20 +153,23 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================================================
 function switchView(viewId) {
     // Hide all views
-    document.querySelectorAll('.view-container').forEach(v => v.classList.add('hidden'));
-    document.querySelectorAll('.view-container').forEach(v => v.classList.remove('active'));
-
+    document.querySelectorAll('.view-container').forEach(v => {
+        v.classList.add('hidden');
+        v.classList.remove('active');
+        v.style.display = 'none';
+    });
+    
     // Deactivate nav items
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
     // Which view to show?
     let targetView = `view-${viewId}`;
     if (!document.getElementById(targetView)) {
-        // fallback or not implemented
-        if (viewId === 'dashboard') targetView = 'view-overview'; // mapped for now
+        if (viewId === 'dashboard') targetView = 'view-overview';
         else if (viewId === 'overview') targetView = 'view-overview';
         else if (viewId === 'targets' || viewId === 'inventory') targetView = 'view-inventory';
         else if (viewId === 'vulnerabilities') targetView = 'view-vulnerabilities';
+        else if (viewId === 'admin') targetView = 'view-admin';
         else targetView = 'view-overview';
     }
 
@@ -44,17 +178,19 @@ function switchView(viewId) {
     if (viewEl) {
         viewEl.classList.remove('hidden');
         viewEl.classList.add('active');
+        viewEl.style.display = 'block';
     }
+    
+    // Activate nav dynamically
+    document.querySelectorAll('.sidebar-nav .nav-item').forEach(n => {
+        if (n.getAttribute('onclick') && n.getAttribute('onclick').includes(`'${viewId}'`)) {
+            n.classList.add('active');
+        }
+    });
 
-    // Activate nav
-    const activeNavs = {
-        'overview': 0,
-        'vulnerabilities': 1,
-        'inventory': 2
-    };
-    const navItems = document.querySelectorAll('.nav-item');
-    if (navItems[activeNavs[viewId]]) {
-        navItems[activeNavs[viewId]].classList.add('active');
+    // Load admin data if switching to admin page
+    if (viewId === 'admin') {
+        loadAdminUsers();
     }
 }
 
@@ -530,39 +666,103 @@ window.renderSevTrendChart = function() {
 // ==========================================================================
 async function loadVulnerabilities() {
     try {
-        const resp = await fetch(`${API_BASE}/api/scan-history?limit=100`);
+        const resp = await fetch(`${API_BASE}/api/scan-history?limit=1000`);
         const data = await resp.json();
         allVulns = data.data || [];
-        renderVulnerabilitiesList();
+        applyVulnFilters();
         renderLowerGrid();
     } catch (err) {
         console.error('Error loading scans:', err);
     }
 }
 
-let currentVulnPage = 1;
-const VULNS_PER_PAGE = 20;
+let filteredVulns = null;
+let vulnCurrentPage = 1;
+let vulnRowsPerPage = 15;
+
+function applyVulnFilters() {
+    const startInput = document.getElementById('vulnStartDate')?.value;
+    const endInput = document.getElementById('vulnEndDate')?.value;
+    
+    let startDate = null;
+    let endDate = null;
+    
+    if (startInput) {
+        startDate = new Date(startInput);
+        startDate.setHours(0, 0, 0, 0);
+    }
+    
+    if (endInput) {
+        endDate = new Date(endInput);
+        endDate.setHours(23, 59, 59, 999);
+    }
+    
+    filteredVulns = allVulns.filter(scan => {
+        if (!scan.scan_date) return false;
+        const scanDate = new Date(scan.scan_date);
+        
+        if (startDate && scanDate < startDate) return false;
+        if (endDate && scanDate > endDate) return false;
+        
+        return true;
+    });
+    
+    vulnCurrentPage = 1;
+    renderVulnerabilitiesList();
+}
+
+function resetVulnFilters() {
+    const startInput = document.getElementById('vulnStartDate');
+    const endInput = document.getElementById('vulnEndDate');
+    if (startInput) startInput.value = '';
+    if (endInput) endInput.value = '';
+    
+    filteredVulns = [...allVulns];
+    vulnCurrentPage = 1;
+    renderVulnerabilitiesList();
+}
 
 function renderVulnerabilitiesList() {
     const container = document.getElementById('vulnListContainer');
-    if (!allVulns || allVulns.length === 0) {
-        container.innerHTML = `<tr><td colspan="5" class="empty-state">No scan history found.</td></tr>`;
-        renderPaginationUI('vuln', 0, 1, VULNS_PER_PAGE);
+    const paginationControls = document.getElementById('vulnPaginationControls');
+    
+    // Inisialisasi data filter jika baru pertama kali dimuat
+    if (!filteredVulns) filteredVulns = [...allVulns];
+    
+    if (!filteredVulns || filteredVulns.length === 0) {
+        container.innerHTML = `<tr><td colspan="5" class="empty-state">No scan history found for the selected filter.</td></tr>`;
+        if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
-
-    const totalItems = allVulns.length;
-    const totalPages = Math.ceil(totalItems / VULNS_PER_PAGE);
-    if (currentVulnPage > totalPages) currentVulnPage = totalPages;
-    if (currentVulnPage < 1) currentVulnPage = 1;
-
-    const startIndex = (currentVulnPage - 1) * VULNS_PER_PAGE;
-    const endIndex = Math.min(startIndex + VULNS_PER_PAGE, totalItems);
-    const pageData = allVulns.slice(startIndex, endIndex);
-
-    container.innerHTML = pageData.map((scan, i) => {
-        const actualIndex = startIndex + i; // VERY IMPORTANT for openScanModalIndex
+    
+    if (paginationControls) paginationControls.style.display = 'flex';
+    
+    const totalItems = filteredVulns.length;
+    const totalPages = Math.ceil(totalItems / vulnRowsPerPage) || 1;
+    if (vulnCurrentPage > totalPages) vulnCurrentPage = totalPages;
+    if (vulnCurrentPage < 1) vulnCurrentPage = 1;
+    
+    const startIdx = (vulnCurrentPage - 1) * vulnRowsPerPage;
+    const endIdx = Math.min(startIdx + vulnRowsPerPage, totalItems);
+    const paginatedVulns = filteredVulns.slice(startIdx, endIdx);
+    
+    // Perbarui teks informasi halaman
+    const totalPagesEl = document.getElementById('vulnTotalPages');
+    if (totalPagesEl) totalPagesEl.textContent = totalPages;
+    const pageInput = document.getElementById('vulnPageInput');
+    if (pageInput) pageInput.value = vulnCurrentPage;
+    
+    container.innerHTML = paginatedVulns.map((scan) => {
+        // PENTING: Cari indeks asli dari allVulns agar pop-up detail tidak tertukar saat difilter
+        const actualIndex = allVulns.indexOf(scan);
         const domainName = scan.domains?.domain_name || 'Unknown Target';
+        const riskLevel = scan.risk_level || 'SAFE';
+        const sevClass = getSeverityClass(riskLevel);
+        const date = formatDate(scan.scan_date);
+        const numVulns = scan.vulnerabilities ? scan.vulnerabilities.length : 0;
+
+        return `
+const domainName = scan.domains?.domain_name || 'Unknown Target';
         const riskLevel = scan.risk_level || 'SAFE';
         const sevClass = getSeverityClass(riskLevel);
         const date = formatDate(scan.scan_date);
@@ -579,8 +779,40 @@ function renderVulnerabilitiesList() {
         `;
     }).join('');
     
-    renderPaginationUI('vuln', totalItems, currentVulnPage, VULNS_PER_PAGE);
+    // Perbarui status tombol UI Pagination
+    if (paginationControls) {
+        paginationControls.style.display = 'flex';
+        
+        const pageInput = document.getElementById('vulnPageInput');
+        if (pageInput) {
+            pageInput.value = vulnCurrentPage;
+        }
+        
+        const totalPagesSpan = document.getElementById('vulnTotalPages');
+        const totalPages = Math.ceil(filteredVulns.length / vulnRowsPerPage) || 1;
+        if (totalPagesSpan) {
+            totalPagesSpan.textContent = totalPages;
+        }
+        
+        const prevBtn = document.getElementById('vulnPrevPageBtn');
+        if (prevBtn) {
+            prevBtn.disabled = (vulnCurrentPage === 1);
+            prevBtn.style.opacity = (vulnCurrentPage === 1) ? '0.5' : '1';
+            prevBtn.style.cursor = (vulnCurrentPage === 1) ? 'not-allowed' : 'pointer';
+        }
+        
+        const nextBtn = document.getElementById('vulnNextPageBtn');
+        if (nextBtn) {
+            nextBtn.disabled = (vulnCurrentPage === totalPages || totalPages === 0);
+            nextBtn.style.opacity = (vulnCurrentPage === totalPages || totalPages === 0) ? '0.5' : '1';
+            nextBtn.style.cursor = (vulnCurrentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer';
+        }
+    }
 }
+
+// ==========================================================================
+// Render Lower Dashboard Grid (Recent Alerts & Monitored Domains)
+// ==========================================================================
 function renderLowerGrid() {
     const alertsBody = document.getElementById('recentAlertsBody');
     const domainsList = document.getElementById('monitoredDomainsList');
@@ -723,10 +955,13 @@ function renderLowerGrid() {
         }
     }
 }
+        }
+    }
+}
 
 // Function helper untuk membuka modal dari index
 function openScanModalIndex(index) {
-    const scan = allVulns[index];
+    const scan = filteredVulns[index];
     if (scan) {
         openScanModal(scan);
     }
@@ -740,6 +975,7 @@ async function loadDomains() {
         const resp = await fetch(`${API_BASE}/api/domains`);
         const data = await resp.json();
         allDomains = data.data || [];
+        domainCurrentPage = 1;
         renderInventoryList();
         
         const manageLink = document.getElementById('manageDomainsLink');
@@ -756,35 +992,40 @@ const DOMAINS_PER_PAGE = 20;
 
 function renderInventoryList() {
     const tbody = document.getElementById('inventoryTableBody');
+    const paginationControls = document.getElementById('domainPaginationControls');
+    
     if (!allDomains || allDomains.length === 0) {
         tbody.innerHTML = `<tr><td colspan="3" class="empty-state">No domains found.</td></tr>`;
-        renderPaginationUI('domain', 0, 1, DOMAINS_PER_PAGE);
+        if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
 
     // Filtering logic
     const searchVal = (document.getElementById('domainSearchInput')?.value || '').toLowerCase();
-    const filtered = allDomains.filter(d =>
+filteredDomains = allDomains.filter(d => 
         (d.domain_name || '').toLowerCase().includes(searchVal) ||
         (d.ip_address || '').toLowerCase().includes(searchVal)
     );
-
-    if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="3" class="empty-state">No domains match your search.</td></tr>`;
-        renderPaginationUI('domain', 0, 1, DOMAINS_PER_PAGE);
+    
+    if (filteredDomains.length === 0) {
+        // colspan diubah menjadi 4 karena sekarang ada kolom Checkbox
+        tbody.innerHTML = `<tr><td colspan="4" class="empty-state">No domains match your search.</td></tr>`;
+        if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
-
-    const totalItems = filtered.length;
-    const totalPages = Math.ceil(totalItems / DOMAINS_PER_PAGE);
-    if (currentDomainPage > totalPages) currentDomainPage = totalPages;
-    if (currentDomainPage < 1) currentDomainPage = 1;
-
-    const startIndex = (currentDomainPage - 1) * DOMAINS_PER_PAGE;
-    const endIndex = Math.min(startIndex + DOMAINS_PER_PAGE, totalItems);
-    const pageData = filtered.slice(startIndex, endIndex);
-
-    tbody.innerHTML = pageData.map(d => `
+    
+    if (paginationControls) paginationControls.style.display = 'flex';
+    
+    const totalItems = filteredDomains.length;
+    const totalPages = Math.ceil(totalItems / domainRowsPerPage) || 1;
+    if (domainCurrentPage > totalPages) domainCurrentPage = totalPages;
+    if (domainCurrentPage < 1) domainCurrentPage = 1;
+    
+    const startIdx = (domainCurrentPage - 1) * domainRowsPerPage;
+    const endIdx = Math.min(startIdx + domainRowsPerPage, totalItems);
+    const paginatedDomains = filteredDomains.slice(startIdx, endIdx);
+    
+    tbody.innerHTML = paginatedDomains.map(d => `
         <tr>
             <td style="font-weight:500; color:var(--primary)">${escapeHtml(d.domain_name)}</td>
             <td style="font-family:var(--font-mono); color:var(--text-secondary)">${escapeHtml(d.ip_address || '-')}</td>
@@ -792,70 +1033,47 @@ function renderInventoryList() {
         </tr>
     `).join('');
     
-    renderPaginationUI('domain', totalItems, currentDomainPage, DOMAINS_PER_PAGE);
+if (paginationControls) {
+        paginationControls.style.display = 'flex';
+        
+        const pageInput = document.getElementById('domainPageInput');
+        if (pageInput) {
+            pageInput.value = domainCurrentPage;
+        }
+        
+        const totalPagesSpan = document.getElementById('domainTotalPages');
+        if (totalPagesSpan) {
+            totalPagesSpan.textContent = totalPages || 1;
+        }
+        
+        const prevBtn = document.getElementById('domainPrevPageBtn');
+        if (prevBtn) {
+            prevBtn.disabled = (domainCurrentPage === 1);
+            prevBtn.style.opacity = (domainCurrentPage === 1) ? '0.5' : '1';
+            prevBtn.style.cursor = (domainCurrentPage === 1) ? 'not-allowed' : 'pointer';
+        }
+        
+        const nextBtn = document.getElementById('domainNextPageBtn');
+        if (nextBtn) {
+            nextBtn.disabled = (domainCurrentPage === totalPages || totalPages === 0);
+            nextBtn.style.opacity = (domainCurrentPage === totalPages || totalPages === 0) ? '0.5' : '1';
+            nextBtn.style.cursor = (domainCurrentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer';
+        }
+    }
+
+    // PENTING: Panggil ulang logika pengunci checkbox setiap kali tabel dirender ulang
+    if (typeof updateCheckboxLogic === 'function') {
+        updateCheckboxLogic();
+    }
 }
-
-// Pagination generic renderer
-function renderPaginationUI(type, totalItems, currentPage, itemsPerPage) {
-    const infoEl = document.getElementById(`${type}PaginationInfo`);
-    const controlsEl = document.getElementById(`${type}PaginationControls`);
-    
-    if (!infoEl || !controlsEl) return;
-
-    if (totalItems === 0) {
-        infoEl.textContent = `Showing 0 to 0 of 0 results`;
-        controlsEl.innerHTML = '';
-        return;
-    }
-
-    const totalPages = Math.ceil(totalItems / itemsPerPage);
-    const startItem = (currentPage - 1) * itemsPerPage + 1;
-    const endItem = Math.min(currentPage * itemsPerPage, totalItems);
-
-    infoEl.textContent = `Showing ${startItem} to ${endItem} of ${totalItems.toLocaleString()} results`;
-
-    let html = '';
-    
-    html += `<button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="changePage('${type}', ${currentPage - 1})">&lt;</button>`;
-    
-    let startPage = Math.max(1, currentPage - 2);
-    let endPage = Math.min(totalPages, currentPage + 2);
-    
-    if (startPage > 1) {
-        html += `<button class="page-btn" onclick="changePage('${type}', 1)">1</button>`;
-        if (startPage > 2) html += `<span style="padding: 0 4px; color: var(--text-secondary);">...</span>`;
-    }
-    
-    for (let i = startPage; i <= endPage; i++) {
-        html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="changePage('${type}', ${i})">${i}</button>`;
-    }
-    
-    if (endPage < totalPages) {
-        if (endPage < totalPages - 1) html += `<span style="padding: 0 4px; color: var(--text-secondary);">...</span>`;
-        html += `<button class="page-btn" onclick="changePage('${type}', ${totalPages})">${totalPages}</button>`;
-    }
-
-    html += `<button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage('${type}', ${currentPage + 1})">&gt;</button>`;
-
-    controlsEl.innerHTML = html;
-}
-
-function changePage(type, newPage) {
-    if (type === 'vuln') {
-        currentVulnPage = newPage;
-        renderVulnerabilitiesList();
-    } else if (type === 'domain') {
-        currentDomainPage = newPage;
-        renderInventoryList();
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Other init code is at the top of app.js. Adding search listener here.
     const searchInput = document.getElementById('domainSearchInput');
     if (searchInput) {
         searchInput.addEventListener('input', () => {
-            currentDomainPage = 1;
+            domainCurrentPage = 1;
             renderInventoryList();
         });
     }
@@ -1069,4 +1287,565 @@ function getMockCVSS(sev) {
     if (s === 'MEDIUM') return '5.0';
     if (s === 'LOW') return '2.5';
     return '0.0';
+}
+
+// ==========================================================================
+// Authentication & Session Management (Admin Restricted Registration)
+// ==========================================================================
+let wsLive = null;
+let currentUser = null;
+let allNotifications = JSON.parse(localStorage.getItem('dsti_notifs') || '[]');
+
+async function checkAuth() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/auth/me`);
+        if (resp.status === 200) {
+            const user = await resp.json();
+            handleSuccessfulLogin(user);
+        } else {
+            showLoginOverlay();
+        }
+    } catch (err) {
+        console.error("Gagal memeriksa status auth:", err);
+        showLoginOverlay();
+    }
+}
+
+function showLoginOverlay() {
+    document.getElementById('authOverlay').classList.remove('hidden');
+    document.getElementById('sidebar-user-container').style.display = 'none';
+    document.getElementById('nav-admin').style.display = 'none';
+    document.getElementById('mainHeader').style.display = 'none';
+    document.getElementById('notifWrapper').style.display = 'none';
+    
+    if (wsLive) {
+        wsLive.close();
+        wsLive = null;
+    }
+}
+
+function handleSuccessfulLogin(user) {
+    currentUser = user;
+    document.getElementById('authOverlay').classList.add('hidden');
+    
+    // Show Main Header
+    document.getElementById('mainHeader').style.display = 'flex';
+    
+    // Setup Sidebar User Info
+    document.getElementById('sidebar-user-container').style.display = 'flex';
+    document.getElementById('sidebar-username').textContent = user.username;
+    
+    const roleEl = document.getElementById('sidebar-user-role');
+    if (user.role === 'admin') {
+        roleEl.innerHTML = `<span class="badge-admin-role">Admin</span>`;
+        document.getElementById('nav-admin').style.display = 'block';
+        document.getElementById('notifWrapper').style.display = 'block';
+        
+        renderNotificationList();
+    } else {
+        roleEl.innerHTML = `<span class="badge-user-role">User</span>`;
+        document.getElementById('nav-admin').style.display = 'none';
+        document.getElementById('notifWrapper').style.display = 'none';
+        
+        // If regular user was on admin tab, redirect to overview
+        const activeNav = document.querySelector('.sidebar-nav .nav-item.active');
+        if (activeNav && activeNav.getAttribute('onclick').includes('admin')) {
+            switchView('overview');
+        }
+    }
+    
+    // Hubungkan WebSocket Live Session untuk semua user (baik admin maupun user biasa)
+    connectLiveWebSocket(user.session_id);
+    
+    // Clean inputs
+    document.getElementById('authUsername').value = '';
+    document.getElementById('authPassword').value = '';
+    document.getElementById('authErrorMsg').style.display = 'none';
+    
+    refreshData();
+}
+
+async function handleAuthSubmit(e) {
+    e.preventDefault();
+    const username = document.getElementById('authUsername').value.trim();
+    const password = document.getElementById('authPassword').value;
+    const errMsg = document.getElementById('authErrorMsg');
+    
+    errMsg.style.display = 'none';
+    
+    try {
+        const resp = await fetch(`${API_BASE}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await resp.json();
+        
+        if (resp.status === 200) {
+            showToast("Selamat Datang", `Berhasil masuk sebagai ${data.username}!`, "🔑");
+            handleSuccessfulLogin(data);
+        } else {
+            errMsg.textContent = data.detail || "Username atau password salah.";
+            errMsg.style.display = 'block';
+        }
+    } catch (err) {
+        errMsg.textContent = "Koneksi ke server gagal.";
+        errMsg.style.display = 'block';
+    }
+}
+
+async function handleLogout() {
+    try {
+        await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST' });
+    } catch (err) {
+        console.error("Gagal mengirim request logout:", err);
+    }
+    showToast("Logout", "Anda berhasil keluar.", "👋");
+    showLoginOverlay();
+}
+
+// Interceptor global untuk response 401
+const originalFetch = window.fetch;
+window.fetch = async function(...args) {
+    const response = await originalFetch(...args);
+    if (response.status === 401 && !args[0].includes('/api/auth/me') && !args[0].includes('/api/auth/login')) {
+        showLoginOverlay();
+        showToast("Sesi Berakhir", "Sesi Anda telah berakhir. Silakan masuk kembali.", "⚠️");
+    }
+    return response;
+};
+
+// ==========================================================================
+// Admin Panel: User Creation Modal & CRUD Handlers
+// ==========================================================================
+function openCreateUserModal() {
+    console.log("[Debug] openCreateUserModal called.");
+    const overlay = document.getElementById('createUserModalOverlay');
+    if (!overlay) {
+        console.error("[Debug] Element #createUserModalOverlay not found!");
+        return;
+    }
+    overlay.classList.add('active');
+    console.log("[Debug] added 'active' to #createUserModalOverlay. Class list is now:", overlay.className);
+    
+    const errorMsg = document.getElementById('createUserErrorMsg');
+    if (errorMsg) {
+        errorMsg.style.display = 'none';
+    } else {
+        console.warn("[Debug] Element #createUserErrorMsg not found.");
+    }
+}
+
+function closeCreateUserModal() {
+    document.getElementById('createUserModalOverlay').classList.remove('active');
+    document.getElementById('createUsername').value = '';
+    document.getElementById('createPassword').value = '';
+    document.getElementById('createConfirmPassword').value = '';
+}
+
+async function handleCreateUserSubmit(e) {
+    e.preventDefault();
+    const username = document.getElementById('createUsername').value.trim();
+    const password = document.getElementById('createPassword').value;
+    const confirmPassword = document.getElementById('createConfirmPassword').value;
+    const role = "user";
+    const errMsg = document.getElementById('createUserErrorMsg');
+    
+    errMsg.style.display = 'none';
+    
+    // Validasi kecocokan password
+    if (password !== confirmPassword) {
+        errMsg.textContent = "Konfirmasi password tidak sesuai!";
+        errMsg.style.display = 'block';
+        return;
+    }
+    
+    try {
+        const resp = await fetch(`${API_BASE}/api/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, role })
+        });
+        const data = await resp.json();
+        
+        if (resp.status === 200) {
+            showToast("Sukses", `User baru '${username}' berhasil didaftarkan.`, "✨");
+            closeCreateUserModal();
+            loadAdminUsers(); // Refresh daftar user
+        } else {
+            errMsg.textContent = data.detail || "Gagal membuat user baru.";
+            errMsg.style.display = 'block';
+        }
+    } catch (err) {
+        errMsg.textContent = "Gagal menghubungi server.";
+        errMsg.style.display = 'block';
+    }
+}
+
+// ==========================================================================
+// Admin Panel: User Table List & Control Actions
+// ==========================================================================
+async function loadAdminUsers() {
+    const tbody = document.getElementById('userTableBody');
+    try {
+        const resp = await fetch(`${API_BASE}/api/admin/users`);
+        const result = await resp.json();
+        
+        if (resp.status === 200) {
+            renderUserTable(result.data);
+        } else {
+            tbody.innerHTML = `<tr><td colspan="5" class="empty-state text-danger">${result.detail || 'Gagal memuat daftar user.'}</td></tr>`;
+        }
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="empty-state text-danger">Gagal menghubungi server.</td></tr>`;
+    }
+}
+
+function renderUserTable(users) {
+    const tbody = document.getElementById('userTableBody');
+    if (!users || users.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Tidak ada user terdaftar.</td></tr>`;
+        return;
+    }
+    
+    tbody.innerHTML = users.map(u => {
+        const isSelf = u.username === currentUser.username;
+        const roleBadge = u.role === 'admin' 
+            ? `<span class="badge-admin-role">Admin</span>` 
+            : `<span class="badge-user-role">User</span>`;
+            
+        const isOnline = u.is_online;
+        const statusBadge = isOnline
+            ? `<span class="status-indicator status-online">Online</span>`
+            : `<span class="status-indicator status-offline">Offline</span>`;
+            
+        const lastActiveText = u.is_online ? "Baru saja aktif" : formatRelativeTime(u.last_online);
+        
+        // Logika check timeout
+        let isTimedOut = false;
+        if (u.timeout_until) {
+            const timeoutDate = new Date(u.timeout_until);
+            if (timeoutDate > new Date()) {
+                isTimedOut = true;
+            }
+        }
+        
+        let actionButtons = '';
+        if (isSelf) {
+            actionButtons = `<span style="color:var(--text-tertiary); font-style:italic;">Akun Anda</span>`;
+        } else if (isTimedOut) {
+            actionButtons = `
+                <span class="text-timeout" style="margin-right: 12px;">Ditangguhkan (Timeout)</span>
+                <button class="btn-timeout" style="border-color:#22c55e; color:#22c55e; margin-left:0;" onclick="triggerRemoveTimeout('${u.username}')">Cabut Timeout</button>
+                <button class="btn-delete-user" onclick="triggerDeleteUser('${u.username}')">Hapus</button>
+            `;
+        } else {
+            actionButtons = `
+                <button class="btn-force-logout" onclick="triggerForceLogout('${u.username}')">Force Logout</button>
+                <button class="btn-timeout" onclick="triggerTimeoutUser('${u.username}')">Timeout 2 Jam</button>
+                <button class="btn-delete-user" onclick="triggerDeleteUser('${u.username}')">Hapus</button>
+            `;
+        }
+        
+        return `
+            <tr>
+                <td style="font-weight: 600; color: var(--text-primary);">${escapeHtml(u.username)}</td>
+                <td>${roleBadge}</td>
+                <td>${statusBadge}</td>
+                <td>${lastActiveText}</td>
+                <td>${actionButtons}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function triggerForceLogout(username) {
+    if (!confirm(`Apakah Anda yakin ingin melakukan Force Logout pada user '${username}'?`)) return;
+    try {
+        const resp = await fetch(`${API_BASE}/api/admin/users/${username}/force-logout`, {
+            method: 'POST'
+        });
+        const data = await resp.json();
+        if (resp.status === 200) {
+            showToast("Force Logout", `User '${username}' telah berhasil dikeluarkan dari sistem.`, "🔴");
+            loadAdminUsers();
+        } else {
+            alert(data.detail || "Gagal melakukan force logout.");
+        }
+    } catch (err) {
+        alert("Gagal menghubungi server.");
+    }
+}
+
+async function triggerTimeoutUser(username) {
+    if (!confirm(`Apakah Anda yakin ingin menangguhkan (timeout) user '${username}' selama 2 jam?`)) return;
+    try {
+        const resp = await fetch(`${API_BASE}/api/admin/users/${username}/timeout`, {
+            method: 'POST'
+        });
+        const data = await resp.json();
+        if (resp.status === 200) {
+            showToast("User Ditangguhkan", `User '${username}' ditangguhkan selama 2 jam.`, "⏳");
+            loadAdminUsers();
+        } else {
+            alert(data.detail || "Gagal melakukan penangguhan.");
+        }
+    } catch (err) {
+        alert("Gagal menghubungi server.");
+    }
+}
+
+async function triggerRemoveTimeout(username) {
+    if (!confirm(`Apakah Anda yakin ingin mencabut status penangguhan (timeout) user '${username}'?`)) return;
+    try {
+        const resp = await fetch(`${API_BASE}/api/admin/users/${username}/remove-timeout`, {
+            method: 'POST'
+        });
+        const data = await resp.json();
+        if (resp.status === 200) {
+            showToast("Timeout Dicabut", `Penangguhan untuk user '${username}' berhasil dicabut!`, "💚");
+            loadAdminUsers();
+        } else {
+            alert(data.detail || "Gagal mencabut status timeout.");
+        }
+    } catch (err) {
+        alert("Gagal menghubungi server.");
+    }
+}
+
+async function triggerDeleteUser(username) {
+    if (!confirm(`Apakah Anda yakin ingin menghapus user '${username}' secara permanen? Akun ini tidak akan bisa login kembali.`)) return;
+    try {
+        const resp = await fetch(`${API_BASE}/api/admin/users/${username}`, {
+            method: 'DELETE'
+        });
+        const data = await resp.json();
+        if (resp.status === 200) {
+            showToast("Hapus User", `User '${username}' berhasil dihapus dari sistem.`, "🗑️");
+            loadAdminUsers();
+        } else {
+            alert(data.detail || "Gagal menghapus user.");
+        }
+    } catch (err) {
+        alert("Gagal menghubungi server.");
+    }
+}
+
+function formatRelativeTime(dateStr) {
+    if (!dateStr) return 'Belum pernah aktif';
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '-';
+        const now = new Date();
+        const diffMs = now - d;
+        const diffMins = Math.floor(diffMs / 60000);
+        
+        if (diffMins < 1) return 'Baru saja aktif';
+        if (diffMins < 60) return `${diffMins} menit yang lalu`;
+        
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffHours < 24) return `${diffHours} jam yang lalu`;
+        
+        return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    } catch {
+        return '-';
+    }
+}
+
+// ==========================================================================
+// YouTube-Style Notification Dropdown Logic & Rendering
+// ==========================================================================
+function toggleNotificationDropdown(e) {
+    if (e) e.stopPropagation();
+    const dropdown = document.getElementById('notificationDropdown');
+    const isHidden = dropdown.style.display === 'none';
+    
+    if (isHidden) {
+        dropdown.style.display = 'flex';
+        clearBadge();
+    } else {
+        dropdown.style.display = 'none';
+    }
+}
+
+document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('notificationDropdown');
+    const bellBtn = document.getElementById('notificationBellBtn');
+    if (dropdown && dropdown.style.display !== 'none') {
+        if (!dropdown.contains(e.target) && !bellBtn.contains(e.target)) {
+            dropdown.style.display = 'none';
+        }
+    }
+});
+
+function updateNotificationBadge() {
+    const badge = document.getElementById('notificationBadge');
+    const unreadCount = allNotifications.filter(n => n.unread).length;
+    
+    if (unreadCount > 0) {
+        badge.textContent = unreadCount;
+        badge.style.display = 'flex';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+function clearBadge() {
+    const badge = document.getElementById('notificationBadge');
+    badge.style.display = 'none';
+}
+
+function markAllNotificationsAsRead(e) {
+    if (e) e.stopPropagation();
+    allNotifications.forEach(n => n.unread = false);
+    localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
+    renderNotificationList();
+    showToast("Notifikasi", "Semua notifikasi ditandai telah dibaca.", "✔️");
+}
+
+function deleteNotification(notifId, e) {
+    if (e) e.stopPropagation();
+    allNotifications = allNotifications.filter(n => n.id !== notifId);
+    localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
+    renderNotificationList();
+}
+
+function renderNotificationList() {
+    const listContainer = document.getElementById('notificationList');
+    if (!listContainer) return;
+    
+    updateNotificationBadge();
+    
+    if (allNotifications.length === 0) {
+        listContainer.innerHTML = `<div class="notif-empty-state">Tidak ada notifikasi</div>`;
+        return;
+    }
+    
+    listContainer.innerHTML = allNotifications.map(n => {
+        const initials = (n.username || 'U').substring(0, 2).toUpperCase();
+        const roleText = n.role === 'admin' ? 'Admin' : 'User';
+        const unreadClass = n.unread ? 'unread' : '';
+        const relativeTime = formatRelativeTime(n.timestamp);
+        
+        return `
+            <div class="notif-item ${unreadClass}" onclick="markAsRead('${n.id}')">
+                <div class="notif-unread-dot"></div>
+                <div class="notif-avatar">${initials}</div>
+                <div class="notif-content">
+                    <div class="notif-text">👤 <strong>${escapeHtml(n.username)}</strong> (${roleText}) baru saja masuk ke sistem.</div>
+                    <div class="notif-time">${relativeTime}</div>
+                </div>
+                <div class="notif-actions">
+                    <button class="notif-action-btn" onclick="deleteNotification('${n.id}', event)" title="Hapus notifikasi">✕</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function markAsRead(notifId) {
+    const notif = allNotifications.find(n => n.id === notifId);
+    if (notif && notif.unread) {
+        notif.unread = false;
+        localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
+        renderNotificationList();
+    }
+}
+
+// ==========================================================================
+// WebSockets Client
+// ==========================================================================
+function connectLiveWebSocket(sessionId) {
+    if (wsLive) {
+        wsLive.close();
+    }
+    
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProto}//${window.location.host}/ws/live?session_id=${sessionId}`;
+    
+    wsLive = new WebSocket(wsUrl);
+    
+    wsLive.onopen = () => {
+        console.log("[WebSocket] Terkoneksi ke Live Session.");
+    };
+    
+    wsLive.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            
+            if (data.event === 'user_login') {
+                // Notifikasi admin tentang user login baru
+                if (currentUser && currentUser.role === 'admin') {
+                    showToast(
+                        "User Login Baru", 
+                        `👤 <b>${escapeHtml(data.username)}</b> (${data.role === 'admin' ? 'Admin' : 'User'}) baru saja masuk ke sistem pada pukul ${data.time}.`,
+                        "🔔"
+                    );
+                    
+                    const notif = {
+                        id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                        username: data.username,
+                        role: data.role,
+                        time: data.time,
+                        timestamp: new Date().toISOString(),
+                        unread: true
+                    };
+                    allNotifications.unshift(notif);
+                    localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
+                    renderNotificationList();
+                    
+                    const activeNav = document.querySelector('.sidebar-nav .nav-item.active');
+                    if (activeNav && activeNav.getAttribute('onclick').includes('admin')) {
+                        loadAdminUsers();
+                    }
+                }
+            } else if (data.event === 'force_logout') {
+                showToast("Sesi Diakhiri", "Anda telah dipaksa keluar oleh Administrator.", "⚠️");
+                setTimeout(() => {
+                    handleLogout();
+                }, 1000);
+            } else if (data.event === 'timeout') {
+                showToast("Akun Ditangguhkan", "Akun Anda telah ditangguhkan selama 2 jam oleh Administrator.", "⏳");
+                setTimeout(() => {
+                    handleLogout();
+                }, 1000);
+            }
+        } catch (e) {
+            console.error("Gagal mem-parsing pesan websocket:", e);
+        }
+    };
+    
+    wsLive.onclose = (e) => {
+        console.log("[WebSocket] Koneksi Live terputus. Kode:", e.code);
+        // Lakukan reconnect otomatis jika masih login dan bukan kode tutup normal (4003)
+        if (currentUser && e.code !== 4003 && e.code !== 4000) {
+            setTimeout(() => {
+                if (currentUser) {
+                    connectLiveWebSocket(sessionId);
+                }
+            }, 5000);
+        }
+    };
+}
+
+function showToast(title, message, icon = "ℹ️") {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification';
+    
+    toast.innerHTML = `
+        <div class="toast-icon">${icon}</div>
+        <div class="toast-body">
+            <div class="toast-title">${title}</div>
+            <div class="toast-message">${message}</div>
+        </div>
+    `;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+    }, 5000);
 }
