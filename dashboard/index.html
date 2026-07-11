@@ -166,7 +166,7 @@
                         </div>
                     </div>
 
-<div class="summary-cards" style="margin-bottom: 24px;">
+                    <div class="summary-cards" style="margin-bottom: 24px;">
                         <div class="card">
                             <div class="card-title">TOTAL DOMAINS</div>
                             <div class="card-value" id="overviewTotalDomains">0</div>
@@ -311,7 +311,7 @@
                     </div>
                 </div> <!-- PENUTUP VIEW OVERVIEW -->
 
-                <!-- VIEW: Vulnerabilities List (Automated Pentests) -->
+<!-- VIEW: Vulnerabilities List (Automated Pentests) -->
                 <div id="view-vulnerabilities" class="view-container hidden">
                     <div class="view-header" style="display: flex; flex-direction: column; align-items: flex-start; gap: 16px; margin-bottom: 24px;">
                         <h1 style="margin: 0;">Scan History</h1>
@@ -331,41 +331,6 @@
                         </div>
                     </div>
 
-                    <div class="vuln-list-container" id="vulnListContainer">
-                        <div class="empty-state">Loading vulnerabilities...</div>
-                    </div>
-
-                    <!-- Pagination Controls -->
-                    <div class="pagination-controls" id="vulnPaginationControls" style="display: none; justify-content: space-between; align-items: center; margin-top: 20px; padding: 16px; background: white; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
-                        <div class="pagination-left">
-                            <span style="font-size: 13px; color: var(--text-secondary);">Tampilkan per halaman:</span>
-                            <select id="vulnRowsSelect" style="margin-left: 8px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);">
-                                <option value="15" selected>15</option>
-                                <option value="25">25</option>
-                                <option value="50">50</option>
-                            </select>
-                        </div>
-                        <div class="pagination-right" style="display: flex; align-items: center; gap: 12px;">
-                            <button class="btn btn-outline btn-sm" id="vulnPrevPageBtn" style="padding: 6px 12px; min-width: auto;">Sebelumnya</button>
-                            <span id="vulnPageInfo" style="font-size: 13px; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
-                                Halaman 
-                                <input type="number" id="vulnPageInput" min="1" value="1" style="width: 45px; text-align: center; padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);"> 
-                                dari 
-                                <span id="vulnTotalPages">1</span>
-                            </span>
-                            <button class="btn btn-outline btn-sm" id="vulnNextPageBtn" style="padding: 6px 12px; min-width: auto;">Selanjutnya</button>
-                        </div>
-                    </div>
-                </div>
-
-                    </div>
-                    <!-- AKHIR BAGIAN BAWAH -->
-                </div>
-
-                <div id="view-vulnerabilities" class="view-container hidden">
-                    <div class="view-header">
-                        <h1>Scan History</h1>
-                    </div>
                     <div class="card table-card">
                         <table class="modern-table">
                             <thead>
@@ -383,31 +348,63 @@
                                 </tr>
                             </tbody>
                         </table>
-                        <div class="pagination-container" id="vulnPagination">
-                            <div class="pagination-info" id="vulnPaginationInfo">Showing 0 to 0 of 0 results</div>
-                            <div class="pagination-controls" id="vulnPaginationControls"></div>
+                        
+                        <!-- Pagination Controls (Digabung ke dalam card tabel agar rapi) -->
+                        <div class="pagination-controls" id="vulnPaginationControls" style="display: none; justify-content: space-between; align-items: center; padding: 16px; border-top: 1px solid var(--border-color);">
+                            <div class="pagination-left">
+                                <span style="font-size: 13px; color: var(--text-secondary);">Tampilkan per halaman:</span>
+                                <select id="vulnRowsSelect" style="margin-left: 8px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);">
+                                    <option value="15" selected>15</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                </select>
+                            </div>
+                            <div class="pagination-right" style="display: flex; align-items: center; gap: 12px;">
+                                <button class="btn btn-outline btn-sm" id="vulnPrevPageBtn" style="padding: 6px 12px; min-width: auto;">Sebelumnya</button>
+                                <span id="vulnPageInfo" style="font-size: 13px; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                                    Halaman 
+                                    <input type="number" id="vulnPageInput" min="1" value="1" style="width: 45px; text-align: center; padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);"> 
+                                    dari 
+                                    <span id="vulnTotalPages">1</span>
+                                </span>
+                                <button class="btn btn-outline btn-sm" id="vulnNextPageBtn" style="padding: 6px 12px; min-width: auto;">Selanjutnya</button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div id="view-inventory" class="view-container hidden">
-                    <div class="view-header"
-                        style="display: flex; justify-content: space-between; align-items: center;">
+<div id="view-inventory" class="view-container hidden">
+                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                         <h1>Domains</h1>
-                        <div class="topbar-search"
-                            style="display: flex; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; width: 320px; transition: border-color 0.2s;">
+                        <div class="topbar-search" style="display: flex; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; width: 320px; transition: border-color 0.2s;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="min-width: 16px;">
                                 <circle cx="11" cy="11" r="8"></circle>
                                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                             </svg>
-                            <input type="text" id="domainSearchInput" placeholder="Search domains or IP..."
-                                style="border: none; outline: none; background: transparent; width: 100%; font-size: 14px; color: var(--text-primary); margin-left: 10px; font-family: inherit;">
+                            <input type="text" id="domainSearchInput" placeholder="Search domains or IP..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 14px; color: var(--text-primary); margin-left: 10px; font-family: inherit;">
                         </div>
                     </div>
+                    
                     <div class="card table-card">
+                        <!-- Baris Tombol Aksi Pentest -->
+                        <div style="padding: 16px 24px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; background: #fafafa;">
+                            <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);" id="selectedDomainCount">0 domain dipilih</span>
+                            <div style="display: flex; gap: 12px;">
+                                <button id="saveTargetsBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                                    Simpan Target (Interval)
+                                </button>
+                                <button id="runScanBtn" class="auth-btn" disabled style="width: auto; padding: 8px 16px; opacity: 0.5; cursor: not-allowed; display: flex; align-items: center; gap: 6px; font-size: 13px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                    Scan Sekarang
+                                </button>
+                            </div>
+                        </div>
+
                         <table class="modern-table">
                             <thead>
                                 <tr>
+                                    <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAllDomains" style="cursor: pointer;"></th>
                                     <th>Domain</th>
                                     <th>IP Address</th>
                                     <th>Status</th>
@@ -415,39 +412,34 @@
                             </thead>
                             <tbody id="inventoryTableBody">
                                 <tr>
-                                    <td colspan="3" class="empty-state">Loading domains...</td>
+                                    <td colspan="4" class="empty-state">Loading domains...</td>
                                 </tr>
                             </tbody>
                         </table>
-                        <div class="pagination-container" id="domainPagination">
-                            <div class="pagination-info" id="domainPaginationInfo">Showing 0 to 0 of 0 results</div>
-                            <div class="pagination-controls" id="domainPaginationControls"></div>
+                        
+                        <!-- Domain Pagination Controls -->
+                        <div class="pagination-controls" id="domainPaginationControls" style="display: none; justify-content: space-between; align-items: center; padding: 16px; border-top: 1px solid var(--border-color);">
+                            <div class="pagination-left">
+                                <span style="font-size: 13px; color: var(--text-secondary);">Tampilkan per halaman:</span>
+                                <select id="domainRowsSelect" style="margin-left: 8px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);">
+                                    <option value="15" selected>15</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                </select>
+                            </div>
+                            <div class="pagination-right" style="display: flex; align-items: center; gap: 12px;">
+                                <button class="btn btn-outline btn-sm" id="domainPrevPageBtn" style="padding: 6px 12px; min-width: auto;">Sebelumnya</button>
+                                <span id="domainPageInfo" style="font-size: 13px; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                                    Halaman 
+                                    <input type="number" id="domainPageInput" min="1" value="1" style="width: 45px; text-align: center; padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);"> 
+                                    dari 
+                                    <span id="domainTotalPages">1</span>
+                                </span>
+                                <button class="btn btn-outline btn-sm" id="domainNextPageBtn" style="padding: 6px 12px; min-width: auto;">Selanjutnya</button>
+                            </div>
                         </div>
                     </div>
                 </div>
-
-                <!-- Domain Pagination Controls -->
-                <div class="pagination-controls" id="domainPaginationControls" style="display: none; justify-content: space-between; align-items: center; margin-top: 20px; padding: 16px; background: white; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
-                    <div class="pagination-left">
-                        <span style="font-size: 13px; color: var(--text-secondary);">Tampilkan per halaman:</span>
-                        <select id="domainRowsSelect" style="margin-left: 8px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);">
-                            <option value="15" selected>15</option>
-                            <option value="25">25</option>
-                            <option value="50">50</option>
-                        </select>
-                    </div>
-                    <div class="pagination-right" style="display: flex; align-items: center; gap: 12px;">
-                        <button class="btn btn-outline btn-sm" id="domainPrevPageBtn" style="padding: 6px 12px; min-width: auto;">Sebelumnya</button>
-                        <span id="domainPageInfo" style="font-size: 13px; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
-                            Halaman 
-                            <input type="number" id="domainPageInput" min="1" value="1" style="width: 45px; text-align: center; padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);"> 
-                            dari 
-                            <span id="domainTotalPages">1</span>
-                        </span>
-                        <button class="btn btn-outline btn-sm" id="domainNextPageBtn" style="padding: 6px 12px; min-width: auto;">Selanjutnya</button>
-                    </div>
-                </div>
-            </div>
 
             <!-- VIEW: Admin User Management -->
             <div id="view-admin" class="view-container hidden" style="display: none;">
