@@ -1573,6 +1573,7 @@ async function handleAuthSubmit(e) {
         const data = await resp.json();
         
         if (resp.status === 200) {
+            showToast("Selamat Datang", `Berhasil masuk sebagai ${data.username}!`, "🔑");
             handleSuccessfulLogin(data);
         } else {
             errMsg.textContent = data.detail || "Username atau password salah.";
@@ -1600,7 +1601,7 @@ window.fetch = async function(...args) {
     const response = await originalFetch(...args);
     if (response.status === 401 && !args[0].includes('/api/auth/me') && !args[0].includes('/api/auth/login')) {
         showLoginOverlay();
-    // Notifikasi "Sesi Berakhir" dinonaktifkan sesuai permintaan
+        showToast("Sesi Berakhir", "Sesi Anda telah berakhir. Silakan masuk kembali.", "⚠️");
     }
     return response;
 };
@@ -1964,8 +1965,8 @@ function connectLiveWebSocket(sessionId) {
             const data = JSON.parse(event.data);
             
             if (data.event === 'user_login') {
-                // Notifikasi admin tentang user login baru (hanya untuk user lain, bukan diri sendiri)
-                if (currentUser && currentUser.role === 'admin' && data.username !== currentUser.username) {
+                // Notifikasi admin tentang user login baru
+                if (currentUser && currentUser.role === 'admin') {
                     showToast(
                         "User Login Baru", 
                         `👤 <b>${escapeHtml(data.username)}</b> (${data.role === 'admin' ? 'Admin' : 'User'}) baru saja masuk ke sistem pada pukul ${data.time}.`,
@@ -2018,7 +2019,7 @@ function connectLiveWebSocket(sessionId) {
     };
 }
 
-function showToast(title, message, icon = "🔔") {
+function showToast(title, message, icon = "ℹ️") {
     const container = document.getElementById('toast-container');
     if (!container) return;
     
