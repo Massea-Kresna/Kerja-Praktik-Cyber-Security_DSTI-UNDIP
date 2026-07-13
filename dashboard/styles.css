@@ -1576,3 +1576,135 @@ body {
         transform: translateY(0);
     }
 }
+
+/* ==========================================================================
+   BUTTONS & ACTIONS (MODERN & PREMIUM DESIGN)
+   ========================================================================== */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    gap: 6px;
+    outline: none;
+    white-space: nowrap;
+}
+
+.btn-primary {
+    background: var(--color-accent);
+    color: #ffffff;
+    border-color: var(--color-accent);
+    box-shadow: 0 4px 6px -1px rgba(0, 88, 189, 0.2);
+}
+
+.btn-primary:hover {
+    background: #004ba2;
+    border-color: #004ba2;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 12px -1px rgba(0, 88, 189, 0.3);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-outline {
+    background: transparent;
+    color: var(--color-ink-soft);
+    border-color: var(--color-border);
+}
+
+.btn-outline:hover {
+    background: var(--color-bg);
+    border-color: var(--color-muted-light);
+    color: var(--color-ink);
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+}
+
+/* Specific Style for inspect button to look high fidelity */
+.modern-table td .btn-outline.btn-sm {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+    background: rgba(0, 88, 189, 0.03);
+    font-weight: 600;
+}
+
+.modern-table td .btn-outline.btn-sm:hover {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(0, 88, 189, 0.15);
+}
+
+/* ==========================================================================
+   VULNERABILITY FILTERS (MODAL CARD)
+   ========================================================================== */
+.vuln-filters {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1px solid var(--color-border);
+    background: #ffffff;
+    color: var(--color-muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.filter-btn:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    color: var(--color-ink-soft);
+    transform: translateY(-0.5px);
+}
+
+.filter-btn.active {
+    background: var(--color-navy);
+    color: #ffffff;
+    border-color: var(--color-navy);
+    box-shadow: 0 4px 6px -1px rgba(15, 28, 44, 0.2);
+}
+
+.filter-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    flex-shrink: 0;
+    line-height: 1;
+    text-transform: uppercase;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.filter-btn.active .filter-dot {
+    box-shadow: 0 1px 2px rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+}
