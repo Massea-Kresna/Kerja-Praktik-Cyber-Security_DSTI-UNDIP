@@ -233,6 +233,28 @@ const openBtn = document.getElementById('openCreateUserModalBtn');
         });
     }
 
+    // Click outside to close modals
+    const scanModalOverlay = document.getElementById('scanModalOverlay');
+    if (scanModalOverlay) {
+        scanModalOverlay.addEventListener('click', (e) => {
+            if (e.target === scanModalOverlay) closeScanModal();
+        });
+    }
+
+    const threatModalOverlay = document.getElementById('threatModalOverlay');
+    if (threatModalOverlay) {
+        threatModalOverlay.addEventListener('click', (e) => {
+            if (e.target === threatModalOverlay) closeThreatModal();
+        });
+    }
+
+    const createUserModalOverlay = document.getElementById('createUserModalOverlay');
+    if (createUserModalOverlay) {
+        createUserModalOverlay.addEventListener('click', (e) => {
+            if (e.target === createUserModalOverlay) closeCreateUserModal();
+        });
+    }
+
     // Refresh otomatis setiap 5 detik
     // setInterval(refreshData, 5000);
 });
