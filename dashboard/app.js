@@ -233,6 +233,28 @@ const openBtn = document.getElementById('openCreateUserModalBtn');
         });
     }
 
+    // Click outside to close modals
+    const scanModalOverlay = document.getElementById('scanModalOverlay');
+    if (scanModalOverlay) {
+        scanModalOverlay.addEventListener('click', (e) => {
+            if (e.target === scanModalOverlay) closeScanModal();
+        });
+    }
+
+    const threatModalOverlay = document.getElementById('threatModalOverlay');
+    if (threatModalOverlay) {
+        threatModalOverlay.addEventListener('click', (e) => {
+            if (e.target === threatModalOverlay) closeThreatModal();
+        });
+    }
+
+    const createUserModalOverlay = document.getElementById('createUserModalOverlay');
+    if (createUserModalOverlay) {
+        createUserModalOverlay.addEventListener('click', (e) => {
+            if (e.target === createUserModalOverlay) closeCreateUserModal();
+        });
+    }
+
     // Refresh otomatis setiap 5 detik
     // setInterval(refreshData, 5000);
 });
@@ -321,7 +343,7 @@ let rawTrendData = null;
 let rawSevTrendData = null;
 
 // Consistent color palette: each domain always gets the same color via hash
-const PALETTE = ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#22c55e', '#8b5cf6', '#ec4899', '#14b8a6', '#06b6d4', '#a855f7', '#f43f5e', '#10b981', '#6366f1', '#d946ef', '#84cc16'];
+const PALETTE = ['#FF0000', '#0000FF', '#00FF00', '#FFFF00', '#FF8C00', '#800080', '#00FFFF', '#FF00FF', '#8B4513', '#FF69B4'];
 const domainColorMap = {};
 
 function getDomainColor(domain) {
@@ -499,7 +521,6 @@ window.renderVulnTrendChart = function () {
     if (!rawTrendData) return;
 
     const vulnCtx = document.getElementById('vulnBarChart').getContext('2d');
-    if (vulnChartInstance) vulnChartInstance.destroy();
 
     // Get selected domains from checkboxes
     const checkboxes = Array.from(document.querySelectorAll('#vulnTrendItems input[type="checkbox"]'));
@@ -565,8 +586,13 @@ window.renderVulnTrendChart = function () {
         };
     });
 
-    vulnChartInstance = new Chart(vulnCtx, {
-        type: 'line',
+    if (vulnChartInstance) {
+        vulnChartInstance.data.labels = rawTrendData.labels || [];
+        vulnChartInstance.data.datasets = domainDatasets;
+        vulnChartInstance.update('none');
+    } else {
+        vulnChartInstance = new Chart(vulnCtx, {
+            type: 'line',
         data: {
             labels: rawTrendData.labels || [],
             datasets: domainDatasets
@@ -591,6 +617,20 @@ window.renderVulnTrendChart = function () {
                 legend: {
                     display: true,
                     position: 'bottom',
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        generateLabels: (chart) => {
+                            return chart.data.datasets.map((dataset, i) => ({
+                                text: dataset.label,
+                                fillStyle: dataset.borderColor,
+                                hidden: !chart.isDatasetVisible(i),
+                                strokeStyle: dataset.borderColor,
+                                pointStyle: 'circle',
+                                datasetIndex: i
+                            }));
+                        }
+                    },
                     onClick: null
                 },
                 tooltip: {
@@ -606,7 +646,16 @@ window.renderVulnTrendChart = function () {
                     bodyFont: { size: 12 },
                     mode: 'index',
                     intersect: false,
+                    filter: function(tooltipItem) {
+                        return tooltipItem.parsed.y > 0;
+                    },
                     callbacks: {
+                        labelColor: function(context) {
+                            return {
+                                borderColor: context.dataset.borderColor,
+                                backgroundColor: context.dataset.borderColor
+                            };
+                        },
                         label: function (context) {
                             let label = context.dataset.label || '';
                             if (label) label += ' | Vulns: ';
@@ -618,13 +667,13 @@ window.renderVulnTrendChart = function () {
             }
         }
     });
+    }
 };
 
 window.renderSevTrendChart = function() {
     if (!rawSevTrendData) return;
     
     const sevCtx = document.getElementById('sevTrendChart').getContext('2d');
-    if (sevChartInstance) sevChartInstance.destroy();
     
     // Get selected severities from checkboxes
     const checkboxes = Array.from(document.querySelectorAll('#sevTrendItems input[type="checkbox"]'));
@@ -685,8 +734,13 @@ window.renderSevTrendChart = function() {
         };
     });
 
-    sevChartInstance = new Chart(sevCtx, {
-        type: 'line',
+    if (sevChartInstance) {
+        sevChartInstance.data.labels = rawSevTrendData.labels || [];
+        sevChartInstance.data.datasets = sevDatasets;
+        sevChartInstance.update('none');
+    } else {
+        sevChartInstance = new Chart(sevCtx, {
+            type: 'line',
         data: {
             labels: rawSevTrendData.labels || [],
             datasets: sevDatasets
@@ -1573,7 +1627,6 @@ async function handleAuthSubmit(e) {
         const data = await resp.json();
         
         if (resp.status === 200) {
-            showToast("Selamat Datang", `Berhasil masuk sebagai ${data.username}!`, "🔑");
             handleSuccessfulLogin(data);
         } else {
             errMsg.textContent = data.detail || "Username atau password salah.";
@@ -1601,7 +1654,7 @@ window.fetch = async function(...args) {
     const response = await originalFetch(...args);
     if (response.status === 401 && !args[0].includes('/api/auth/me') && !args[0].includes('/api/auth/login')) {
         showLoginOverlay();
-        showToast("Sesi Berakhir", "Sesi Anda telah berakhir. Silakan masuk kembali.", "⚠️");
+    // Notifikasi "Sesi Berakhir" dinonaktifkan sesuai permintaan
     }
     return response;
 };
@@ -1965,8 +2018,8 @@ function connectLiveWebSocket(sessionId) {
             const data = JSON.parse(event.data);
             
             if (data.event === 'user_login') {
-                // Notifikasi admin tentang user login baru
-                if (currentUser && currentUser.role === 'admin') {
+                // Notifikasi admin tentang user login baru (hanya untuk user lain, bukan diri sendiri)
+                if (currentUser && currentUser.role === 'admin' && data.username !== currentUser.username) {
                     showToast(
                         "User Login Baru", 
                         `👤 <b>${escapeHtml(data.username)}</b> (${data.role === 'admin' ? 'Admin' : 'User'}) baru saja masuk ke sistem pada pukul ${data.time}.`,
@@ -2019,7 +2072,7 @@ function connectLiveWebSocket(sessionId) {
     };
 }
 
-function showToast(title, message, icon = "ℹ️") {
+function showToast(title, message, icon = "🔔") {
     const container = document.getElementById('toast-container');
     if (!container) return;
     
