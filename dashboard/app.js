@@ -712,8 +712,13 @@ window.renderSevTrendChart = function() {
         };
     });
 
-    sevChartInstance = new Chart(sevCtx, {
-        type: 'line',
+    if (sevChartInstance) {
+        sevChartInstance.data.labels = rawSevTrendData.labels || [];
+        sevChartInstance.data.datasets = sevDatasets;
+        sevChartInstance.update('none');
+    } else {
+        sevChartInstance = new Chart(sevCtx, {
+            type: 'line',
         data: {
             labels: rawSevTrendData.labels || [],
             datasets: sevDatasets
