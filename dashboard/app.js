@@ -321,7 +321,7 @@ let rawTrendData = null;
 let rawSevTrendData = null;
 
 // Consistent color palette: each domain always gets the same color via hash
-const PALETTE = ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#22c55e', '#8b5cf6', '#ec4899', '#14b8a6', '#06b6d4', '#a855f7', '#f43f5e', '#10b981', '#6366f1', '#d946ef', '#84cc16'];
+const PALETTE = ['#FF0000', '#0000FF', '#00FF00', '#FFFF00', '#FF8C00', '#800080', '#00FFFF', '#FF00FF', '#8B4513', '#FF69B4'];
 const domainColorMap = {};
 
 function getDomainColor(domain) {
@@ -564,8 +564,13 @@ window.renderVulnTrendChart = function () {
         };
     });
 
-    vulnChartInstance = new Chart(vulnCtx, {
-        type: 'line',
+    if (vulnChartInstance) {
+        vulnChartInstance.data.labels = rawTrendData.labels || [];
+        vulnChartInstance.data.datasets = domainDatasets;
+        vulnChartInstance.update('none');
+    } else {
+        vulnChartInstance = new Chart(vulnCtx, {
+            type: 'line',
         data: {
             labels: rawTrendData.labels || [],
             datasets: domainDatasets
@@ -619,7 +624,16 @@ window.renderVulnTrendChart = function () {
                     bodyFont: { size: 12 },
                     mode: 'index',
                     intersect: false,
+                    filter: function(tooltipItem) {
+                        return tooltipItem.parsed.y > 0;
+                    },
                     callbacks: {
+                        labelColor: function(context) {
+                            return {
+                                borderColor: context.dataset.borderColor,
+                                backgroundColor: context.dataset.borderColor
+                            };
+                        },
                         label: function (context) {
                             let label = context.dataset.label || '';
                             if (label) label += ' | Vulns: ';
