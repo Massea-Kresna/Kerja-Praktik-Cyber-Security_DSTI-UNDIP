@@ -645,13 +645,13 @@ window.renderVulnTrendChart = function () {
             }
         }
     });
+    }
 };
 
 window.renderSevTrendChart = function() {
     if (!rawSevTrendData) return;
     
     const sevCtx = document.getElementById('sevTrendChart').getContext('2d');
-    if (sevChartInstance) sevChartInstance.destroy();
     
     // Get selected severities from checkboxes
     const checkboxes = Array.from(document.querySelectorAll('#sevTrendItems input[type="checkbox"]'));
