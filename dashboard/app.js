@@ -499,7 +499,6 @@ window.renderVulnTrendChart = function () {
     if (!rawTrendData) return;
 
     const vulnCtx = document.getElementById('vulnBarChart').getContext('2d');
-    if (vulnChartInstance) vulnChartInstance.destroy();
 
     // Get selected domains from checkboxes
     const checkboxes = Array.from(document.querySelectorAll('#vulnTrendItems input[type="checkbox"]'));
@@ -591,6 +590,20 @@ window.renderVulnTrendChart = function () {
                 legend: {
                     display: true,
                     position: 'bottom',
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        generateLabels: (chart) => {
+                            return chart.data.datasets.map((dataset, i) => ({
+                                text: dataset.label,
+                                fillStyle: dataset.borderColor,
+                                hidden: !chart.isDatasetVisible(i),
+                                strokeStyle: dataset.borderColor,
+                                pointStyle: 'circle',
+                                datasetIndex: i
+                            }));
+                        }
+                    },
                     onClick: null
                 },
                 tooltip: {
