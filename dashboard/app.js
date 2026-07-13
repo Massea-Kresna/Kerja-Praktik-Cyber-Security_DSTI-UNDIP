@@ -343,7 +343,7 @@ let rawTrendData = null;
 let rawSevTrendData = null;
 
 // Consistent color palette: each domain always gets the same color via hash
-const PALETTE = ['#FF0000', '#0000FF', '#00FF00', '#FFFF00', '#FF8C00', '#800080', '#00FFFF', '#FF00FF', '#8B4513', '#FF69B4'];
+const PALETTE = ['#ef4444', '#3b82f6', '#eab308', '#22c55e', '#a855f7'];
 const domainColorMap = {};
 
 function getDomainColor(domain) {
@@ -446,9 +446,17 @@ async function loadOverview() {
             allLabel.innerHTML = `<input type="checkbox" value="All" ${allChecked} onchange="onVulnFilterChange(this)"><b>All Domains</b>`;
             vulnItemsContainer.appendChild(allLabel);
 
+            // Clear existing map and pre-assign colors based on vulnerability rank
+            Object.keys(domainColorMap).forEach(key => delete domainColorMap[key]);
+            const rankedDomains = [...rawTrendData.datasets]
+                .sort((a, b) => b.data.reduce((x, y) => x + y, 0) - a.data.reduce((x, y) => x + y, 0))
+                .map(ds => ds.label);
+            
+            rankedDomains.forEach((d, idx) => {
+                domainColorMap[d] = PALETTE[idx % PALETTE.length];
+            });
+
             let sortedDomains = rawTrendData.datasets.map(ds => ds.label).sort();
-            // Pre-assign colors
-            sortedDomains.forEach(d => getDomainColor(d));
 
             sortedDomains.forEach(domain => {
                 const color = getDomainColor(domain);
@@ -765,6 +773,20 @@ window.renderSevTrendChart = function() {
                 legend: {
                     display: true,
                     position: 'bottom',
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        generateLabels: (chart) => {
+                            return chart.data.datasets.map((dataset, i) => ({
+                                text: dataset.label,
+                                fillStyle: dataset.borderColor,
+                                hidden: !chart.isDatasetVisible(i),
+                                strokeStyle: dataset.borderColor,
+                                pointStyle: 'circle',
+                                datasetIndex: i
+                            }));
+                        }
+                    },
                     onClick: null
                 },
                 tooltip: {
@@ -951,14 +973,14 @@ function renderLowerGrid() {
     const domainsList = document.getElementById('monitoredDomainsList');
 
     if (!allVulns || allVulns.length === 0) {
-        if (alertsBody) alertsBody.innerHTML = `<tr><td colspan="4" class="empty-state">No alerts found.</td></tr>`;
+        if (alertsBody) alertsBody.innerHTML = `<tr><td colspan="5" class="empty-state">No alerts found.</td></tr>`;
         if (domainsList) domainsList.innerHTML = `<li class="domain-item" style="justify-content: center;"><span class="empty-state">No domains monitored.</span></li>`;
         return;
     }
 
     // 1. Process Recent Critical Alerts
     let allAlerts = [];
-    allVulns.forEach(scan => {
+    allVulns.forEach((scan, scanIdx) => {
         const domainName = scan.domains?.domain_name || 'Unknown Target';
         const scanDate = scan.scan_date;
         if (scan.vulnerabilities && scan.vulnerabilities.length > 0) {
@@ -970,7 +992,9 @@ function renderLowerGrid() {
                         title: v.title || v.check_type || 'Unknown Vulnerability',
                         target: domainName,
                         date: new Date(scanDate).getTime(),
-                        rawDate: scanDate
+                        rawDate: scanDate,
+                        vulnCount: scan.vulnerabilities.length,
+                        globalIndex: scanIdx
                     });
                 }
             });
@@ -998,15 +1022,16 @@ function renderLowerGrid() {
     
     if (alertsBody) {
         if (topAlerts.length === 0) {
-            alertsBody.innerHTML = `<tr><td colspan="4" class="empty-state">No high/critical alerts.</td></tr>`;
+            alertsBody.innerHTML = `<tr><td colspan="5" class="empty-state">No high/critical alerts.</td></tr>`;
         } else {
-            alertsBody.innerHTML = topAlerts.map(alert => {
+            alertsBody.innerHTML = topAlerts.map((alert, idx) => {
                 const sevClass = getSeverityClass(alert.severity);
                 return `
-                    <tr>
-                        <td><span class="badge badge-${sevClass}">${alert.severity}</span></td>
-                        <td class="font-mono" style="font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;" title="${escapeHtml(alert.title)}">${escapeHtml(alert.title)}</td>
+                    <tr onclick="openScanModalByGlobalIndex(${alert.globalIndex})" style="cursor: pointer;">
+                        <td style="text-align: center; font-weight: 600;">${idx + 1}</td>
                         <td class="font-mono" style="font-size: 12px;">${escapeHtml(alert.target)}</td>
+                        <td style="font-size: 12px; font-weight: 500;">${alert.vulnCount} Vulns</td>
+                        <td><span class="badge badge-${sevClass}">${alert.severity}</span></td>
                         <td style="color: var(--color-muted-light); font-size: 12px;">${formatDate(alert.rawDate)}</td>
                     </tr>
                 `;
@@ -1092,6 +1117,13 @@ function renderLowerGrid() {
 // Function helper untuk membuka modal dari index
 function openScanModalIndex(index) {
     const scan = filteredVulns[index];
+    if (scan) {
+        openScanModal(scan);
+    }
+}
+
+function openScanModalByGlobalIndex(index) {
+    const scan = allVulns[index];
     if (scan) {
         openScanModal(scan);
     }
