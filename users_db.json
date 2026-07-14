@@ -1,1 +1,12 @@
-[]
+[
+    {
+        "username": "admin",
+        "password": "70ff74f91ff24a4183c1b1e4e76af7e5$a78da494bb1bc83405824efe278a0db348d7bfdf92139ae2d5f3af4c28120ed1",
+        "role": "admin",
+        "is_online": false,
+        "last_online": null,
+        "timeout_until": null,
+        "session_id": null,
+        "created_at": "2026-07-14T04:50:04.477379+00:00"
+    }
+]
