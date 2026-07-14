@@ -892,7 +892,7 @@ function renderVulnerabilitiesList() {
     if (!filteredVulns) filteredVulns = [...allVulns];
     
     if (!filteredVulns || filteredVulns.length === 0) {
-        container.innerHTML = `<tr><td colspan="5" class="empty-state">No scan history found for the selected filter.</td></tr>`;
+        container.innerHTML = `<tr><td colspan="4" class="empty-state">No scan history found for the selected filter.</td></tr>`;
         if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
@@ -914,7 +914,7 @@ function renderVulnerabilitiesList() {
     const pageInput = document.getElementById('vulnPageInput');
     if (pageInput) pageInput.value = vulnCurrentPage;
     
-container.innerHTML = paginatedVulns.map((scan) => {
+    container.innerHTML = paginatedVulns.map((scan) => {
         // PENTING: Cari indeks asli dari allVulns agar pop-up detail tidak tertukar saat difilter
         const actualIndex = allVulns.indexOf(scan);
         const domainName = scan.domains?.domain_name || 'Unknown Target';
@@ -929,7 +929,6 @@ container.innerHTML = paginatedVulns.map((scan) => {
                 <td><span style="color:var(--primary); font-weight:500;">${escapeHtml(domainName)}</span></td>
                 <td style="color:var(--text-secondary);">${date}</td>
                 <td><span class="badge badge-${sevClass}">${numVulns} Vulns</span></td>
-                <td><button class="icon-btn" onclick="event.stopPropagation(); openScanModalIndex(${actualIndex})" title="View Details">⋮</button></td>
             </tr>
         `;
     }).join('');
