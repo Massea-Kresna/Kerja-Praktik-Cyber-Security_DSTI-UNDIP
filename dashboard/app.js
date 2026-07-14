@@ -112,7 +112,40 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const openBtn = document.getElementById('openCreateUserModalBtn');
+    // -- Logika untuk Tombol Network Scan --
+    const runNetworkScanBtn = document.getElementById('runNetworkScanBtn');
+    if (runNetworkScanBtn) {
+        runNetworkScanBtn.addEventListener('click', async () => {
+            const domainsToScan = [...selectedDomains];
+            if (domainsToScan.length === 0) return;
+
+            showToast('Scan Jaringan', `Memerintahkan API Pentest-Tools untuk melakukan pemindaian jaringan pada ${domainsToScan.length} domain...`, '🔍');
+            
+            runNetworkScanBtn.disabled = true;
+            runNetworkScanBtn.style.opacity = '0.5';
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/network-scan`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ targets: domainsToScan })
+                });
+
+                if (resp.status === 200) {
+                    showToast('Scan Diterima', 'Proses Network Scan sedang berjalan secara asinkron di server.', '✅');
+                } else {
+                    const data = await resp.json();
+                    showToast('Gagal', data.detail || 'Server menolak permintaan pemindaian jaringan.', '❌');
+                }
+            } catch (err) {
+                showToast('Koneksi Terputus', 'Gagal menghubungi server.', '🔌');
+            } finally {
+                refreshCheckboxUI(); // Memastikan status tombol diperbarui berdasarkan jumlah centang saat ini
+            }
+        });
+    }
+    
+const openBtn = document.getElementById('openCreateUserModalBtn');
     if (openBtn) {
         openBtn.addEventListener('click', openCreateUserModal);
     }
@@ -1341,6 +1374,19 @@ function refreshCheckboxUI() {
         }
     }
 
+    const runNetworkScanBtn = document.getElementById('runNetworkScanBtn');
+    if (runNetworkScanBtn) {
+        if (count > 0) {
+            runNetworkScanBtn.disabled = false;
+            runNetworkScanBtn.style.opacity = '1';
+            runNetworkScanBtn.style.cursor = 'pointer';
+        } else {
+            runNetworkScanBtn.disabled = true;
+            runNetworkScanBtn.style.opacity = '0.5';
+            runNetworkScanBtn.style.cursor = 'not-allowed';
+        }
+    }
+
     // UX Enhancement: Kunci sisa checkbox jika sudah mencapai batas 5
     checkboxes.forEach(cb => {
         if (!cb.checked && count >= 5) {
@@ -1706,11 +1752,11 @@ async function handleAuthSubmit(e) {
         if (resp.status === 200) {
             handleSuccessfulLogin(data);
         } else {
-            errMsg.textContent = data.detail || "Username atau password salah.";
+            errMsg.innerText = data.detail || "Username atau password salah.";
             errMsg.style.display = 'block';
         }
     } catch (err) {
-        errMsg.textContent = "Koneksi ke server gagal.";
+        errMsg.innerText = "Koneksi ke server gagal.";
         errMsg.style.display = 'block';
     } finally {
         submitBtn.textContent = originalText;

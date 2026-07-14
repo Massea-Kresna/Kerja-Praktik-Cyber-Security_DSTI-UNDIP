@@ -85,7 +85,7 @@ def insert_vulnerabilities(supabase, history_id, vulnerabilities):
         } 
         for v in vulnerabilities
     ]
-    supabase.table("vulnerabilities").insert(data).execute()
+    supabase.table("scan_result").insert(data).execute()
 
 def save_all_results(domain_list, port_results, tech_results, vuln_results):
     """
@@ -167,7 +167,7 @@ def save_all_results(domain_list, port_results, tech_results, vuln_results):
         print(f"[-] ERROR saat menyimpan ke Supabase: {e}")
         return False
 
-def save_pentest_tools_result(domain_name, report_json):
+def save_pentest_tools_result(domain_name, report_json, scanner_type="Web Scanner"):
     """
     Mengadaptasi laporan dari Pentest-Tools API dan menyimpannya ke Supabase.
     """
@@ -222,7 +222,7 @@ def save_pentest_tools_result(domain_name, report_json):
             
             vuln_obj = {
                 "severity": severity,
-                "check": "Pentest-Tools",
+                "check": scanner_type,
                 "title": title,
                 "detail": desc,
                 "recommendation": recom
@@ -235,7 +235,7 @@ def save_pentest_tools_result(domain_name, report_json):
                 # Format untuk raw_json (disamakan dengan response web_app.py)
                 low_info_vulns.append({
                     "severity": severity,
-                    "check_type": "Pentest-Tools",
+                    "check_type": scanner_type,
                     "title": title,
                     "description": desc,
                     "recommendation": recom
