@@ -414,14 +414,25 @@
                         <!-- Baris Tombol Aksi Pentest -->
                         <div style="padding: 16px 24px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; background: #fafafa;">
                             <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);" id="selectedDomainCount">0 domain dipilih</span>
+                            
+                            <!-- KELOMPOK TOMBOL AKSI -->
                             <div style="display: flex; gap: 12px;">
+                                <!-- Tombol 1: Simpan Jadwal -->
                                 <button id="saveTargetsBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white;">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
                                     Simpan Target (Interval)
                                 </button>
+                                
+                                <!-- Tombol 2: Network Scan (BARU) -->
+                                <button id="runNetworkScanBtn" class="btn btn-outline" disabled style="width: auto; padding: 8px 16px; opacity: 0.5; cursor: not-allowed; display: flex; align-items: center; gap: 6px; font-size: 13px; background: white;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                                    Network Scan
+                                </button>
+
+                                <!-- Tombol 3: Scan Web (Deep/Light) -->
                                 <button id="runScanBtn" class="auth-btn" disabled style="width: auto; padding: 8px 16px; opacity: 0.5; cursor: not-allowed; display: flex; align-items: center; gap: 6px; font-size: 13px;">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                                    Scan Sekarang
+                                    Web Scan
                                 </button>
                             </div>
                         </div>
