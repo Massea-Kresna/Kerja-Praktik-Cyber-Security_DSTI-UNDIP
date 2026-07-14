@@ -128,7 +128,7 @@ def get_current_user(request: Request):
                 sisa_detik = int((timeout_until - now).total_seconds())
                 menit = sisa_detik // 60
                 detik = sisa_detik % 60
-                detail_msg = f"Akun Anda ditangguhkan. Silakan coba lagi dalam {menit} menit {detik} detik."
+                detail_msg = f"Admin telah menangguhkan akun anda, hubungi admin untuk informasi lebih lanjut.\nWaktu sisa penangguhan: {menit} menit {detik} detik"
                 raise HTTPException(status_code=403, detail=detail_msg)
         except HTTPException as he:
             raise he
@@ -205,7 +205,7 @@ async def login_user(user_data: UserLogin, response: Response):
                 sisa_detik = int((timeout_until - now).total_seconds())
                 menit = sisa_detik // 60
                 detik = sisa_detik % 60
-                raise HTTPException(status_code=403, detail=f"Akun Anda sedang ditangguhkan. Sisa waktu: {menit} menit {detik} detik.")
+                raise HTTPException(status_code=403, detail=f"Admin telah menangguhkan akun anda, hubungi admin untuk informasi lebih lanjut.\nWaktu sisa penangguhan: {menit} menit {detik} detik")
         except HTTPException as he:
             raise he
         except Exception:
@@ -418,7 +418,7 @@ def get_dashboard_stats(current_user = Depends(get_current_user)):
                 stats[r_level] += 1
 
         # Hitung total vulnerabilities
-        vuln_resp = supabase.table("vulnerabilities").select("id", count="exact").execute()
+        vuln_resp = supabase.table("scan_result").select("id", count="exact").execute()
         total_vulns = vuln_resp.count if hasattr(vuln_resp, 'count') and vuln_resp.count is not None else len(vuln_resp.data)
 
         return {
@@ -462,7 +462,7 @@ def get_trend_stats(current_user = Depends(get_current_user)):
         
         resp = (
             supabase.table("scan_history")
-            .select("id, scan_date, raw_json, domains(domain_name), vulnerabilities(id)")
+            .select("id, scan_date, raw_json, domains(domain_name), scan_result(id)")
             .gte("scan_date", start_time_iso)
             .order("scan_date", desc=False)
             .execute()
@@ -499,7 +499,7 @@ def get_trend_stats(current_user = Depends(get_current_user)):
                 if domain_name not in domains_data:
                     domains_data[domain_name] = [0] * 49
                 
-                vuln_count = len(scan.get("vulnerabilities") or [])
+                vuln_count = len(scan.get("scan_result") or [])
                 raw_json = scan.get("raw_json")
                 if isinstance(raw_json, list):
                     vuln_count += len(raw_json)
@@ -545,7 +545,7 @@ def get_severity_trend_stats(current_user = Depends(get_current_user)):
         
         resp = (
             supabase.table("scan_history")
-            .select("id, scan_date, raw_json, vulnerabilities(severity), domains(domain_name)")
+            .select("id, scan_date, raw_json, scan_result(severity), domains(domain_name)")
             .gte("scan_date", start_time_iso)
             .order("scan_date", desc=False)
             .execute()
@@ -589,7 +589,7 @@ def get_severity_trend_stats(current_user = Depends(get_current_user)):
             
             if 0 <= bucket_index < 49:
                 # Hitung dari tabel vulnerabilities (Medium/High/Critical)
-                vulns = scan.get("vulnerabilities") or []
+                vulns = scan.get("scan_result") or []
                 for v in vulns:
                     sev = (v.get("severity") or "").upper()
                     if sev in severities_data:
@@ -704,8 +704,8 @@ def get_domain_detail(domain_name: str, current_user = Depends(get_current_user)
 
             # Vulnerabilities
             vulns_resp = (
-                supabase.table("vulnerabilities")
-                .select("severity, check_type, title, description, recommendation")
+                supabase.table("scan_result")
+                .select("id, check_type, severity, title, description, recommendation")
                 .eq("history_id", scan_id)
                 .execute()
             )
@@ -750,7 +750,7 @@ def get_scan_history(limit: int = Query(20, ge=1, le=1000)):
     try:
         resp = (
             supabase.table("scan_history")
-            .select("id, risk_score, risk_level, scan_date, raw_json, domain_id, domains(domain_name, ip_address), vulnerabilities(title, severity, check_type, description, recommendation)")
+            .select("id, risk_score, risk_level, scan_date, raw_json, domain_id, domains(domain_name, ip_address), scan_result(title, severity, check_type, description, recommendation)")
             .order("scan_date", desc=True)
             .limit(limit)
             .execute()
@@ -758,6 +758,11 @@ def get_scan_history(limit: int = Query(20, ge=1, le=1000)):
         
         data = resp.data
         for scan in data:
+            if "scan_result" in scan:
+                scan["vulnerabilities"] = scan.pop("scan_result")
+            else:
+                scan["vulnerabilities"] = []
+                
             if scan.get("raw_json") and isinstance(scan["raw_json"], list):
                 if not scan.get("vulnerabilities"):
                     scan["vulnerabilities"] = []
@@ -786,7 +791,7 @@ def get_vulnerabilities(
 
     try:
         query = (
-            supabase.table("vulnerabilities")
+            supabase.table("scan_result")
             .select("id, severity, check_type, title, description, recommendation, history_id, scan_history(scan_date, domain_id, domains(domain_name))")
         )
         if severity:

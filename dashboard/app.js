@@ -1707,11 +1707,11 @@ async function handleAuthSubmit(e) {
         if (resp.status === 200) {
             handleSuccessfulLogin(data);
         } else {
-            errMsg.textContent = data.detail || "Username atau password salah.";
+            errMsg.innerText = data.detail || "Username atau password salah.";
             errMsg.style.display = 'block';
         }
     } catch (err) {
-        errMsg.textContent = "Koneksi ke server gagal.";
+        errMsg.innerText = "Koneksi ke server gagal.";
         errMsg.style.display = 'block';
     }
 }
