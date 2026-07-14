@@ -24,7 +24,7 @@ import uuid
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from scanner.pentest_tools_scheduler import process_domain_scan
-from pydantic import BaseModel
+from scanner.pentest_tools_scheduler import process_network_scan
 from typing import List
 
 app = FastAPI(title="DSTI UNDIP Pentest Dashboard API")
@@ -863,6 +863,25 @@ async def trigger_pentest(domain_name: str, background_tasks: BackgroundTasks, c
         "status": "queued"
     })
 
+class NetworkScanRequest(BaseModel):
+    targets: List[str]
+
+async def run_network_scan_background(targets: List[str]):
+    """Fungsi latar belakang untuk menjalankan Network Scan pada beberapa target."""
+    semaphore = asyncio.Semaphore(5) # Membatasi konkurensi agar tidak melanggar batas API
+    async with aiohttp.ClientSession() as session:
+        tasks = [process_network_scan(session, target, semaphore) for target in targets]
+        await asyncio.gather(*tasks)
+
+@app.post("/api/network-scan")
+async def trigger_network_scan(payload: NetworkScanRequest, background_tasks: BackgroundTasks):
+    """Memicu proses Network Scan."""
+    if not payload.targets:
+        raise HTTPException(status_code=400, detail="Tidak ada target yang diberikan.")
+        
+    background_tasks.add_task(run_network_scan_background, payload.targets)
+    
+    return {"status": "success", "message": f"Network Scan via Pentest-Tools diluncurkan untuk {len(payload.targets)} aset."}
 
 # ===================================================================
 # Mount Static Files — HARUS di bawah semua route API
