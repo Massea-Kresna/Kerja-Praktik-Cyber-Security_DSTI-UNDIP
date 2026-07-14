@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Simpan di memori browser
             localStorage.setItem('dsti_saved_targets', JSON.stringify(domainsToSave));
-            
+
             // Tembakkan API ke Backend
             try {
                 // Diubah ke endpoint /api/schedule-scan dan mengubah key "domains" menjadi "targets"
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (domainsToScan.length === 0) return;
 
             showToast('Scan Dimulai', `Memerintahkan backend untuk memulai scan pada ${domainsToScan.length} domain...`, '🚀');
-            
+
             // Kunci tombol agar tidak di-klik dua kali (spam)
             runBtn.disabled = true;
             runBtn.style.opacity = '0.5';
@@ -89,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 const responses = await Promise.all(scanPromises);
-                
+
                 // Cek apakah ada request yang gagal
                 const allSuccess = responses.every(resp => resp.status === 200 || resp.status === 202);
 
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (domainsToScan.length === 0) return;
 
             showToast('Scan Jaringan', `Memerintahkan API Pentest-Tools untuk melakukan pemindaian jaringan pada ${domainsToScan.length} domain...`, '🔍');
-            
+
             runNetworkScanBtn.disabled = true;
             runNetworkScanBtn.style.opacity = '0.5';
 
@@ -144,8 +144,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    
-const openBtn = document.getElementById('openCreateUserModalBtn');
+
+    const openBtn = document.getElementById('openCreateUserModalBtn');
     if (openBtn) {
         openBtn.addEventListener('click', openCreateUserModal);
     }
@@ -186,7 +186,7 @@ const openBtn = document.getElementById('openCreateUserModalBtn');
             }
         });
     }
-    
+
     // Bind page input jumps
     const vulnPageInput = document.getElementById('vulnPageInput');
     if (vulnPageInput) {
@@ -196,7 +196,7 @@ const openBtn = document.getElementById('openCreateUserModalBtn');
             if (isNaN(val)) val = 1;
             if (val < 1) val = 1;
             if (val > totalPages) val = totalPages;
-            
+
             vulnCurrentPage = val;
             renderVulnerabilitiesList();
         });
@@ -254,7 +254,7 @@ const openBtn = document.getElementById('openCreateUserModalBtn');
             if (isNaN(val)) val = 1;
             if (val < 1) val = 1;
             if (val > totalPages) val = totalPages;
-            
+
             domainCurrentPage = val;
             renderInventoryList();
         });
@@ -302,7 +302,7 @@ function switchView(viewId) {
         v.classList.remove('active');
         v.style.display = 'none';
     });
-    
+
     // Deactivate nav items
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
@@ -324,7 +324,7 @@ function switchView(viewId) {
         viewEl.classList.add('active');
         viewEl.style.display = 'block';
     }
-    
+
     // Activate nav dynamically
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(n => {
         if (n.getAttribute('onclick') && n.getAttribute('onclick').includes(`'${viewId}'`)) {
@@ -484,7 +484,7 @@ async function loadOverview() {
             const rankedDomains = [...rawTrendData.datasets]
                 .sort((a, b) => b.data.reduce((x, y) => x + y, 0) - a.data.reduce((x, y) => x + y, 0))
                 .map(ds => ds.label);
-            
+
             rankedDomains.forEach((d, idx) => {
                 domainColorMap[d] = PALETTE[idx % PALETTE.length];
             });
@@ -499,7 +499,7 @@ async function loadOverview() {
                 label.innerHTML = `<input type="checkbox" value="${domain}" ${isChecked} onchange="onVulnFilterChange(this)"><span class="sev-dot" style="background:${color}"></span>${domain}`;
                 vulnItemsContainer.appendChild(label);
             });
-            
+
             if (hasExisting) {
                 updateDropdownLabel('vulnTrendDropdown', 'All Domains');
             }
@@ -634,92 +634,92 @@ window.renderVulnTrendChart = function () {
     } else {
         vulnChartInstance = new Chart(vulnCtx, {
             type: 'line',
-        data: {
-            labels: rawTrendData.labels || [],
-            datasets: domainDatasets
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { precision: 0 },
-                    grid: { color: '#e5e7eb', borderDash: [5, 5] },
-                    border: { display: false }
-                },
-                x: {
-                    ticks: { maxTicksLimit: 12 },
-                    grid: { display: false },
-                    border: { display: false }
-                }
+            data: {
+                labels: rawTrendData.labels || [],
+                datasets: domainDatasets
             },
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'bottom',
-                    labels: {
-                        usePointStyle: true,
-                        pointStyle: 'circle',
-                        generateLabels: (chart) => {
-                            return chart.data.datasets.map((dataset, i) => ({
-                                text: dataset.label,
-                                fillStyle: dataset.borderColor,
-                                hidden: !chart.isDatasetVisible(i),
-                                strokeStyle: dataset.borderColor,
-                                pointStyle: 'circle',
-                                datasetIndex: i
-                            }));
-                        }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 },
+                        grid: { color: '#e5e7eb', borderDash: [5, 5] },
+                        border: { display: false }
                     },
-                    onClick: null
+                    x: {
+                        ticks: { maxTicksLimit: 12 },
+                        grid: { display: false },
+                        border: { display: false }
+                    }
                 },
-                tooltip: {
-                    backgroundColor: '#ffffff',
-                    titleColor: '#1f2937',
-                    bodyColor: '#374151',
-                    borderColor: '#e5e7eb',
-                    borderWidth: 1,
-                    padding: 12,
-                    boxPadding: 6,
-                    usePointStyle: true,
-                    titleFont: { size: 13, weight: '600' },
-                    bodyFont: { size: 12 },
-                    mode: 'index',
-                    intersect: false,
-                    filter: function(tooltipItem) {
-                        return tooltipItem.parsed.y > 0;
-                    },
-                    callbacks: {
-                        labelColor: function(context) {
-                            return {
-                                borderColor: context.dataset.borderColor,
-                                backgroundColor: context.dataset.borderColor
-                            };
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            generateLabels: (chart) => {
+                                return chart.data.datasets.map((dataset, i) => ({
+                                    text: dataset.label,
+                                    fillStyle: dataset.borderColor,
+                                    hidden: !chart.isDatasetVisible(i),
+                                    strokeStyle: dataset.borderColor,
+                                    pointStyle: 'circle',
+                                    datasetIndex: i
+                                }));
+                            }
                         },
-                        label: function (context) {
-                            let label = context.dataset.label || '';
-                            if (label) label += ' | Vulns: ';
-                            if (context.parsed.y !== null) label += context.parsed.y;
-                            return label;
+                        onClick: null
+                    },
+                    tooltip: {
+                        backgroundColor: '#ffffff',
+                        titleColor: '#1f2937',
+                        bodyColor: '#374151',
+                        borderColor: '#e5e7eb',
+                        borderWidth: 1,
+                        padding: 12,
+                        boxPadding: 6,
+                        usePointStyle: true,
+                        titleFont: { size: 13, weight: '600' },
+                        bodyFont: { size: 12 },
+                        mode: 'index',
+                        intersect: false,
+                        filter: function (tooltipItem) {
+                            return tooltipItem.parsed.y > 0;
+                        },
+                        callbacks: {
+                            labelColor: function (context) {
+                                return {
+                                    borderColor: context.dataset.borderColor,
+                                    backgroundColor: context.dataset.borderColor
+                                };
+                            },
+                            label: function (context) {
+                                let label = context.dataset.label || '';
+                                if (label) label += ' | Vulns: ';
+                                if (context.parsed.y !== null) label += context.parsed.y;
+                                return label;
+                            }
                         }
                     }
                 }
             }
-        }
-    });
+        });
     }
 };
 
-window.renderSevTrendChart = function() {
+window.renderSevTrendChart = function () {
     if (!rawSevTrendData) return;
-    
+
     const sevCtx = document.getElementById('sevTrendChart').getContext('2d');
-    
+
     // Get selected severities from checkboxes
     const checkboxes = Array.from(document.querySelectorAll('#sevTrendItems input[type="checkbox"]'));
     const allCb = checkboxes.find(cb => cb.value === 'All');
-    
+
     let selectedSevs = [];
     let allChecked = false;
 
@@ -729,10 +729,10 @@ window.renderSevTrendChart = function() {
         selectedSevs = checkboxes.filter(cb => cb.checked && cb.value !== 'All').map(cb => cb.value);
         if (selectedSevs.length === 0) allChecked = true;
     }
-    
+
     // Update label (handled by onSevFilterChange but good to ensure on initial render)
     updateDropdownLabel('sevTrendDropdown', 'All Severities');
-    
+
     const sevColors = {
         'Critical': '#ef4444',
         'High': '#f97316',
@@ -740,12 +740,12 @@ window.renderSevTrendChart = function() {
         'Low': '#3b82f6',
         'Info': '#22c55e'
     };
-    
+
     let baseDatasets = rawSevTrendData.datasets || [];
     if (!allChecked && selectedSevs.length > 0) {
         baseDatasets = baseDatasets.filter(ds => selectedSevs.includes(ds.label));
     }
-    
+
     const sevDatasets = baseDatasets.map((ds) => {
         const color = sevColors[ds.label] || '#9ca3af';
         return {
@@ -755,7 +755,7 @@ window.renderSevTrendChart = function() {
             borderColor: color,
             backgroundColor: (context) => {
                 const chart = context.chart;
-                const {ctx, chartArea} = chart;
+                const { ctx, chartArea } = chart;
                 if (!chartArea) return color;
                 const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
                 const rgb = hexToRgb(color);
@@ -782,87 +782,119 @@ window.renderSevTrendChart = function() {
     } else {
         sevChartInstance = new Chart(sevCtx, {
             type: 'line',
-        data: {
-            labels: rawSevTrendData.labels || [],
-            datasets: sevDatasets
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { precision: 0 },
-                    grid: { color: '#e5e7eb', borderDash: [5, 5] },
-                    border: { display: false }
-                },
-                x: {
-                    ticks: { maxTicksLimit: 12 },
-                    grid: { display: false },
-                    border: { display: false }
-                }
+            data: {
+                labels: rawSevTrendData.labels || [],
+                datasets: sevDatasets
             },
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'bottom',
-                    labels: {
-                        usePointStyle: true,
-                        pointStyle: 'circle',
-                        generateLabels: (chart) => {
-                            return chart.data.datasets.map((dataset, i) => ({
-                                text: dataset.label,
-                                fillStyle: dataset.borderColor,
-                                hidden: !chart.isDatasetVisible(i),
-                                strokeStyle: dataset.borderColor,
-                                pointStyle: 'circle',
-                                datasetIndex: i
-                            }));
-                        }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 },
+                        grid: { color: '#e5e7eb', borderDash: [5, 5] },
+                        border: { display: false }
                     },
-                    onClick: null
+                    x: {
+                        ticks: { maxTicksLimit: 12 },
+                        grid: { display: false },
+                        border: { display: false }
+                    }
                 },
-                tooltip: {
-                    backgroundColor: '#ffffff',
-                    titleColor: '#1f2937',
-                    bodyColor: '#374151',
-                    borderColor: '#e5e7eb',
-                    borderWidth: 1,
-                    padding: 12,
-                    boxPadding: 6,
-                    usePointStyle: true,
-                    titleFont: { size: 13, weight: '600' },
-                    bodyFont: { size: 12 },
-                    mode: 'index',
-                    intersect: false,
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.dataset.label || '';
-                            let val = context.parsed.y;
-                            if (label) label += ': ';
-                            label += val;
-
-                            let domainsList = context.dataset.domains ? context.dataset.domains[context.dataIndex] : null;
-                            if (val > 0 && domainsList && domainsList.length > 0) {
-                                let lines = [label];
-                                domainsList.forEach(d => {
-                                    lines.push('   • ' + d);
-                                });
-                                return lines;
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            generateLabels: (chart) => {
+                                return chart.data.datasets.map((dataset, i) => ({
+                                    text: dataset.label,
+                                    fillStyle: dataset.borderColor,
+                                    hidden: !chart.isDatasetVisible(i),
+                                    strokeStyle: dataset.borderColor,
+                                    pointStyle: 'circle',
+                                    datasetIndex: i
+                                }));
                             }
-                            return label;
+                        },
+                        onClick: null
+                    },
+                    tooltip: {
+                        backgroundColor: '#ffffff',
+                        titleColor: '#1f2937',
+                        bodyColor: '#374151',
+                        borderColor: '#e5e7eb',
+                        borderWidth: 1,
+                        padding: 12,
+                        boxPadding: 6,
+                        usePointStyle: true,
+                        titleFont: { size: 13, weight: '600' },
+                        bodyFont: { size: 12 },
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function (context) {
+                                let label = context.dataset.label || '';
+                                let val = context.parsed.y;
+                                if (label) label += ': ';
+                                label += val;
+
+                                let domainsList = context.dataset.domains ? context.dataset.domains[context.dataIndex] : null;
+                                if (val > 0 && domainsList && domainsList.length > 0) {
+                                    let lines = [label];
+                                    domainsList.forEach(d => {
+                                        lines.push('   • ' + d);
+                                    });
+                                    return lines;
+                                }
+                                return label;
+                            }
                         }
                     }
                 }
             }
-        }
-    });
+        });
     }
 };
 
 // ==========================================================================
 // Automated Pentests (Vulnerabilities View)
 // ==========================================================================
+let vulnSortCol = 'date';
+let vulnSortDesc = true;
+
+function sortVulnHistory(col) {
+    if (vulnSortCol === col) {
+        vulnSortDesc = !vulnSortDesc;
+    } else {
+        vulnSortCol = col;
+        vulnSortDesc = (col === 'date' || col === 'vulns');
+    }
+    applyVulnFilters();
+}
+
+function updateSortIcons() {
+    const headers = document.querySelectorAll('#scanHistoryHeaders .sortable');
+    headers.forEach(th => {
+        const icon = th.querySelector('.sort-icon');
+        if (icon) icon.innerHTML = '';
+    });
+    
+    const activeMapping = { 'id': 0, 'domain': 1, 'date': 2, 'type': 3, 'vulns': 4 };
+    const activeIndex = activeMapping[vulnSortCol];
+    
+    if (activeIndex !== undefined) {
+        const activeTh = document.querySelectorAll('#scanHistoryHeaders th')[activeIndex];
+        if (activeTh) {
+            const icon = activeTh.querySelector('.sort-icon');
+            if (icon) icon.innerHTML = vulnSortDesc ? '↓' : '↑';
+        }
+    }
+}
+
 async function loadVulnerabilities() {
     try {
         const resp = await fetch(`${API_BASE}/api/scan-history?limit=1000`);
@@ -878,30 +910,56 @@ async function loadVulnerabilities() {
 function applyVulnFilters() {
     const startInput = document.getElementById('vulnStartDate')?.value;
     const endInput = document.getElementById('vulnEndDate')?.value;
-    
+
     let startDate = null;
     let endDate = null;
-    
+
     if (startInput) {
         startDate = new Date(startInput);
         startDate.setHours(0, 0, 0, 0);
     }
-    
+
     if (endInput) {
         endDate = new Date(endInput);
         endDate.setHours(23, 59, 59, 999);
     }
-    
+
     filteredVulns = allVulns.filter(scan => {
         if (!scan.scan_date) return false;
         const scanDate = new Date(scan.scan_date);
-        
+
         if (startDate && scanDate < startDate) return false;
         if (endDate && scanDate > endDate) return false;
-        
+
         return true;
     });
-    
+
+    filteredVulns.sort((a, b) => {
+        let valA, valB;
+        if (vulnSortCol === 'id') {
+            valA = a.id || 0;
+            valB = b.id || 0;
+        } else if (vulnSortCol === 'domain') {
+            valA = (a.domains?.domain_name || '').toLowerCase();
+            valB = (b.domains?.domain_name || '').toLowerCase();
+        } else if (vulnSortCol === 'date') {
+            valA = new Date(a.scan_date).getTime() || 0;
+            valB = new Date(b.scan_date).getTime() || 0;
+        } else if (vulnSortCol === 'type') {
+            valA = (a.vulnerabilities && a.vulnerabilities.length > 0 && a.vulnerabilities[0].check_type || '').toLowerCase();
+            valB = (b.vulnerabilities && b.vulnerabilities.length > 0 && b.vulnerabilities[0].check_type || '').toLowerCase();
+        } else if (vulnSortCol === 'vulns') {
+            valA = a.vulnerabilities ? a.vulnerabilities.length : 0;
+            valB = b.vulnerabilities ? b.vulnerabilities.length : 0;
+        }
+        
+        if (valA < valB) return vulnSortDesc ? 1 : -1;
+        if (valA > valB) return vulnSortDesc ? -1 : 1;
+        return 0;
+    });
+
+    updateSortIcons();
+
     vulnCurrentPage = 1;
     renderVulnerabilitiesList();
 }
@@ -911,7 +969,7 @@ function resetVulnFilters() {
     const endInput = document.getElementById('vulnEndDate');
     if (startInput) startInput.value = '';
     if (endInput) endInput.value = '';
-    
+
     filteredVulns = [...allVulns];
     vulnCurrentPage = 1;
     renderVulnerabilitiesList();
@@ -920,33 +978,33 @@ function resetVulnFilters() {
 function renderVulnerabilitiesList() {
     const container = document.getElementById('vulnListContainer');
     const paginationControls = document.getElementById('vulnPaginationControls');
-    
+
     // Inisialisasi data filter jika baru pertama kali dimuat
     if (!filteredVulns) filteredVulns = [...allVulns];
-    
+
     if (!filteredVulns || filteredVulns.length === 0) {
         container.innerHTML = `<tr><td colspan="4" class="empty-state">No scan history found for the selected filter.</td></tr>`;
         if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
-    
+
     if (paginationControls) paginationControls.style.display = 'flex';
-    
+
     const totalItems = filteredVulns.length;
     const totalPages = Math.ceil(totalItems / vulnRowsPerPage) || 1;
     if (vulnCurrentPage > totalPages) vulnCurrentPage = totalPages;
     if (vulnCurrentPage < 1) vulnCurrentPage = 1;
-    
+
     const startIdx = (vulnCurrentPage - 1) * vulnRowsPerPage;
     const endIdx = Math.min(startIdx + vulnRowsPerPage, totalItems);
     const paginatedVulns = filteredVulns.slice(startIdx, endIdx);
-    
+
     // Perbarui teks informasi halaman
     const totalPagesEl = document.getElementById('vulnTotalPages');
     if (totalPagesEl) totalPagesEl.textContent = totalPages;
     const pageInput = document.getElementById('vulnPageInput');
     if (pageInput) pageInput.value = vulnCurrentPage;
-    
+
     container.innerHTML = paginatedVulns.map((scan) => {
         // PENTING: Cari indeks asli dari allVulns agar pop-up detail tidak tertukar saat difilter
         const actualIndex = allVulns.indexOf(scan);
@@ -956,38 +1014,44 @@ function renderVulnerabilitiesList() {
         const date = formatDate(scan.scan_date);
         const numVulns = scan.vulnerabilities ? scan.vulnerabilities.length : 0;
 
+        let scanType = "Unknown Scan";
+        if (scan.vulnerabilities && scan.vulnerabilities.length > 0) {
+            scanType = scan.vulnerabilities[0].check_type || "Unknown Scan";
+        }
+
         return `
             <tr onclick="openScanModalIndex(${actualIndex})" style="cursor: pointer;">
                 <td style="font-family:var(--font-mono); font-weight:500;">SCAN-${String(scan.id || actualIndex + 1).padStart(4, '0')}</td>
                 <td><span style="color:var(--primary); font-weight:500;">${escapeHtml(domainName)}</span></td>
                 <td style="color:var(--text-secondary);">${date}</td>
+                <td style="color:var(--text-secondary); font-weight:500;">${escapeHtml(scanType)}</td>
                 <td><span class="badge badge-${sevClass}">${numVulns} Vulns</span></td>
             </tr>
         `;
     }).join('');
-    
+
     // Perbarui status tombol UI Pagination
     if (paginationControls) {
         paginationControls.style.display = 'flex';
-        
+
         const pageInput = document.getElementById('vulnPageInput');
         if (pageInput) {
             pageInput.value = vulnCurrentPage;
         }
-        
+
         const totalPagesSpan = document.getElementById('vulnTotalPages');
         const totalPages = Math.ceil(filteredVulns.length / vulnRowsPerPage) || 1;
         if (totalPagesSpan) {
             totalPagesSpan.textContent = totalPages;
         }
-        
+
         const prevBtn = document.getElementById('vulnPrevPageBtn');
         if (prevBtn) {
             prevBtn.disabled = (vulnCurrentPage === 1);
             prevBtn.style.opacity = (vulnCurrentPage === 1) ? '0.5' : '1';
             prevBtn.style.cursor = (vulnCurrentPage === 1) ? 'not-allowed' : 'pointer';
         }
-        
+
         const nextBtn = document.getElementById('vulnNextPageBtn');
         if (nextBtn) {
             nextBtn.disabled = (vulnCurrentPage === totalPages || totalPages === 0);
@@ -1051,7 +1115,7 @@ function renderLowerGrid() {
     }
 
     const topAlerts = uniqueDomainAlerts.slice(0, 5);
-    
+
     if (alertsBody) {
         if (topAlerts.length === 0) {
             alertsBody.innerHTML = `<tr><td colspan="5" class="empty-state">No high/critical alerts.</td></tr>`;
@@ -1090,10 +1154,10 @@ function renderLowerGrid() {
 
     let uniqueDomains = Object.values(domainMap);
     const DOMAIN_RISK_WEIGHT = { 'CRITICAL': 6, 'HIGH': 5, 'MEDIUM': 4, 'LOW': 3, 'INFO': 2, 'SAFE': 1 };
-    
+
     const riskFilterEl = document.querySelector('input[name="domainRisk"]:checked');
     const selectedRiskFilter = riskFilterEl ? riskFilterEl.value : 'ALL';
-    
+
     if (selectedRiskFilter !== 'ALL') {
         uniqueDomains = uniqueDomains.filter(d => {
             if (selectedRiskFilter === 'AT_RISK') return d.risk === 'CRITICAL' || d.risk === 'HIGH';
@@ -1119,7 +1183,7 @@ function renderLowerGrid() {
             domainsList.innerHTML = topDomains.map(d => {
                 let statusLabel = 'SECURE';
                 let statusClass = 'secure';
-                
+
                 if (d.risk === 'CRITICAL' || d.risk === 'HIGH') {
                     statusLabel = 'AT RISK';
                     statusClass = 'at-risk';
@@ -1171,7 +1235,7 @@ async function loadDomains() {
         allDomains = data.data || [];
         domainCurrentPage = 1;
         renderInventoryList();
-        
+
         const manageLink = document.getElementById('manageDomainsLink');
         if (manageLink) {
             manageLink.textContent = `Manage All ${allDomains.length} Domains`;
@@ -1187,7 +1251,7 @@ const DOMAINS_PER_PAGE = 20;
 function renderInventoryList() {
     const tbody = document.getElementById('inventoryTableBody');
     const paginationControls = document.getElementById('domainPaginationControls');
-    
+
     // Perbaikan Bug: Render UI Kosong dengan benar jika tidak ada data dari backend
     if (!allDomains || allDomains.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" class="empty-state">No domains found.</td></tr>`;
@@ -1197,28 +1261,28 @@ function renderInventoryList() {
 
     // Filtering logic
     const searchVal = (document.getElementById('domainSearchInput')?.value || '').toLowerCase();
-    filteredDomains = allDomains.filter(d => 
+    filteredDomains = allDomains.filter(d =>
         (d.domain_name || '').toLowerCase().includes(searchVal) ||
         (d.ip_address || '').toLowerCase().includes(searchVal)
     );
-    
+
     if (filteredDomains.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" class="empty-state">No domains match your search.</td></tr>`;
         if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
-    
+
     if (paginationControls) paginationControls.style.display = 'flex';
-    
+
     const totalItems = filteredDomains.length;
     const totalPages = Math.ceil(totalItems / domainRowsPerPage) || 1;
     if (domainCurrentPage > totalPages) domainCurrentPage = totalPages;
     if (domainCurrentPage < 1) domainCurrentPage = 1;
-    
+
     const startIdx = (domainCurrentPage - 1) * domainRowsPerPage;
     const endIdx = Math.min(startIdx + domainRowsPerPage, totalItems);
     const paginatedDomains = filteredDomains.slice(startIdx, endIdx);
-    
+
     // Cetak Tabel dengan pengecekan state "selectedDomains"
     tbody.innerHTML = paginatedDomains.map(d => {
         // Cek apakah domain ini ada di memori yang tersimpan
@@ -1236,21 +1300,21 @@ function renderInventoryList() {
         </tr>
         `;
     }).join('');
-    
+
     if (paginationControls) {
         const pageInput = document.getElementById('domainPageInput');
         if (pageInput) pageInput.value = domainCurrentPage;
-        
+
         const totalPagesSpan = document.getElementById('domainTotalPages');
         if (totalPagesSpan) totalPagesSpan.textContent = totalPages || 1;
-        
+
         const prevBtn = document.getElementById('domainPrevPageBtn');
         if (prevBtn) {
             prevBtn.disabled = (domainCurrentPage === 1);
             prevBtn.style.opacity = (domainCurrentPage === 1) ? '0.5' : '1';
             prevBtn.style.cursor = (domainCurrentPage === 1) ? 'not-allowed' : 'pointer';
         }
-        
+
         const nextBtn = document.getElementById('domainNextPageBtn');
         if (nextBtn) {
             nextBtn.disabled = (domainCurrentPage === totalPages || totalPages === 0);
@@ -1267,7 +1331,7 @@ function renderInventoryList() {
 function updateCheckboxLogic() {
     const checkboxes = document.querySelectorAll('.domain-checkbox');
     const selectAll = document.getElementById('selectAllDomains');
-    
+
     // 1. Re-bind listeners ke setiap checkbox baris
     checkboxes.forEach(cb => {
         cb.addEventListener('change', (e) => {
@@ -1286,12 +1350,12 @@ function updateCheckboxLogic() {
             refreshCheckboxUI();
         });
     });
-    
+
     // 2. Logika Select All yang disesuaikan dengan limit 5
     if (selectAll) {
         selectAll.onclick = (e) => {
             const isChecked = e.target.checked;
-            
+
             if (isChecked) {
                 let addedCount = 0;
                 checkboxes.forEach(cb => {
@@ -1302,7 +1366,7 @@ function updateCheckboxLogic() {
                         addedCount++;
                     }
                 });
-                
+
                 // Beri tahu pengguna jika terpotong oleh limit
                 if (selectedDomains.size >= 5 && addedCount > 0) {
                     showToast('Batas Tercapai', 'Hanya dipilih sampai batas maksimal 5 domain.', '⚠️');
@@ -1317,7 +1381,7 @@ function updateCheckboxLogic() {
             refreshCheckboxUI();
         };
     }
-    
+
     // Perbarui teks dan tombol UI pertama kali tabel dimuat
     refreshCheckboxUI();
 }
@@ -1327,14 +1391,14 @@ function refreshCheckboxUI() {
     const runBtn = document.getElementById('runScanBtn');
     const checkboxes = document.querySelectorAll('.domain-checkbox');
     const selectAll = document.getElementById('selectAllDomains');
-    
+
     const count = selectedDomains.size;
-    
+
     // Update teks indikator
     if (countText) {
         countText.textContent = `${count} dari maksimal 5 domain dipilih`;
     }
-    
+
     // Update tombol "Scan Sekarang"
     if (runBtn) {
         if (count > 0) {
@@ -1378,7 +1442,7 @@ function refreshCheckboxUI() {
     if (selectAll) {
         const allDisplayedChecked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
         selectAll.checked = allDisplayedChecked;
-        
+
         // Matikan Select All jika keranjang sudah penuh dari halaman lain
         if (!selectAll.checked && count >= 5) {
             selectAll.disabled = true;
@@ -1460,6 +1524,15 @@ function openScanModal(scan) {
     document.getElementById('scanModalDate').textContent = formatDate(scan.scan_date);
     document.getElementById('scanModalRisk').textContent = scan.risk_level || 'SAFE';
     document.getElementById('scanModalRisk').className = `meta-value text-${getSeverityClass(scan.risk_level)}`;
+    
+    let scanType = "Unknown Scan";
+    if (scan.vulnerabilities && scan.vulnerabilities.length > 0) {
+        scanType = scan.vulnerabilities[0].check_type || "Unknown Scan";
+    }
+    const typeEl = document.getElementById('scanModalType');
+    if (typeEl) {
+        typeEl.textContent = scanType;
+    }
 
     const btnDownload = document.getElementById('btnDownloadReport');
     if (btnDownload && domainName) {
@@ -1631,7 +1704,7 @@ function showLoginOverlay() {
     document.getElementById('nav-admin').style.display = 'none';
     document.getElementById('mainHeader').style.display = 'none';
     document.getElementById('notifWrapper').style.display = 'none';
-    
+
     if (wsLive) {
         wsLive.close();
         wsLive = null;
@@ -1646,41 +1719,41 @@ function showLoginOverlay() {
 function handleSuccessfulLogin(user) {
     currentUser = user;
     document.getElementById('authOverlay').classList.add('hidden');
-    
+
     // Show Main Header
     document.getElementById('mainHeader').style.display = 'flex';
-    
+
     // Setup Sidebar User Info
     document.getElementById('sidebar-user-container').style.display = 'flex';
     document.getElementById('sidebar-username').textContent = user.username;
-    
+
     const roleEl = document.getElementById('sidebar-user-role');
     if (user.role === 'admin') {
         roleEl.innerHTML = `<span class="badge-admin-role">Admin</span>`;
         document.getElementById('nav-admin').style.display = 'block';
         document.getElementById('notifWrapper').style.display = 'block';
-        
+
         renderNotificationList();
     } else {
         roleEl.innerHTML = `<span class="badge-user-role">User</span>`;
         document.getElementById('nav-admin').style.display = 'none';
         document.getElementById('notifWrapper').style.display = 'none';
-        
+
         // If regular user was on admin tab, redirect to overview
         const activeNav = document.querySelector('.sidebar-nav .nav-item.active');
         if (activeNav && activeNav.getAttribute('onclick').includes('admin')) {
             switchView('overview');
         }
     }
-    
+
     // Hubungkan WebSocket Live Session untuk semua user (baik admin maupun user biasa)
     connectLiveWebSocket(user.session_id);
-    
+
     // Clean inputs
     document.getElementById('authUsername').value = '';
     document.getElementById('authPassword').value = '';
     document.getElementById('authErrorMsg').style.display = 'none';
-    
+
     refreshData();
 
     // Mulai refresh otomatis 5 detik HANYA setelah sukses login
@@ -1693,9 +1766,9 @@ async function handleAuthSubmit(e) {
     const username = document.getElementById('authUsername').value.trim();
     const password = document.getElementById('authPassword').value;
     const errMsg = document.getElementById('authErrorMsg');
-    
+
     errMsg.style.display = 'none';
-    
+
     try {
         const resp = await fetch(`${API_BASE}/api/auth/login`, {
             method: 'POST',
@@ -1703,7 +1776,7 @@ async function handleAuthSubmit(e) {
             body: JSON.stringify({ username, password })
         });
         const data = await resp.json();
-        
+
         if (resp.status === 200) {
             handleSuccessfulLogin(data);
         } else {
@@ -1728,11 +1801,11 @@ async function handleLogout() {
 
 // Interceptor global untuk response 401
 const originalFetch = window.fetch;
-window.fetch = async function(...args) {
+window.fetch = async function (...args) {
     const response = await originalFetch(...args);
     if (response.status === 401 && !args[0].includes('/api/auth/me') && !args[0].includes('/api/auth/login')) {
         showLoginOverlay();
-    // Notifikasi "Sesi Berakhir" dinonaktifkan sesuai permintaan
+        // Notifikasi "Sesi Berakhir" dinonaktifkan sesuai permintaan
     }
     return response;
 };
@@ -1749,7 +1822,7 @@ function openCreateUserModal() {
     }
     overlay.classList.add('active');
     console.log("[Debug] added 'active' to #createUserModalOverlay. Class list is now:", overlay.className);
-    
+
     const errorMsg = document.getElementById('createUserErrorMsg');
     if (errorMsg) {
         errorMsg.style.display = 'none';
@@ -1772,16 +1845,16 @@ async function handleCreateUserSubmit(e) {
     const confirmPassword = document.getElementById('createConfirmPassword').value;
     const role = "user";
     const errMsg = document.getElementById('createUserErrorMsg');
-    
+
     errMsg.style.display = 'none';
-    
+
     // Validasi kecocokan password
     if (password !== confirmPassword) {
         errMsg.textContent = "Konfirmasi password tidak sesuai!";
         errMsg.style.display = 'block';
         return;
     }
-    
+
     try {
         const resp = await fetch(`${API_BASE}/api/auth/register`, {
             method: 'POST',
@@ -1789,7 +1862,7 @@ async function handleCreateUserSubmit(e) {
             body: JSON.stringify({ username, password, role })
         });
         const data = await resp.json();
-        
+
         if (resp.status === 200) {
             showToast("Sukses", `User baru '${username}' berhasil didaftarkan.`, "✨");
             closeCreateUserModal();
@@ -1812,7 +1885,7 @@ async function loadAdminUsers() {
     try {
         const resp = await fetch(`${API_BASE}/api/admin/users`);
         const result = await resp.json();
-        
+
         if (resp.status === 200) {
             renderUserTable(result.data);
         } else {
@@ -1829,20 +1902,20 @@ function renderUserTable(users) {
         tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Tidak ada user terdaftar.</td></tr>`;
         return;
     }
-    
+
     tbody.innerHTML = users.map(u => {
         const isSelf = u.username === currentUser.username;
-        const roleBadge = u.role === 'admin' 
-            ? `<span class="badge-admin-role">Admin</span>` 
+        const roleBadge = u.role === 'admin'
+            ? `<span class="badge-admin-role">Admin</span>`
             : `<span class="badge-user-role">User</span>`;
-            
+
         const isOnline = u.is_online;
         const statusBadge = isOnline
             ? `<span class="status-indicator status-online">Online</span>`
             : `<span class="status-indicator status-offline">Offline</span>`;
-            
+
         const lastActiveText = u.is_online ? "Baru saja aktif" : formatRelativeTime(u.last_online);
-        
+
         // Logika check timeout
         let isTimedOut = false;
         if (u.timeout_until) {
@@ -1851,7 +1924,7 @@ function renderUserTable(users) {
                 isTimedOut = true;
             }
         }
-        
+
         let actionButtons = '';
         if (isSelf) {
             actionButtons = `<span style="color:var(--text-tertiary); font-style:italic;">Akun Anda</span>`;
@@ -1868,7 +1941,7 @@ function renderUserTable(users) {
                 <button class="btn-delete-user" onclick="triggerDeleteUser('${u.username}')">Hapus</button>
             `;
         }
-        
+
         return `
             <tr>
                 <td style="font-weight: 600; color: var(--text-primary);">${escapeHtml(u.username)}</td>
@@ -1961,13 +2034,13 @@ function formatRelativeTime(dateStr) {
         const now = new Date();
         const diffMs = now - d;
         const diffMins = Math.floor(diffMs / 60000);
-        
+
         if (diffMins < 1) return 'Baru saja aktif';
         if (diffMins < 60) return `${diffMins} menit yang lalu`;
-        
+
         const diffHours = Math.floor(diffMins / 60);
         if (diffHours < 24) return `${diffHours} jam yang lalu`;
-        
+
         return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
     } catch {
         return '-';
@@ -1981,7 +2054,7 @@ function toggleNotificationDropdown(e) {
     if (e) e.stopPropagation();
     const dropdown = document.getElementById('notificationDropdown');
     const isHidden = dropdown.style.display === 'none';
-    
+
     if (isHidden) {
         dropdown.style.display = 'flex';
         clearBadge();
@@ -2003,7 +2076,7 @@ document.addEventListener('click', (e) => {
 function updateNotificationBadge() {
     const badge = document.getElementById('notificationBadge');
     const unreadCount = allNotifications.filter(n => n.unread).length;
-    
+
     if (unreadCount > 0) {
         badge.textContent = unreadCount;
         badge.style.display = 'flex';
@@ -2035,20 +2108,20 @@ function deleteNotification(notifId, e) {
 function renderNotificationList() {
     const listContainer = document.getElementById('notificationList');
     if (!listContainer) return;
-    
+
     updateNotificationBadge();
-    
+
     if (allNotifications.length === 0) {
         listContainer.innerHTML = `<div class="notif-empty-state">Tidak ada notifikasi</div>`;
         return;
     }
-    
+
     listContainer.innerHTML = allNotifications.map(n => {
         const initials = (n.username || 'U').substring(0, 2).toUpperCase();
         const roleText = n.role === 'admin' ? 'Admin' : 'User';
         const unreadClass = n.unread ? 'unread' : '';
         const relativeTime = formatRelativeTime(n.timestamp);
-        
+
         return `
             <div class="notif-item ${unreadClass}" onclick="markAsRead('${n.id}')">
                 <div class="notif-unread-dot"></div>
@@ -2081,29 +2154,29 @@ function connectLiveWebSocket(sessionId) {
     if (wsLive) {
         wsLive.close();
     }
-    
+
     const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProto}//${window.location.host}/ws/live?session_id=${sessionId}`;
-    
+
     wsLive = new WebSocket(wsUrl);
-    
+
     wsLive.onopen = () => {
         console.log("[WebSocket] Terkoneksi ke Live Session.");
     };
-    
+
     wsLive.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
-            
+
             if (data.event === 'user_login') {
                 // Notifikasi admin tentang user login baru (hanya untuk user lain, bukan diri sendiri)
                 if (currentUser && currentUser.role === 'admin' && data.username !== currentUser.username) {
                     showToast(
-                        "User Login Baru", 
+                        "User Login Baru",
                         `👤 <b>${escapeHtml(data.username)}</b> (${data.role === 'admin' ? 'Admin' : 'User'}) baru saja masuk ke sistem pada pukul ${data.time}.`,
                         "🔔"
                     );
-                    
+
                     const notif = {
                         id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
                         username: data.username,
@@ -2115,7 +2188,7 @@ function connectLiveWebSocket(sessionId) {
                     allNotifications.unshift(notif);
                     localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
                     renderNotificationList();
-                    
+
                     const activeNav = document.querySelector('.sidebar-nav .nav-item.active');
                     if (activeNav && activeNav.getAttribute('onclick').includes('admin')) {
                         loadAdminUsers();
@@ -2136,7 +2209,7 @@ function connectLiveWebSocket(sessionId) {
             console.error("Gagal mem-parsing pesan websocket:", e);
         }
     };
-    
+
     wsLive.onclose = (e) => {
         console.log("[WebSocket] Koneksi Live terputus. Kode:", e.code);
         // Lakukan reconnect otomatis jika masih login dan bukan kode tutup normal (4003)
@@ -2153,10 +2226,10 @@ function connectLiveWebSocket(sessionId) {
 function showToast(title, message, icon = "🔔") {
     const container = document.getElementById('toast-container');
     if (!container) return;
-    
+
     const toast = document.createElement('div');
     toast.className = 'toast-notification';
-    
+
     toast.innerHTML = `
         <div class="toast-icon">${icon}</div>
         <div class="toast-body">
@@ -2164,9 +2237,9 @@ function showToast(title, message, icon = "🔔") {
             <div class="toast-message">${message}</div>
         </div>
     `;
-    
+
     container.appendChild(toast);
-    
+
     setTimeout(() => {
         toast.remove();
     }, 5000);

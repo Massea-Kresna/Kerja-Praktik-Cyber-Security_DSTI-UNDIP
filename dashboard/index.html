@@ -8,16 +8,19 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="styles.css?v=23">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <!-- Chart.js -->
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
-<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
         <symbol id="icon-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 3 4.5 6v6c0 4.5 3 7.5 7.5 9 4.5-1.5 7.5-4.5 7.5-9V6L12 3Z" />
@@ -57,38 +60,46 @@
             <div class="auth-card-body">
                 <div class="auth-header">
                     <div class="auth-icon-wrapper" style="background: transparent; color: inherit;">
-                        <img src="assets/undip-logo.png" alt="UNDIP Logo" style="width: 64px; height: 64px; object-fit: contain; display: block;">
+                        <img src="assets/undip-logo.png" alt="UNDIP Logo"
+                            style="width: 64px; height: 64px; object-fit: contain; display: block;">
                     </div>
                     <h2>UNDIP Security</h2>
                     <p id="authSubtitle">Domain Scanner Login</p>
                 </div>
-                
+
                 <div class="auth-error-msg" id="authErrorMsg">Username atau password salah</div>
-                
+
                 <form class="auth-form" id="authForm" onsubmit="handleAuthSubmit(event)">
                     <div class="form-group">
                         <label for="authUsername">Email or Username</label>
-                        <input type="text" id="authUsername" class="auth-input" placeholder="Enter your credentials" required autocomplete="username">
+                        <input type="text" id="authUsername" class="auth-input" placeholder="Enter your credentials"
+                            required autocomplete="username">
                     </div>
                     <div class="form-group">
                         <label for="authPassword">Password</label>
                         <div class="password-wrapper">
-                            <input type="password" id="authPassword" class="auth-input" placeholder="Enter your password" required autocomplete="current-password">
-                            <button type="button" class="toggle-password" onclick="const p = document.getElementById('authPassword'); p.type = p.type === 'password' ? 'text' : 'password';">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            <input type="password" id="authPassword" class="auth-input"
+                                placeholder="Enter your password" required autocomplete="current-password">
+                            <button type="button" class="toggle-password"
+                                onclick="const p = document.getElementById('authPassword'); p.type = p.type === 'password' ? 'text' : 'password';">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
                             </button>
                         </div>
                     </div>
-                    
+
                     <div class="auth-options">
                         <label class="remember-me">
                             <input type="checkbox" id="rememberMe">
                             <span>Remember me</span>
                         </label>
                     </div>
-                    
+
                     <button type="submit" class="auth-btn" id="authSubmitBtn">Login</button>
-                    
+
                 </form>
             </div>
         </div>
@@ -98,7 +109,8 @@
         <aside class="sidebar">
             <div class="sidebar-brand">
                 <div class="brand-logo" style="background: transparent; padding: 0;">
-                    <img src="assets/undip-logo.png" alt="UNDIP Logo" style="width: 34px; height: 34px; display: block; object-fit: contain;">
+                    <img src="assets/undip-logo.png" alt="UNDIP Logo"
+                        style="width: 34px; height: 34px; display: block; object-fit: contain;">
                 </div>
                 <div class="brand-text">
                     <h2>UNDIP Security</h2>
@@ -137,28 +149,43 @@
                     <span class="user-role" id="sidebar-user-role">-</span>
                 </div>
                 <button class="logout-btn-icon" onclick="handleLogout()" title="Logout">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
                 </button>
             </div>
         </aside>
 
         <main class="main-content">
             <!-- Global Top Bar Header with Notification Bell -->
-            <header class="topbar" id="mainHeader" style="display: none; justify-content: space-between; align-items: center;">
+            <header class="topbar" id="mainHeader"
+                style="display: none; justify-content: space-between; align-items: center;">
                 <h1 class="topbar-title">Security Scanner</h1>
                 <!-- Notification Bell Wrapper -->
                 <div class="notification-wrapper" id="notifWrapper" style="display: none;">
-                    <button class="notification-bell-btn" id="notificationBellBtn" onclick="toggleNotificationDropdown(event)">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                    <button class="notification-bell-btn" id="notificationBellBtn"
+                        onclick="toggleNotificationDropdown(event)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                        </svg>
                         <span class="notification-badge" id="notificationBadge" style="display: none;">0</span>
                     </button>
-                    
+
                     <!-- YouTube-style Notification Dropdown -->
                     <div class="notification-dropdown" id="notificationDropdown" style="display: none;">
                         <div class="notif-dropdown-header">
                             <h3>Notifikasi</h3>
-                            <button class="icon-btn-sm" onclick="markAllNotificationsAsRead(event)" title="Tandai semua telah dibaca">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            <button class="icon-btn-sm" onclick="markAllNotificationsAsRead(event)"
+                                title="Tandai semua telah dibaca">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
                             </button>
                         </div>
                         <div class="notif-dropdown-body" id="notificationList">
@@ -190,7 +217,7 @@
 
                     <!-- Pembungkus Grid untuk dua grafik agar rapi bersebelahan -->
                     <div class="dashboard-grid">
-                        
+
                         <!-- CHART 1: VULNERABILITY TREND -->
                         <div class="card chart-card">
                             <div class="card-header-row">
@@ -202,12 +229,14 @@
                                     <button class="multi-select-btn" onclick="toggleDropdown('vulnTrendDropdown')">
                                         <span class="multi-select-label">All Domains</span>
                                         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                                            <path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                            <path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5"
+                                                stroke-linecap="round" stroke-linejoin="round" />
                                         </svg>
                                     </button>
                                     <div class="multi-select-panel">
                                         <div class="multi-select-search">
-                                            <input type="text" placeholder="Cari domain..." oninput="filterDropdownItems('vulnTrendDropdown', this.value)" />
+                                            <input type="text" placeholder="Cari domain..."
+                                                oninput="filterDropdownItems('vulnTrendDropdown', this.value)" />
                                         </div>
                                         <div class="multi-select-items" id="vulnTrendItems">
                                             <!-- Diisi oleh app.js -->
@@ -231,17 +260,29 @@
                                     <button class="multi-select-btn" onclick="toggleDropdown('sevTrendDropdown')">
                                         <span class="multi-select-label">All Severities</span>
                                         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                                            <path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                            <path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5"
+                                                stroke-linecap="round" stroke-linejoin="round" />
                                         </svg>
                                     </button>
                                     <div class="multi-select-panel">
                                         <div class="multi-select-items" id="sevTrendItems">
-                                            <label class="multi-select-item"><input type="checkbox" value="All" checked onchange="onSevFilterChange(this)"><b>All Severities</b></label>
-                                            <label class="multi-select-item"><input type="checkbox" value="Critical" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#ef4444"></span>Critical</label>
-                                            <label class="multi-select-item"><input type="checkbox" value="High" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#f97316"></span>High</label>
-                                            <label class="multi-select-item"><input type="checkbox" value="Medium" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#eab308"></span>Medium</label>
-                                            <label class="multi-select-item"><input type="checkbox" value="Low" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#3b82f6"></span>Low</label>
-                                            <label class="multi-select-item"><input type="checkbox" value="Info" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#22c55e"></span>Info</label>
+                                            <label class="multi-select-item"><input type="checkbox" value="All" checked
+                                                    onchange="onSevFilterChange(this)"><b>All Severities</b></label>
+                                            <label class="multi-select-item"><input type="checkbox" value="Critical"
+                                                    onchange="onSevFilterChange(this)"><span class="sev-dot"
+                                                    style="background:#ef4444"></span>Critical</label>
+                                            <label class="multi-select-item"><input type="checkbox" value="High"
+                                                    onchange="onSevFilterChange(this)"><span class="sev-dot"
+                                                    style="background:#f97316"></span>High</label>
+                                            <label class="multi-select-item"><input type="checkbox" value="Medium"
+                                                    onchange="onSevFilterChange(this)"><span class="sev-dot"
+                                                    style="background:#eab308"></span>Medium</label>
+                                            <label class="multi-select-item"><input type="checkbox" value="Low"
+                                                    onchange="onSevFilterChange(this)"><span class="sev-dot"
+                                                    style="background:#3b82f6"></span>Low</label>
+                                            <label class="multi-select-item"><input type="checkbox" value="Info"
+                                                    onchange="onSevFilterChange(this)"><span class="sev-dot"
+                                                    style="background:#22c55e"></span>Info</label>
                                         </div>
                                     </div>
                                 </div>
@@ -253,12 +294,13 @@
 
                     </div>
 
-<!-- BAGIAN BAWAH: Recent Critical Alerts & Monitored Domains -->
+                    <!-- BAGIAN BAWAH: Recent Critical Alerts & Monitored Domains -->
                     <div class="dashboard-grid lower-grid" style="margin-top: 24px;">
-                        
+
                         <!-- Kolom Kiri: Recent Critical Alerts -->
                         <div class="card" style="padding: 0; overflow: hidden;">
-                            <div class="card-header-row" style="padding: 20px 24px; border-bottom: 1px solid var(--color-border); margin: 0;">
+                            <div class="card-header-row"
+                                style="padding: 20px 24px; border-bottom: 1px solid var(--color-border); margin: 0;">
                                 <h3 style="font-size: 18px;">Ranking Vulnerabilities</h3>
                             </div>
                             <table class="modern-table">
@@ -281,69 +323,107 @@
 
                         <!-- Kolom Kanan: Monitored Domains -->
                         <div class="card" style="padding: 0; display: flex; flex-direction: column; overflow: hidden;">
-                            <div class="card-header-row" style="padding: 20px 24px; border-bottom: 1px solid var(--color-border); margin: 0;">
+                            <div class="card-header-row"
+                                style="padding: 20px 24px; border-bottom: 1px solid var(--color-border); margin: 0;">
                                 <h3 style="font-size: 18px;">Monitored Domains</h3>
                                 <div class="multi-select-dropdown" id="domainRiskDropdown">
-                                    <button class="icon-btn" onclick="toggleDropdown('domainRiskDropdown')" style="width: 28px; height: 28px; border:none; background: transparent; cursor: pointer; padding: 4px; color: var(--text-secondary);">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <button class="icon-btn" onclick="toggleDropdown('domainRiskDropdown')"
+                                        style="width: 28px; height: 28px; border:none; background: transparent; cursor: pointer; padding: 4px; color: var(--text-secondary);">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
                                             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
                                         </svg>
                                     </button>
-                                    <div class="multi-select-panel" style="right: 0; left: auto; width: 140px; top: 100%;">
+                                    <div class="multi-select-panel"
+                                        style="right: 0; left: auto; width: 140px; top: 100%;">
                                         <div class="multi-select-items" id="domainRiskItems">
                                             <label class="multi-select-item">
-                                                <input type="radio" name="domainRisk" value="ALL" checked onchange="renderLowerGrid(); toggleDropdown('domainRiskDropdown');"> All Risks
+                                                <input type="radio" name="domainRisk" value="ALL" checked
+                                                    onchange="renderLowerGrid(); toggleDropdown('domainRiskDropdown');">
+                                                All Risks
                                             </label>
                                             <label class="multi-select-item">
-                                                <input type="radio" name="domainRisk" value="AT_RISK" onchange="renderLowerGrid(); toggleDropdown('domainRiskDropdown');"> <span class="sev-dot sev-high"></span> At Risk
+                                                <input type="radio" name="domainRisk" value="AT_RISK"
+                                                    onchange="renderLowerGrid(); toggleDropdown('domainRiskDropdown');">
+                                                <span class="sev-dot sev-high"></span> At Risk
                                             </label>
                                             <label class="multi-select-item">
-                                                <input type="radio" name="domainRisk" value="REVIEW" onchange="renderLowerGrid(); toggleDropdown('domainRiskDropdown');"> <span class="sev-dot sev-medium"></span> Review
+                                                <input type="radio" name="domainRisk" value="REVIEW"
+                                                    onchange="renderLowerGrid(); toggleDropdown('domainRiskDropdown');">
+                                                <span class="sev-dot sev-medium"></span> Review
                                             </label>
                                             <label class="multi-select-item">
-                                                <input type="radio" name="domainRisk" value="SECURE" onchange="renderLowerGrid(); toggleDropdown('domainRiskDropdown');"> <span class="sev-dot sev-low"></span> Secure
+                                                <input type="radio" name="domainRisk" value="SECURE"
+                                                    onchange="renderLowerGrid(); toggleDropdown('domainRiskDropdown');">
+                                                <span class="sev-dot sev-low"></span> Secure
                                             </label>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <ul class="domain-list" id="monitoredDomainsList">
                                 <li class="domain-item" style="justify-content: center;">
                                     <span class="empty-state">Loading domains...</span>
                                 </li>
                             </ul>
-                            
+
                             <!-- Tombol Bawah (Sticky di bawah) -->
-                            <div style="padding: 16px; text-align: center; border-top: 1px solid var(--color-border); margin-top: auto; background: var(--color-surface);">
-                                <a href="#" class="link-action" id="manageDomainsLink" onclick="switchView('inventory')">Manage All Domains</a>
+                            <div
+                                style="padding: 16px; text-align: center; border-top: 1px solid var(--color-border); margin-top: auto; background: var(--color-surface);">
+                                <a href="#" class="link-action" id="manageDomainsLink"
+                                    onclick="switchView('inventory')">Manage All Domains</a>
                             </div>
                         </div>
                     </div>
                 </div> <!-- PENUTUP VIEW OVERVIEW -->
 
-<!-- VIEW: Vulnerabilities List (Automated Pentests) -->
+                <!-- VIEW: Vulnerabilities List (Automated Pentests) -->
                 <div id="view-vulnerabilities" class="view-container hidden">
-                    <div class="view-header" style="display: flex; flex-direction: column; align-items: flex-start; gap: 16px; margin-bottom: 24px;">
+                    <div class="view-header"
+                        style="display: flex; flex-direction: column; align-items: flex-start; gap: 16px; margin-bottom: 24px;">
                         <h1 style="margin: 0;">Scan History</h1>
-                        
+
                         <!-- Date Range Filter -->
-                        <div style="display: flex; gap: 24px; align-items: center; padding: 16px 24px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; flex-wrap: wrap; width: 100%; box-sizing: border-box; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                        <div
+                            style="display: flex; gap: 24px; align-items: center; padding: 16px 24px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; flex-wrap: wrap; width: 100%; box-sizing: border-box; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <label for="vulnStartDate" style="font-size: 14px; color: #475569; font-weight: 500;">Dari:</label>
-                                <input type="date" id="vulnStartDate" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 14px; outline: none; background: #f8fafc; color: #1e293b; transition: all 0.2s ease; cursor: pointer; font-family: inherit;" onfocus="this.style.borderColor='#0b1f3a'; this.style.boxShadow='0 0 0 2px rgba(11, 31, 58, 0.1)'" onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none'">
+                                <label for="vulnStartDate"
+                                    style="font-size: 14px; color: #475569; font-weight: 500;">Dari:</label>
+                                <input type="date" id="vulnStartDate"
+                                    style="padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 14px; outline: none; background: #f8fafc; color: #1e293b; transition: all 0.2s ease; cursor: pointer; font-family: inherit;"
+                                    onfocus="this.style.borderColor='#0b1f3a'; this.style.boxShadow='0 0 0 2px rgba(11, 31, 58, 0.1)'"
+                                    onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none'">
                             </div>
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <label for="vulnEndDate" style="font-size: 14px; color: #475569; font-weight: 500;">Sampai:</label>
-                                <input type="date" id="vulnEndDate" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 14px; outline: none; background: #f8fafc; color: #1e293b; transition: all 0.2s ease; cursor: pointer; font-family: inherit;" onfocus="this.style.borderColor='#0b1f3a'; this.style.boxShadow='0 0 0 2px rgba(11, 31, 58, 0.1)'" onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none'">
+                                <label for="vulnEndDate"
+                                    style="font-size: 14px; color: #475569; font-weight: 500;">Sampai:</label>
+                                <input type="date" id="vulnEndDate"
+                                    style="padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 14px; outline: none; background: #f8fafc; color: #1e293b; transition: all 0.2s ease; cursor: pointer; font-family: inherit;"
+                                    onfocus="this.style.borderColor='#0b1f3a'; this.style.boxShadow='0 0 0 2px rgba(11, 31, 58, 0.1)'"
+                                    onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none'">
                             </div>
                             <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
-                                <button id="vulnFilterBtn" style="padding: 8px 20px; font-size: 14px; font-weight: 500; border-radius: 6px; border: none; background: #0b1f3a; color: white; cursor: pointer; transition: background 0.2s; font-family: inherit; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.background='#1e3a5f'" onmouseout="this.style.background='#0b1f3a'">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                <button id="vulnFilterBtn"
+                                    style="padding: 8px 20px; font-size: 14px; font-weight: 500; border-radius: 6px; border: none; background: #0b1f3a; color: white; cursor: pointer; transition: background 0.2s; font-family: inherit; display: flex; align-items: center; gap: 6px;"
+                                    onmouseover="this.style.background='#1e3a5f'"
+                                    onmouseout="this.style.background='#0b1f3a'">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
                                     Filter
                                 </button>
-                                <button id="vulnResetFilterBtn" style="padding: 8px 20px; font-size: 14px; font-weight: 500; border-radius: 6px; border: 1px solid #cbd5e1; background: white; color: #475569; cursor: pointer; transition: all 0.2s; font-family: inherit; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.background='#f1f5f9'; this.style.color='#0f172a'" onmouseout="this.style.background='white'; this.style.color='#475569'">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>
+                                <button id="vulnResetFilterBtn"
+                                    style="padding: 8px 20px; font-size: 14px; font-weight: 500; border-radius: 6px; border: 1px solid #cbd5e1; background: white; color: #475569; cursor: pointer; transition: all 0.2s; font-family: inherit; display: flex; align-items: center; gap: 6px;"
+                                    onmouseover="this.style.background='#f1f5f9'; this.style.color='#0f172a'"
+                                    onmouseout="this.style.background='white'; this.style.color='#475569'">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                                        <polyline points="3 3 3 8 8 8"></polyline>
+                                    </svg>
                                     Reset
                                 </button>
                             </div>
@@ -353,25 +433,29 @@
                     <div class="card table-card">
                         <table class="modern-table">
                             <thead>
-                                <tr>
-                                    <th>Scan ID</th>
-                                    <th>Target Domain</th>
-                                    <th>Scan Date</th>
-                                    <th>Vulnerabilities</th>
+                                <tr id="scanHistoryHeaders">
+                                    <th class="sortable" onclick="sortVulnHistory('id')" style="cursor: pointer;">Scan ID <span class="sort-icon"></span></th>
+                                    <th class="sortable" onclick="sortVulnHistory('domain')" style="cursor: pointer;">Target Domain <span class="sort-icon"></span></th>
+                                    <th class="sortable" onclick="sortVulnHistory('date')" style="cursor: pointer;">Scan Date <span class="sort-icon">↓</span></th>
+                                    <th class="sortable" onclick="sortVulnHistory('type')" style="cursor: pointer;">Scan Type <span class="sort-icon"></span></th>
+                                    <th class="sortable" onclick="sortVulnHistory('vulns')" style="cursor: pointer;">Vulnerabilities <span class="sort-icon"></span></th>
                                 </tr>
                             </thead>
                             <tbody id="vulnListContainer">
                                 <tr>
-                                    <td colspan="4" class="empty-state">Loading vulnerabilities...</td>
+                                    <td colspan="5" class="empty-state">Loading vulnerabilities...</td>
                                 </tr>
                             </tbody>
                         </table>
-                        
+
                         <!-- Pagination Controls (Digabung ke dalam card tabel agar rapi) -->
-                        <div class="pagination-controls" id="vulnPaginationControls" style="display: none; justify-content: space-between; align-items: center; padding: 16px; border-top: 1px solid var(--border-color);">
+                        <div class="pagination-controls" id="vulnPaginationControls"
+                            style="display: none; justify-content: space-between; align-items: center; padding: 16px; border-top: 1px solid var(--border-color);">
                             <div class="pagination-left">
-                                <span style="font-size: 13px; color: var(--text-secondary);">Tampilkan per halaman:</span>
-                                <select id="vulnRowsSelect" style="margin-left: 8px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);">
+                                <span style="font-size: 13px; color: var(--text-secondary);">Tampilkan per
+                                    halaman:</span>
+                                <select id="vulnRowsSelect"
+                                    style="margin-left: 8px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);">
                                     <option value="15" selected>15</option>
                                     <option value="25">25</option>
                                     <option value="50">50</option>
@@ -380,53 +464,79 @@
                                 </select>
                             </div>
                             <div class="pagination-right" style="display: flex; align-items: center; gap: 12px;">
-                                <button class="btn btn-outline btn-sm" id="vulnPrevPageBtn" style="padding: 6px 12px; min-width: auto;">Sebelumnya</button>
-                                <span id="vulnPageInfo" style="font-size: 13px; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
-                                    Halaman 
-                                    <input type="number" id="vulnPageInput" min="1" value="1" style="width: 45px; text-align: center; padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);"> 
-                                    dari 
+                                <button class="btn btn-outline btn-sm" id="vulnPrevPageBtn"
+                                    style="padding: 6px 12px; min-width: auto;">Sebelumnya</button>
+                                <span id="vulnPageInfo"
+                                    style="font-size: 13px; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                                    Halaman
+                                    <input type="number" id="vulnPageInput" min="1" value="1"
+                                        style="width: 45px; text-align: center; padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);">
+                                    dari
                                     <span id="vulnTotalPages">1</span>
                                 </span>
-                                <button class="btn btn-outline btn-sm" id="vulnNextPageBtn" style="padding: 6px 12px; min-width: auto;">Selanjutnya</button>
+                                <button class="btn btn-outline btn-sm" id="vulnNextPageBtn"
+                                    style="padding: 6px 12px; min-width: auto;">Selanjutnya</button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-<div id="view-inventory" class="view-container hidden">
-                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <div id="view-inventory" class="view-container hidden">
+                    <div class="view-header"
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                         <h1>Domains</h1>
-                        <div class="topbar-search" style="display: flex; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; width: 320px; transition: border-color 0.2s;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="min-width: 16px;">
+                        <div class="topbar-search"
+                            style="display: flex; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; width: 320px; transition: border-color 0.2s;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                style="min-width: 16px;">
                                 <circle cx="11" cy="11" r="8"></circle>
                                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                             </svg>
-                            <input type="text" id="domainSearchInput" placeholder="Search domains or IP..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 14px; color: var(--text-primary); margin-left: 10px; font-family: inherit;">
+                            <input type="text" id="domainSearchInput" placeholder="Search domains or IP..."
+                                style="border: none; outline: none; background: transparent; width: 100%; font-size: 14px; color: var(--text-primary); margin-left: 10px; font-family: inherit;">
                         </div>
                     </div>
-                    
+
                     <div class="card table-card">
                         <!-- Baris Tombol Aksi Pentest -->
-                        <div style="padding: 16px 24px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; background: #fafafa;">
-                            <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);" id="selectedDomainCount">0 domain dipilih</span>
-                            
+                        <div
+                            style="padding: 16px 24px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; background: #fafafa;">
+                            <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);"
+                                id="selectedDomainCount">0 domain dipilih</span>
+
                             <!-- KELOMPOK TOMBOL AKSI -->
                             <div style="display: flex; gap: 12px;">
                                 <!-- Tombol 1: Simpan Jadwal -->
-                                <button id="saveTargetsBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                                <button id="saveTargetsBtn" class="btn btn-outline"
+                                    style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z">
+                                        </path>
+                                        <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                        <polyline points="7 3 7 8 15 8"></polyline>
+                                    </svg>
                                     Simpan Target (Interval)
                                 </button>
-                                
+
                                 <!-- Tombol 2: Network Scan (BARU) -->
-                                <button id="runNetworkScanBtn" class="btn btn-outline" disabled style="width: auto; padding: 8px 16px; opacity: 0.5; cursor: not-allowed; display: flex; align-items: center; gap: 6px; font-size: 13px; background: white;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                                <button id="runNetworkScanBtn" class="btn btn-outline" disabled
+                                    style="width: auto; padding: 8px 16px; opacity: 0.5; cursor: not-allowed; display: flex; align-items: center; gap: 6px; font-size: 13px; background: white;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+                                    </svg>
                                     Network Scan
                                 </button>
 
                                 <!-- Tombol 3: Scan Web (Deep/Light) -->
-                                <button id="runScanBtn" class="auth-btn" disabled style="width: auto; padding: 8px 16px; opacity: 0.5; cursor: not-allowed; display: flex; align-items: center; gap: 6px; font-size: 13px;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                <button id="runScanBtn" class="auth-btn" disabled
+                                    style="width: auto; padding: 8px 16px; opacity: 0.5; cursor: not-allowed; display: flex; align-items: center; gap: 6px; font-size: 13px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                    </svg>
                                     Web Scan
                                 </button>
                             </div>
@@ -435,7 +545,8 @@
                         <table class="modern-table">
                             <thead>
                                 <tr>
-                                    <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAllDomains" style="cursor: pointer;"></th>
+                                    <th style="width: 40px; text-align: center;"><input type="checkbox"
+                                            id="selectAllDomains" style="cursor: pointer;"></th>
                                     <th>Domain</th>
                                     <th>IP Address</th>
                                     <th>Status</th>
@@ -447,12 +558,15 @@
                                 </tr>
                             </tbody>
                         </table>
-                        
+
                         <!-- Domain Pagination Controls -->
-                        <div class="pagination-controls" id="domainPaginationControls" style="display: none; justify-content: space-between; align-items: center; padding: 16px; border-top: 1px solid var(--border-color);">
+                        <div class="pagination-controls" id="domainPaginationControls"
+                            style="display: none; justify-content: space-between; align-items: center; padding: 16px; border-top: 1px solid var(--border-color);">
                             <div class="pagination-left">
-                                <span style="font-size: 13px; color: var(--text-secondary);">Tampilkan per halaman:</span>
-                                <select id="domainRowsSelect" style="margin-left: 8px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);">
+                                <span style="font-size: 13px; color: var(--text-secondary);">Tampilkan per
+                                    halaman:</span>
+                                <select id="domainRowsSelect"
+                                    style="margin-left: 8px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);">
                                     <option value="15" selected>15</option>
                                     <option value="25">25</option>
                                     <option value="50">50</option>
@@ -461,43 +575,51 @@
                                 </select>
                             </div>
                             <div class="pagination-right" style="display: flex; align-items: center; gap: 12px;">
-                                <button class="btn btn-outline btn-sm" id="domainPrevPageBtn" style="padding: 6px 12px; min-width: auto;">Sebelumnya</button>
-                                <span id="domainPageInfo" style="font-size: 13px; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
-                                    Halaman 
-                                    <input type="number" id="domainPageInput" min="1" value="1" style="width: 45px; text-align: center; padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);"> 
-                                    dari 
+                                <button class="btn btn-outline btn-sm" id="domainPrevPageBtn"
+                                    style="padding: 6px 12px; min-width: auto;">Sebelumnya</button>
+                                <span id="domainPageInfo"
+                                    style="font-size: 13px; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                                    Halaman
+                                    <input type="number" id="domainPageInput" min="1" value="1"
+                                        style="width: 45px; text-align: center; padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);">
+                                    dari
                                     <span id="domainTotalPages">1</span>
                                 </span>
-                                <button class="btn btn-outline btn-sm" id="domainNextPageBtn" style="padding: 6px 12px; min-width: auto;">Selanjutnya</button>
+                                <button class="btn btn-outline btn-sm" id="domainNextPageBtn"
+                                    style="padding: 6px 12px; min-width: auto;">Selanjutnya</button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-            <!-- VIEW: Admin User Management -->
-            <div id="view-admin" class="view-container hidden" style="display: none;">
-                <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                    <h1>User Management</h1>
-                    <button class="auth-btn" id="openCreateUserModalBtn" style="width: auto; padding: 10px 20px; font-size: 13px;">Tambah User Baru</button>
-                </div>
+                <!-- VIEW: Admin User Management -->
+                <div id="view-admin" class="view-container hidden" style="display: none;">
+                    <div class="view-header"
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                        <h1>User Management</h1>
+                        <button class="auth-btn" id="openCreateUserModalBtn"
+                            style="width: auto; padding: 10px 20px; font-size: 13px;">Tambah User Baru</button>
+                    </div>
 
-                <div class="table-card">
-                    <table class="modern-table">
-                        <thead>
-                            <tr>
-                                <th>Username</th>
-                                <th>Role</th>
-                                <th>Status</th>
-                                <th>Last Active</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="userTableBody">
-                            <tr><td colspan="5" class="empty-state">Loading users...</td></tr>
-                        </tbody>
-                    </table>
+                    <div class="table-card">
+                        <table class="modern-table">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Last Active</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="userTableBody">
+                                <tr>
+                                    <td colspan="5" class="empty-state">Loading users...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
         </main>
     </div>
 
@@ -517,7 +639,7 @@
                 </div>
             </div>
             <div class="modal-body">
-                <div class="modal-meta-grid" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="modal-meta-grid" style="grid-template-columns: repeat(5, 1fr);">
                     <div>
                         <div class="meta-label">TARGET DOMAIN</div>
                         <div class="meta-value" id="scanModalDomain">-</div>
@@ -529,6 +651,10 @@
                     <div>
                         <div class="meta-label">SCAN DATE</div>
                         <div class="meta-value" id="scanModalDate">-</div>
+                    </div>
+                    <div>
+                        <div class="meta-label">SCAN TYPE</div>
+                        <div class="meta-value" id="scanModalType">-</div>
                     </div>
                     <div>
                         <div class="meta-label">RISK LEVEL</div>
@@ -658,21 +784,25 @@
             </div>
             <div class="modal-body">
                 <div class="auth-error-msg" id="createUserErrorMsg" style="margin-bottom: 16px;">Error message</div>
-                
+
                 <form class="auth-form" id="createUserForm">
                     <div class="form-group animate-slide-up">
                         <label for="createUsername">Username</label>
-                        <input type="text" id="createUsername" class="auth-input" placeholder="Masukkan username" required autocomplete="off">
+                        <input type="text" id="createUsername" class="auth-input" placeholder="Masukkan username"
+                            required autocomplete="off">
                     </div>
                     <div class="form-group animate-slide-up" style="animation-delay: 0.1s;">
                         <label for="createPassword">Password</label>
-                        <input type="password" id="createPassword" class="auth-input" placeholder="Masukkan password" required autocomplete="off">
+                        <input type="password" id="createPassword" class="auth-input" placeholder="Masukkan password"
+                            required autocomplete="off">
                     </div>
                     <div class="form-group animate-slide-up" style="animation-delay: 0.15s;">
                         <label for="createConfirmPassword">Konfirmasi Password</label>
-                        <input type="password" id="createConfirmPassword" class="auth-input" placeholder="Masukkan kembali password" required autocomplete="off">
+                        <input type="password" id="createConfirmPassword" class="auth-input"
+                            placeholder="Masukkan kembali password" required autocomplete="off">
                     </div>
-                    <button type="submit" class="auth-btn animate-slide-up" style="margin-top: 24px; animation-delay: 0.25s;">Buat Akun</button>
+                    <button type="submit" class="auth-btn animate-slide-up"
+                        style="margin-top: 24px; animation-delay: 0.25s;">Buat Akun</button>
                 </form>
             </div>
         </div>
