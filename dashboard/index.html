@@ -46,6 +46,22 @@
             <circle cx="11" cy="11" r="7" />
             <path d="m21 21-4.3-4.3" />
         </symbol>
+        <symbol id="icon-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
+            <line x1="6" y1="6" x2="6.01" y2="6" />
+            <line x1="6" y1="18" x2="6.01" y2="18" />
+        </symbol>
+        <symbol id="icon-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+        </symbol>
+        <symbol id="icon-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+        </symbol>
+        <symbol id="icon-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+        </symbol>
     </svg>
 
     <!-- Toast Container untuk Notifikasi Real-time -->
@@ -124,6 +140,11 @@
                     <svg class="icon">
                         <use href="#icon-globe" />
                     </svg> Domains
+                </a>
+                <a href="#" class="nav-item" onclick="switchView('network-scanner')">
+                    <svg class="icon">
+                        <use href="#icon-server" />
+                    </svg> Network Scanner
                 </a>
                 <a href="#" class="nav-item hidden" id="nav-admin" onclick="switchView('admin')" style="display: none;">
                     User Management
@@ -474,6 +495,107 @@
                     </div>
                 </div>
 
+                <!-- VIEW: Network Scanner -->
+                <div id="view-network-scanner" class="view-container hidden">
+                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                        <div>
+                            <h1 style="margin-bottom: 4px;">Network Scanner</h1>
+                            <p style="color: var(--text-secondary); font-size: 14px; margin: 0;">Manage and monitor network scanning operations.</p>
+                        </div>
+                        <div style="display: flex; gap: 12px;">
+                            <button class="btn btn-outline" style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                                Configure Target
+                            </button>
+                            <button id="runNewNetworkScanBtn" class="auth-btn" style="width: auto; padding: 8px 16px; display: flex; align-items: center; gap: 8px; font-size: 13px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                Run New Scan
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="summary-cards" style="margin-bottom: 24px;">
+                        <div class="card" style="display: flex; justify-content: space-between; align-items: center; padding: 24px;">
+                            <div>
+                                <div class="card-title" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">CURRENTLY SCANNING</div>
+                                <div class="card-value" id="summaryActiveScans" style="font-size: 28px; font-weight: 700;">-</div>
+                            </div>
+                            <div style="width: 48px; height: 48px; border-radius: 12px; background: #eff6ff; color: #3b82f6; display: flex; align-items: center; justify-content: center;">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+                            </div>
+                        </div>
+                        <div class="card" style="display: flex; justify-content: space-between; align-items: center; padding: 24px;">
+                            <div>
+                                <div class="card-title" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">TOTAL VULNERABILITIES</div>
+                                <div class="card-value" id="summaryTotalVulns" style="font-size: 28px; font-weight: 700;">-</div>
+                            </div>
+                            <div style="width: 48px; height: 48px; border-radius: 12px; background: #fef2f2; color: #ef4444; display: flex; align-items: center; justify-content: center;">
+                                <svg width="24" height="24"><use href="#icon-shield"></use></svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card table-card">
+                    <!-- Severity Breakdown Chart (New) -->
+                    <div class="card" style="margin-bottom: 24px; padding: 24px;">
+                        <h3 style="font-size: 16px; margin: 0 0 16px 0; font-weight: 600;">Network Vulnerability Breakdown</h3>
+                        <div style="position: relative; height: 180px; width: 100%;">
+                            <canvas id="networkSevChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="card table-card">
+                        <div style="padding: 16px 24px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; background: white; flex-wrap: wrap; gap: 16px;">
+                            <h3 style="font-size: 16px; margin: 0; font-weight: 600;">Network Scans</h3>
+                            <div style="display: flex; gap: 12px; align-items: center;">
+                                <div class="topbar-search" style="display: flex; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; width: 240px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
+                                    <input type="text" placeholder="Filter networks..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 13px; color: var(--text-primary); margin-left: 8px; font-family: inherit;">
+                                </div>
+                                <button id="exportNetworkReportBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 6px 12px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                    Export
+                                </button>
+                            </div>
+                        </div>
+
+                        <table class="modern-table" style="margin: 0;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px; text-align: center;"><input type="checkbox" style="cursor: pointer;"></th>
+                                    <th>SCANS (7)</th>
+                                    <th>STATUS</th>
+                                    <th>TARGET</th>
+                                    <th>SUMMARY</th>
+                                    <th>DATE</th>
+                                    <th>AUTHORIZED BY</th>
+                                    <th style="width: 40px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="networkScansTableBody">
+                                <!-- Data will be populated here dynamically via app.js -->
+                            </tbody>
+                        </table>
+                        
+                        <!-- Pagination Controls -->
+                        <div class="pagination-controls" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-top: 1px solid var(--border-color); background: white; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;">
+                            <div style="font-size: 13px; color: var(--text-secondary);">
+                                Showing 1 to 2 of 7 results
+                            </div>
+                            <div class="pagination-right" style="display: flex; align-items: center; gap: 4px;">
+                                <button class="btn btn-outline btn-sm" style="padding: 6px 10px; min-width: auto; border: none; color: #94a3b8;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                                <button class="btn btn-outline btn-sm" style="padding: 4px 10px; min-width: auto; background: #2563eb; color: white; border: none;">1</button>
+                                <button class="btn btn-outline btn-sm" style="padding: 4px 10px; min-width: auto; border: none;">2</button>
+                                <button class="btn btn-outline btn-sm" style="padding: 4px 10px; min-width: auto; border: none;">3</button>
+                                <span style="padding: 4px 6px; font-size: 14px; color: #64748b;">...</span>
+                                <button class="btn btn-outline btn-sm" style="padding: 6px 10px; min-width: auto; border: none;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             <!-- VIEW: Admin User Management -->
             <div id="view-admin" class="view-container hidden" style="display: none;">
                 <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
@@ -635,6 +757,85 @@
                                     <td id="modalLogHost">-</td>
                                     <td>pentest-tools</td>
                                     <td id="modalLogMsg" class="font-mono text-truncate">...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Network Scan Detail Modal -->
+    <div class="modal-overlay" id="networkScanModalOverlay" style="display: none;">
+        <div class="modal-dialog" style="max-width: 800px;">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <h2 id="networkScanModalTitle">Network Scan Details</h2>
+                    <span class="badge badge-medium" id="networkScanModalStatus">Status</span>
+                </div>
+                <div class="modal-actions" style="display: flex; gap: 12px; align-items: center;">
+                    <a id="btnDownloadNetworkReport" href="#" target="_blank" class="badge badge-high" style="text-decoration: none; cursor: pointer; border: 1px solid rgba(255,255,255,0.2);">
+                        📄 Export Details
+                    </a>
+                    <button class="icon-btn" onclick="closeNetworkScanModal()">✕</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="modal-meta-grid" style="grid-template-columns: repeat(4, 1fr);">
+                    <div>
+                        <div class="meta-label">NETWORK TARGET</div>
+                        <div class="meta-value" id="networkScanModalTarget">-</div>
+                    </div>
+                    <div>
+                        <div class="meta-label">IP RANGE</div>
+                        <div class="meta-value" id="networkScanModalIp">-</div>
+                    </div>
+                    <div>
+                        <div class="meta-label">AUTHORIZED BY</div>
+                        <div class="meta-value" id="networkScanModalAuth">-</div>
+                    </div>
+                    <div>
+                        <div class="meta-label">DEVICES DISCOVERED</div>
+                        <div class="meta-value" id="networkScanModalDevices">45</div>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <div class="meta-label mb-2">DISCOVERED DEVICES & VULNERABILITIES</div>
+                    <div class="table-wrapper" style="border: 1px solid var(--color-border); border-radius: 8px; overflow:hidden;">
+                        <table class="modern-table" style="margin:0;">
+                            <thead>
+                                <tr>
+                                    <th>IP ADDRESS</th>
+                                    <th>HOSTNAME</th>
+                                    <th>OS / DEVICE TYPE</th>
+                                    <th>OPEN PORTS</th>
+                                    <th>CRITICAL VULNS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="networkScanModalDeviceBody">
+                                <!-- Mockup devices -->
+                                <tr>
+                                    <td class="font-mono">192.168.10.15</td>
+                                    <td>DB-SERVER-01</td>
+                                    <td>Linux / Ubuntu</td>
+                                    <td>22, 5432</td>
+                                    <td><span style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">1</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="font-mono">192.168.10.42</td>
+                                    <td>WEB-NODE-A</td>
+                                    <td>Linux / Nginx</td>
+                                    <td>80, 443, 22</td>
+                                    <td><span style="color: var(--text-secondary); font-size: 11px;">None</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="font-mono">192.168.10.110</td>
+                                    <td>DESKTOP-HR2</td>
+                                    <td>Windows 10</td>
+                                    <td>135, 139, 445</td>
+                                    <td><span style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">3</span></td>
                                 </tr>
                             </tbody>
                         </table>
