@@ -786,6 +786,10 @@ window.renderVulnTrendChart = function () {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -844,9 +848,10 @@ window.renderVulnTrendChart = function () {
                             },
                             label: function (context) {
                                 let label = context.dataset.label || '';
-                                if (label) label += ' | Vulns: ';
-                                if (context.parsed.y !== null) label += context.parsed.y;
-                                return label;
+                                if (label) {
+                                    return `${label} (${context.parsed.y})`;
+                                }
+                                return context.parsed.y;
                             }
                         }
                     }
@@ -879,11 +884,11 @@ window.renderSevTrendChart = function () {
     updateDropdownLabel('sevTrendDropdown', 'All Severities');
 
     const sevColors = {
-        'Critical': '#ef4444',
-        'High': '#f97316',
-        'Medium': '#eab308',
-        'Low': '#3b82f6',
-        'Info': '#22c55e'
+        'Critical': '#8A2E2E',
+        'High': '#FF4A4A',
+        'Medium': '#FF9F2A',
+        'Low': '#4287F5',
+        'Info': '#00D182'
     };
 
     let baseDatasets = rawSevTrendData.datasets || [];
@@ -934,6 +939,10 @@ window.renderSevTrendChart = function () {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -991,12 +1000,19 @@ window.renderSevTrendChart = function () {
                                 label += val;
 
                                 let domainsList = context.dataset.domains ? context.dataset.domains[context.dataIndex] : null;
-                                if (val > 0 && domainsList && domainsList.length > 0) {
+                                if (val > 0 && domainsList) {
                                     let lines = [label];
-                                    domainsList.forEach(d => {
-                                        lines.push('   • ' + d);
-                                    });
-                                    return lines;
+                                    if (Array.isArray(domainsList) && domainsList.length > 0) {
+                                        domainsList.forEach(d => {
+                                            lines.push('   • ' + d);
+                                        });
+                                        return lines;
+                                    } else if (typeof domainsList === 'object' && !Array.isArray(domainsList) && Object.keys(domainsList).length > 0) {
+                                        Object.entries(domainsList).forEach(([d, count]) => {
+                                            lines.push(`   • ${d} (${count})`);
+                                        });
+                                        return lines;
+                                    }
                                 }
                                 return label;
                             }
@@ -1031,7 +1047,7 @@ function updateSortIcons() {
         if (icon) icon.innerHTML = '';
     });
     
-    const activeMapping = { 'id': 0, 'domain': 1, 'date': 2, 'type': 3, 'vulns': 4 };
+    const activeMapping = { 'date': 0, 'domain': 1, 'type': 2, 'vulns': 3, 'severity': 4 };
     const activeIndex = activeMapping[vulnSortCol];
     
     if (activeIndex !== undefined) {
@@ -1058,6 +1074,8 @@ async function loadVulnerabilities(preservePage = false) {
 function applyVulnFilters(preservePage = false) {
     const startInput = document.getElementById('vulnStartDate')?.value;
     const endInput = document.getElementById('vulnEndDate')?.value;
+    // Ambil kata kunci dari input pencarian
+    const domainSearchInput = document.getElementById('vulnDomainSearch')?.value.toLowerCase();
 
     let startDate = null;
     let endDate = null;
@@ -1076,29 +1094,38 @@ function applyVulnFilters(preservePage = false) {
         if (!scan.scan_date) return false;
         const scanDate = new Date(scan.scan_date);
 
+        // Filter berdasarkan tanggal
         if (startDate && scanDate < startDate) return false;
         if (endDate && scanDate > endDate) return false;
+
+        // Filter berdasarkan pencarian nama domain
+        if (domainSearchInput) {
+            const domainName = (scan.domains?.domain_name || '').toLowerCase();
+            if (!domainName.includes(domainSearchInput)) return false;
+        }
 
         return true;
     });
 
     filteredVulns.sort((a, b) => {
+        // (Sisa kode sorting di bawahnya biarkan tetap sama persis seperti sebelumnya)
         let valA, valB;
-        if (vulnSortCol === 'id') {
-            valA = a.id || 0;
-            valB = b.id || 0;
+        if (vulnSortCol === 'date') {
+            valA = new Date(a.scan_date).getTime() || 0;
+            valB = new Date(b.scan_date).getTime() || 0;
         } else if (vulnSortCol === 'domain') {
             valA = (a.domains?.domain_name || '').toLowerCase();
             valB = (b.domains?.domain_name || '').toLowerCase();
-        } else if (vulnSortCol === 'date') {
-            valA = new Date(a.scan_date).getTime() || 0;
-            valB = new Date(b.scan_date).getTime() || 0;
         } else if (vulnSortCol === 'type') {
             valA = (a.vulnerabilities && a.vulnerabilities.length > 0 && a.vulnerabilities[0].check_type || '').toLowerCase();
             valB = (b.vulnerabilities && b.vulnerabilities.length > 0 && b.vulnerabilities[0].check_type || '').toLowerCase();
         } else if (vulnSortCol === 'vulns') {
             valA = a.vulnerabilities ? a.vulnerabilities.length : 0;
             valB = b.vulnerabilities ? b.vulnerabilities.length : 0;
+        } else if (vulnSortCol === 'severity') {
+            const weights = { 'CRITICAL': 5, 'HIGH': 4, 'MEDIUM': 3, 'LOW': 2, 'INFO': 1, 'SAFE': 0 };
+            valA = weights[(a.risk_level || 'SAFE').toUpperCase()] || 0;
+            valB = weights[(b.risk_level || 'SAFE').toUpperCase()] || 0;
         }
         
         if (valA < valB) return vulnSortDesc ? 1 : -1;
@@ -1115,8 +1142,11 @@ function applyVulnFilters(preservePage = false) {
 function resetVulnFilters() {
     const startInput = document.getElementById('vulnStartDate');
     const endInput = document.getElementById('vulnEndDate');
+    const domainSearchInput = document.getElementById('vulnDomainSearch'); // Tambahkan ini
+    
     if (startInput) startInput.value = '';
     if (endInput) endInput.value = '';
+    if (domainSearchInput) domainSearchInput.value = ''; // Tambahkan ini agar kotak pencarian ikut bersih
 
     filteredVulns = [...allVulns];
     vulnCurrentPage = 1;
@@ -1169,11 +1199,11 @@ function renderVulnerabilitiesList() {
 
         return `
             <tr onclick="openScanModalIndex(${actualIndex})" style="cursor: pointer;">
-                <td style="font-family:var(--font-mono); font-weight:500;">SCAN-${String(scan.id || actualIndex + 1).padStart(4, '0')}</td>
+                <td style="color:var(--text-secondary); font-weight:500;">${date}</td>
                 <td><span style="color:var(--primary); font-weight:500;">${escapeHtml(domainName)}</span></td>
-                <td style="color:var(--text-secondary);">${date}</td>
                 <td style="color:var(--text-secondary); font-weight:500;">${escapeHtml(scanType)}</td>
-                <td><span class="badge badge-${sevClass}">${numVulns} Vulns</span></td>
+                <td style="font-weight:600;">${numVulns} Vulns</td>
+                <td><span class="badge badge-${sevClass}">${(scan.risk_level || 'SAFE').toUpperCase()}</span></td>
             </tr>
         `;
     }).join('');

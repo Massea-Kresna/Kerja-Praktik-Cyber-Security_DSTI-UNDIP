@@ -11,7 +11,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=23">
+    <link rel="stylesheet" href="styles.css?v=25">
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <!-- Chart.js -->
@@ -411,18 +411,26 @@
                                 <label for="vulnStartDate"
                                     style="font-size: 14px; color: #475569; font-weight: 500;">Dari:</label>
                                 <input type="date" id="vulnStartDate"
-                                    style="padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 14px; outline: none; background: #f8fafc; color: #1e293b; transition: all 0.2s ease; cursor: pointer; font-family: inherit;"
-                                    onfocus="this.style.borderColor='#0b1f3a'; this.style.boxShadow='0 0 0 2px rgba(11, 31, 58, 0.1)'"
-                                    onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none'">
+                                    style="padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 14px; outline: none; background: #f8fafc; color: #1e293b; transition: all 0.2s ease; cursor: pointer; font-family: inherit;">
                             </div>
                             <div style="display: flex; align-items: center; gap: 10px;">
                                 <label for="vulnEndDate"
                                     style="font-size: 14px; color: #475569; font-weight: 500;">Sampai:</label>
                                 <input type="date" id="vulnEndDate"
-                                    style="padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 14px; outline: none; background: #f8fafc; color: #1e293b; transition: all 0.2s ease; cursor: pointer; font-family: inherit;"
-                                    onfocus="this.style.borderColor='#0b1f3a'; this.style.boxShadow='0 0 0 2px rgba(11, 31, 58, 0.1)'"
-                                    onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none'">
+                                    style="padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 14px; outline: none; background: #f8fafc; color: #1e293b; transition: all 0.2s ease; cursor: pointer; font-family: inherit;">
                             </div>
+                            
+                            <!-- TAMBAHAN: Kotak Pencarian Domain -->
+                            <div style="display: flex; align-items: center; flex-grow: 1; max-width: 350px;">
+                                <div style="display: flex; align-items: center; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; width: 100%;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="min-width: 16px;">
+                                        <circle cx="11" cy="11" r="8"></circle>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                    </svg>
+                                    <input type="text" id="vulnDomainSearch" placeholder="Cari target domain..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 14px; color: #1e293b; margin-left: 10px; font-family: inherit;">
+                                </div>
+                            </div>
+
                             <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
                                 <button id="vulnFilterBtn"
                                     style="padding: 8px 20px; font-size: 14px; font-weight: 500; border-radius: 6px; border: none; background: #0b1f3a; color: white; cursor: pointer; transition: background 0.2s; font-family: inherit; display: flex; align-items: center; gap: 6px;"
@@ -453,11 +461,11 @@
                         <table class="modern-table">
                             <thead>
                                 <tr id="scanHistoryHeaders">
-                                    <th class="sortable" onclick="sortVulnHistory('id')" style="cursor: pointer;">Scan ID <span class="sort-icon"></span></th>
-                                    <th class="sortable" onclick="sortVulnHistory('domain')" style="cursor: pointer;">Target Domain <span class="sort-icon"></span></th>
                                     <th class="sortable" onclick="sortVulnHistory('date')" style="cursor: pointer;">Scan Date <span class="sort-icon">↓</span></th>
+                                    <th class="sortable" onclick="sortVulnHistory('domain')" style="cursor: pointer;">Target Domain <span class="sort-icon"></span></th>
                                     <th class="sortable" onclick="sortVulnHistory('type')" style="cursor: pointer;">Scan Type <span class="sort-icon"></span></th>
                                     <th class="sortable" onclick="sortVulnHistory('vulns')" style="cursor: pointer;">Vulnerabilities <span class="sort-icon"></span></th>
+                                    <th class="sortable" onclick="sortVulnHistory('severity')" style="cursor: pointer;">Severity <span class="sort-icon"></span></th>
                                 </tr>
                             </thead>
                             <tbody id="vulnListContainer">
