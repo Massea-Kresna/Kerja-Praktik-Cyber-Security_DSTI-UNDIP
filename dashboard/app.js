@@ -2144,7 +2144,7 @@ function openScanModal(scan) {
         btnDownload.removeAttribute('target');
         btnDownload.onclick = (e) => {
             e.preventDefault();
-            openGenerateReportModal(scan.history_id);
+            openGenerateReportModal(scan.id);
         };
         btnDownload.style.display = 'inline-flex';
     } else if (btnDownload) {
@@ -2926,14 +2926,21 @@ document.getElementById('generateReportForm')?.addEventListener('submit', async 
         document.getElementById('generateReportModalOverlay').classList.remove('active');
         showToast('Success', 'Report successfully generated!', '✅');
         
-        // Trigger file download
+        // Trigger file download using anchor tag to bypass popup blockers
         if (data.file_url) {
-            window.open(data.file_url, '_blank');
+            const a = document.createElement('a');
+            a.href = data.file_url;
+            a.download = data.file_url.split('/').pop() || 'report.pdf';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
         }
         
     } catch (err) {
         console.error(err);
         showToast('Error', err.message, '❌');
+        // Ensure modal closes so the screen doesn't stay frozen
+        document.getElementById('generateReportModalOverlay').classList.remove('active');
     } finally {
         btnSubmit.innerHTML = originalText;
         btnSubmit.disabled = false;
@@ -3135,4 +3142,11 @@ window.triggerSingleNetworkScan = async function(domainName) {
     } catch (err) {
         showToast('Error Koneksi', 'Tidak dapat terhubung ke server.', '🔌');
     }
-};
+}
+
+// Global modal background click-to-close
+document.addEventListener('click', (e) => {
+    if (e.target && e.target.classList && e.target.classList.contains('modal-overlay')) {
+        e.target.classList.remove('active');
+    }
+});;

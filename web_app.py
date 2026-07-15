@@ -1195,7 +1195,14 @@ async def generate_report(req: GenerateReportRequest, current_user = Depends(get
             raise HTTPException(status_code=404, detail="Scan history not found")
         raw_json = resp.data[0].get("raw_json")
         pt_scan_id = None
-        
+        # Ensure raw_json is parsed if it's a string
+        if isinstance(raw_json, str):
+            import json
+            try:
+                raw_json = json.loads(raw_json)
+            except:
+                raw_json = None
+                
         # Determine pt_scan_id based on raw_json structure
         if isinstance(raw_json, dict) and "pt_scan_id" in raw_json:
             pt_scan_id = raw_json["pt_scan_id"]
