@@ -219,19 +219,32 @@
                                     <h3>Vulnerability Trend</h3>
                                     <p class="desc">Visualisasi kerentanan berdasarkan domain</p>
                                 </div>
-                                <div class="multi-select-dropdown" id="vulnTrendDropdown">
-                                    <button class="multi-select-btn" onclick="toggleDropdown('vulnTrendDropdown')">
-                                        <span class="multi-select-label">All Domains</span>
-                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                                            <path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-                                        </svg>
-                                    </button>
-                                    <div class="multi-select-panel">
-                                        <div class="multi-select-search">
-                                            <input type="text" placeholder="Cari domain..." oninput="filterDropdownItems('vulnTrendDropdown', this.value)" />
+                                <div style="display: flex; gap: 12px; align-items: center;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <div style="display: flex; align-items: center; background: white; border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden; transition: all 0.2s;" onfocusin="this.style.borderColor='var(--color-accent)'; this.style.boxShadow='0 0 0 2px rgba(11, 31, 58, 0.1)'" onfocusout="this.style.borderColor='var(--color-border)'; this.style.boxShadow='none'">
+                                            <input type="date" id="vulnTrendStartDate" style="border: none; padding: 6px 10px; font-size: 13px; outline: none; background: transparent; cursor: pointer; color: var(--color-ink-soft); font-family: inherit;">
+                                            <span style="font-size: 13px; color: var(--color-muted-light); padding: 0 4px; font-weight: 500;">to</span>
+                                            <input type="date" id="vulnTrendEndDate" style="border: none; padding: 6px 10px; font-size: 13px; outline: none; background: transparent; cursor: pointer; color: var(--color-ink-soft); font-family: inherit;">
+                                            <div style="width: 1px; height: 16px; background: var(--color-border); margin: 0 2px;"></div>
+                                            <button id="vulnTrendResetBtn" style="border: none; background: transparent; padding: 6px 10px; cursor: pointer; color: var(--color-muted-light); display: flex; align-items: center; justify-content: center; transition: color 0.2s;" onmouseover="this.style.color='var(--color-ink)'" onmouseout="this.style.color='var(--color-muted-light)'" title="Reset to 24h">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+                                            </button>
                                         </div>
-                                        <div class="multi-select-items" id="vulnTrendItems">
-                                            <!-- Diisi oleh app.js -->
+                                    </div>
+                                    <div class="multi-select-dropdown" id="vulnTrendDropdown">
+                                        <button class="multi-select-btn" onclick="toggleDropdown('vulnTrendDropdown')">
+                                            <span class="multi-select-label">All Domains</span>
+                                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                                <path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                            </svg>
+                                        </button>
+                                        <div class="multi-select-panel">
+                                            <div class="multi-select-search">
+                                                <input type="text" placeholder="Cari domain..." oninput="filterDropdownItems('vulnTrendDropdown', this.value)" />
+                                            </div>
+                                            <div class="multi-select-items" id="vulnTrendItems">
+                                                <!-- Diisi oleh app.js -->
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -246,23 +259,36 @@
                             <div class="card-header-row">
                                 <div>
                                     <h3>Severity Trend</h3>
-                                    <p class="desc">Distribusi tingkat risiko 24 jam terakhir</p>
+                                    <p class="desc">Distribusi tingkat risiko kerentanan</p>
                                 </div>
-                                <div class="multi-select-dropdown" id="sevTrendDropdown">
-                                    <button class="multi-select-btn" onclick="toggleDropdown('sevTrendDropdown')">
-                                        <span class="multi-select-label">All Severities</span>
-                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                                            <path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-                                        </svg>
-                                    </button>
-                                    <div class="multi-select-panel">
-                                        <div class="multi-select-items" id="sevTrendItems">
-                                            <label class="multi-select-item"><input type="checkbox" value="All" checked onchange="onSevFilterChange(this)"><b>All Severities</b></label>
-                                            <label class="multi-select-item"><input type="checkbox" value="Critical" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#ef4444"></span>Critical</label>
-                                            <label class="multi-select-item"><input type="checkbox" value="High" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#f97316"></span>High</label>
-                                            <label class="multi-select-item"><input type="checkbox" value="Medium" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#eab308"></span>Medium</label>
-                                            <label class="multi-select-item"><input type="checkbox" value="Low" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#3b82f6"></span>Low</label>
-                                            <label class="multi-select-item"><input type="checkbox" value="Info" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#22c55e"></span>Info</label>
+                                <div style="display: flex; gap: 12px; align-items: center;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <div style="display: flex; align-items: center; background: white; border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden; transition: all 0.2s;" onfocusin="this.style.borderColor='var(--color-accent)'; this.style.boxShadow='0 0 0 2px rgba(11, 31, 58, 0.1)'" onfocusout="this.style.borderColor='var(--color-border)'; this.style.boxShadow='none'">
+                                            <input type="date" id="sevTrendStartDate" style="border: none; padding: 6px 10px; font-size: 13px; outline: none; background: transparent; cursor: pointer; color: var(--color-ink-soft); font-family: inherit;">
+                                            <span style="font-size: 13px; color: var(--color-muted-light); padding: 0 4px; font-weight: 500;">to</span>
+                                            <input type="date" id="sevTrendEndDate" style="border: none; padding: 6px 10px; font-size: 13px; outline: none; background: transparent; cursor: pointer; color: var(--color-ink-soft); font-family: inherit;">
+                                            <div style="width: 1px; height: 16px; background: var(--color-border); margin: 0 2px;"></div>
+                                            <button id="sevTrendResetBtn" style="border: none; background: transparent; padding: 6px 10px; cursor: pointer; color: var(--color-muted-light); display: flex; align-items: center; justify-content: center; transition: color 0.2s;" onmouseover="this.style.color='var(--color-ink)'" onmouseout="this.style.color='var(--color-muted-light)'" title="Reset to 24h">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="multi-select-dropdown" id="sevTrendDropdown">
+                                        <button class="multi-select-btn" onclick="toggleDropdown('sevTrendDropdown')">
+                                            <span class="multi-select-label">All Severities</span>
+                                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                                <path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                            </svg>
+                                        </button>
+                                        <div class="multi-select-panel">
+                                            <div class="multi-select-items" id="sevTrendItems">
+                                                <label class="multi-select-item"><input type="checkbox" value="All" checked onchange="onSevFilterChange(this)"><b>All Severities</b></label>
+                                                <label class="multi-select-item"><input type="checkbox" value="Critical" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#ef4444"></span>Critical</label>
+                                                <label class="multi-select-item"><input type="checkbox" value="High" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#f97316"></span>High</label>
+                                                <label class="multi-select-item"><input type="checkbox" value="Medium" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#eab308"></span>Medium</label>
+                                                <label class="multi-select-item"><input type="checkbox" value="Low" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#3b82f6"></span>Low</label>
+                                                <label class="multi-select-item"><input type="checkbox" value="Info" onchange="onSevFilterChange(this)"><span class="sev-dot" style="background:#22c55e"></span>Info</label>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -404,7 +430,7 @@
                                 <button class="btn btn-outline btn-sm" id="vulnPrevPageBtn" style="padding: 6px 12px; min-width: auto;">Sebelumnya</button>
                                 <span id="vulnPageInfo" style="font-size: 13px; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
                                     Halaman 
-                                    <input type="number" id="vulnPageInput" min="1" value="1" style="width: 45px; text-align: center; padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);"> 
+                                    <input type="text" inputmode="numeric" pattern="[0-9]*" id="vulnPageInput" min="1" value="1" style="width: 45px; text-align: center; padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);"> 
                                     dari 
                                     <span id="vulnTotalPages">1</span>
                                 </span>
@@ -417,12 +443,23 @@
 <div id="view-inventory" class="view-container hidden">
                     <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                         <h1>Domains</h1>
-                        <div class="topbar-search" style="display: flex; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; width: 320px; transition: border-color 0.2s;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="min-width: 16px;">
-                                <circle cx="11" cy="11" r="8"></circle>
-                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                            </svg>
-                            <input type="text" id="domainSearchInput" placeholder="Search domains or IP..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 14px; color: var(--text-primary); margin-left: 10px; font-family: inherit;">
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <div class="topbar-search" style="display: flex; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; width: 320px; transition: border-color 0.2s;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="min-width: 16px;">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                </svg>
+                                <input type="text" id="domainSearchInput" placeholder="Search domains or IP..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 14px; color: var(--text-primary); margin-left: 10px; font-family: inherit;">
+                            </div>
+                            <button id="importDomainsBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white; cursor: pointer;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                Import
+                            </button>
+                            <input type="file" id="importDomainsInput" accept=".txt,.json" style="display: none;">
+                            <button id="exportDomainsBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white; cursor: pointer;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Export
+                            </button>
                         </div>
                     </div>
                     
@@ -485,7 +522,7 @@
                                 <button class="btn btn-outline btn-sm" id="domainPrevPageBtn" style="padding: 6px 12px; min-width: auto;">Sebelumnya</button>
                                 <span id="domainPageInfo" style="font-size: 13px; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
                                     Halaman 
-                                    <input type="number" id="domainPageInput" min="1" value="1" style="width: 45px; text-align: center; padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);"> 
+                                    <input type="text" inputmode="numeric" pattern="[0-9]*" id="domainPageInput" min="1" value="1" style="width: 45px; text-align: center; padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 13px; outline: none; background: white; color: var(--text-primary);"> 
                                     dari 
                                     <span id="domainTotalPages">1</span>
                                 </span>
