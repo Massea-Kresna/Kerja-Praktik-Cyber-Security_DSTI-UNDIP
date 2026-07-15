@@ -170,7 +170,7 @@ def save_all_results(domain_list, port_results, tech_results, vuln_results):
         print(f"[-] ERROR saat menyimpan ke Supabase: {e}")
         return False
 
-def save_pentest_tools_result(domain_name, report_json, scanner_type="Web Scanner", scan_date=None):
+def save_pentest_tools_result(domain_name, report_json, scanner_type="Web Scanner", pt_scan_id=None, scan_date=None):
     """
     Mengadaptasi laporan dari Pentest-Tools API dan menyimpannya ke Supabase.
     """
@@ -178,14 +178,14 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type="Web Scanne
     supabase = get_supabase_client()
     if not supabase:
         print("  [!] Gagal menyimpan ke Supabase: Client tidak tersedia.")
-        return False
+        return None
         
     try:
         # 1. Cari domain_id
         response = supabase.table("domains").select("id").eq("domain_name", domain_name).limit(1).execute()
         if not response.data:
             print(f"  [-] Domain {domain_name} tidak ditemukan di tabel domains.")
-            return False
+            return None
             
         domain_id = response.data[0]['id']
         
@@ -272,20 +272,26 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type="Web Scanne
             print(f"  [*] Menyimpan history ke Supabase tanpa detail scan_result DB (Risk Level: {risk_level})")
             
         # 3. Buat History (Simpan LOW/INFO ke raw_json)
-        history_id = create_scan_history(supabase, domain_id, final_risk_score, risk_level, low_info_vulns if low_info_vulns else None, scan_date=scan_date)
+        raw_json_data = low_info_vulns if low_info_vulns else []
+        if pt_scan_id:
+            raw_json_data = {"low_info_vulns": raw_json_data, "pt_scan_id": pt_scan_id}
+        else:
+            raw_json_data = low_info_vulns if low_info_vulns else None
+
+        history_id = create_scan_history(supabase, domain_id, final_risk_score, risk_level, raw_json_data, scan_date=scan_date)
         if not history_id:
-            return False
+            return None
             
         # 4. Simpan Scan_result
         if scan_result:
             insert_scan_result(supabase, history_id, scan_result)
         
         print(f"  [+] Tersimpan ke Supabase (Risk: {risk_level}, Temuan: {len(scan_result)})")
-        return True
+        return history_id
         
     except Exception as e:
         print(f"  [-] ERROR saat mem-parsing hasil Pentest-Tools ke Supabase: {e}")
-        return False
+        return None
 
 # ==============================================================================
 # USER MANAGEMENT & MULTI-ROLE METHODS (SUPABASE / LOCAL JSON FALLBACK)

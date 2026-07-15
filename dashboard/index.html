@@ -11,7 +11,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=25">
+    <link rel="stylesheet" href="styles.css?v=26">
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <!-- Chart.js -->
@@ -152,6 +152,11 @@
                     <svg class="icon">
                         <use href="#icon-globe" />
                     </svg> Domains
+                </a>
+                <a href="#" class="nav-item" onclick="switchView('web-scanner')">
+                    <svg class="icon">
+                        <use href="#icon-globe" />
+                    </svg> Web Scanner
                 </a>
                 <a href="#" class="nav-item" onclick="switchView('network-scanner')">
                     <svg class="icon">
@@ -400,54 +405,44 @@
 
                 <!-- VIEW: Vulnerabilities List (Automated Pentests) -->
                 <div id="view-vulnerabilities" class="view-container hidden">
-                    <div class="view-header"
-                        style="display: flex; flex-direction: column; align-items: flex-start; gap: 16px; margin-bottom: 24px;">
+                    <div class="view-header" style="margin-bottom: 24px;">
                         <h1 style="margin: 0;">Scan History</h1>
+                    </div>
 
-                        <!-- Date Range Filter -->
-                        <div
-                            style="display: flex; gap: 24px; align-items: center; padding: 16px 24px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; flex-wrap: wrap; width: 100%; box-sizing: border-box; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <label for="vulnStartDate"
-                                    style="font-size: 14px; color: #475569; font-weight: 500;">Dari:</label>
-                                <input type="date" id="vulnStartDate"
-                                    style="padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 14px; outline: none; background: #f8fafc; color: #1e293b; transition: all 0.2s ease; cursor: pointer; font-family: inherit;">
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <label for="vulnEndDate"
-                                    style="font-size: 14px; color: #475569; font-weight: 500;">Sampai:</label>
-                                <input type="date" id="vulnEndDate"
-                                    style="padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 14px; outline: none; background: #f8fafc; color: #1e293b; transition: all 0.2s ease; cursor: pointer; font-family: inherit;">
-                            </div>
+                    <div class="card table-card">
+                        <!-- Compact Filter Bar -->
+                        <div style="padding: 12px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: #fafafa; flex-wrap: wrap; gap: 16px;">
                             
-                            <!-- TAMBAHAN: Kotak Pencarian Domain -->
-                            <div style="display: flex; align-items: center; flex-grow: 1; max-width: 350px;">
-                                <div style="display: flex; align-items: center; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; width: 100%;">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="min-width: 16px;">
+                            <!-- KIRI: Pencarian dan Tipe -->
+                            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex-grow: 1;">
+                                <div style="display: flex; align-items: center; background: white; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; width: 100%; max-width: 250px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <circle cx="11" cy="11" r="8"></circle>
                                         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                                     </svg>
-                                    <input type="text" id="vulnDomainSearch" placeholder="Cari target domain..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 14px; color: #1e293b; margin-left: 10px; font-family: inherit;">
+                                    <input type="text" id="vulnDomainSearch" placeholder="Cari target domain..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 13px; color: #1e293b; margin-left: 8px; font-family: inherit;">
                                 </div>
+
+                                <select id="vulnTypeFilter" style="padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13px; outline: none; background: white; color: #1e293b; cursor: pointer; font-family: inherit;">
+                                    <option value="ALL">All Scan Types</option>
+                                    <option value="Web Scanner">Website Scan</option>
+                                    <option value="Network Scanner">Network Scan</option>
+                                </select>
                             </div>
 
-                            <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
-                                <button id="vulnFilterBtn"
-                                    style="padding: 8px 20px; font-size: 14px; font-weight: 500; border-radius: 6px; border: none; background: #0b1f3a; color: white; cursor: pointer; transition: background 0.2s; font-family: inherit; display: flex; align-items: center; gap: 6px;"
-                                    onmouseover="this.style.background='#1e3a5f'"
-                                    onmouseout="this.style.background='#0b1f3a'">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-                                    </svg>
-                                    Filter
-                                </button>
+                            <!-- KANAN: Tanggal dan Reset -->
+                            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; gap: 6px; background: white; padding: 2px; border-radius: 6px; border: 1px solid #cbd5e1;">
+                                    <input type="date" id="vulnStartDate" title="Mulai Tanggal" style="border: none; outline: none; background: transparent; padding: 4px 8px; font-size: 13px; color: #475569; cursor: pointer; font-family: inherit;">
+                                    <span style="color: #cbd5e1;">-</span>
+                                    <input type="date" id="vulnEndDate" title="Sampai Tanggal" style="border: none; outline: none; background: transparent; padding: 4px 8px; font-size: 13px; color: #475569; cursor: pointer; font-family: inherit;">
+                                </div>
+
                                 <button id="vulnResetFilterBtn"
-                                    style="padding: 8px 20px; font-size: 14px; font-weight: 500; border-radius: 6px; border: 1px solid #cbd5e1; background: white; color: #475569; cursor: pointer; transition: all 0.2s; font-family: inherit; display: flex; align-items: center; gap: 6px;"
+                                    style="padding: 6px 14px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid #cbd5e1; background: white; color: #475569; cursor: pointer; transition: all 0.2s; font-family: inherit; display: flex; align-items: center; gap: 6px;"
                                     onmouseover="this.style.background='#f1f5f9'; this.style.color='#0f172a'"
                                     onmouseout="this.style.background='white'; this.style.color='#475569'">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
                                         <polyline points="3 3 3 8 8 8"></polyline>
                                     </svg>
@@ -455,9 +450,7 @@
                                 </button>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="card table-card">
                         <table class="modern-table">
                             <thead>
                                 <tr id="scanHistoryHeaders">
@@ -512,52 +505,29 @@
                     <div class="view-header"
                         style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                         <h1>Domains</h1>
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <div class="topbar-search" style="display: flex; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; width: 320px; transition: border-color 0.2s;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="min-width: 16px;">
-                                    <circle cx="11" cy="11" r="8"></circle>
-                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                                </svg>
-                                <input type="text" id="domainSearchInput" placeholder="Search domains or IP..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 14px; color: var(--text-primary); margin-left: 10px; font-family: inherit;">
-                            </div>
-                            <button id="addDomainBtn" class="auth-btn" style="width: auto; padding: 8px 16px; display: flex; align-items: center; gap: 6px; font-size: 13px;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                Add Domain
-                            </button>
-                            <button id="importDomainsBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white; cursor: pointer;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                                Import
-                            </button>
-                            <input type="file" id="importDomainsInput" accept=".txt,.json" style="display: none;">
-                            <div class="multi-select-dropdown" id="exportDropdown">
-                                <button class="btn btn-outline" onclick="toggleDropdown('exportDropdown')" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white; cursor: pointer;">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                                    Export
-                                </button>
-                                <div class="multi-select-panel" style="right: 0; left: auto; width: 140px; top: 100%;">
-                                    <div class="multi-select-items">
-                                        <label class="multi-select-item" onclick="exportDomains('txt'); toggleDropdown('exportDropdown');" style="cursor: pointer; display: block; padding: 8px 12px; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'">
-                                            Export as .TXT
-                                        </label>
-                                        <label class="multi-select-item" onclick="exportDomains('json'); toggleDropdown('exportDropdown');" style="cursor: pointer; display: block; padding: 8px 12px; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'">
-                                            Export as .JSON
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     </div>
 
                     <div class="card table-card">
                         <!-- Baris Tombol Aksi Pentest -->
                         <div
                             style="padding: 16px 24px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; background: #fafafa;">
-                            <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);"
-                                id="selectedDomainCount">0 domain dipilih</span>
+                            
+                            <!-- KIRI: Selected Count dan Search -->
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary); min-width: 120px;"
+                                    id="selectedDomainCount">0 domain dipilih</span>
+                                
+                                <div class="topbar-search" style="display: flex; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; width: 320px; transition: border-color 0.2s;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="min-width: 16px;">
+                                        <circle cx="11" cy="11" r="8"></circle>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                    </svg>
+                                    <input type="text" id="domainSearchInput" placeholder="Search domains or IP..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 14px; color: var(--text-primary); margin-left: 10px; font-family: inherit;">
+                                </div>
+                            </div>
 
-                            <!-- KELOMPOK TOMBOL AKSI -->
-                            <div style="display: flex; gap: 12px;">
-                                <!-- Tombol 1: Simpan Jadwal -->
+                            <!-- KANAN: Aksi -->
+                            <div style="display: flex; gap: 12px; align-items: center;">
                                 <button id="saveTargetsBtn" class="btn btn-outline"
                                     style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white;">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -567,28 +537,36 @@
                                         <polyline points="17 21 17 13 7 13 7 21"></polyline>
                                         <polyline points="7 3 7 8 15 8"></polyline>
                                     </svg>
-                                    Simpan Target (Interval)
+                                    Simpan Target
                                 </button>
-
-                                <!-- Tombol 2: Network Scan (BARU) -->
-                                <button id="runNetworkScanBtn" class="btn btn-outline" disabled
-                                    style="width: auto; padding: 8px 16px; opacity: 0.5; cursor: not-allowed; display: flex; align-items: center; gap: 6px; font-size: 13px; background: white;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
-                                    </svg>
-                                    Network Scan
+                                
+                                <button id="addDomainBtn" class="auth-btn" style="margin: 0; border: 1px solid transparent; width: auto; padding: 8px 16px; display: flex; align-items: center; gap: 6px; font-size: 13px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                    Add Domain
                                 </button>
-
-                                <!-- Tombol 3: Scan Web (Deep/Light) -->
-                                <button id="runScanBtn" class="auth-btn" disabled
-                                    style="width: auto; padding: 8px 16px; opacity: 0.5; cursor: not-allowed; display: flex; align-items: center; gap: 6px; font-size: 13px;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                                    </svg>
-                                    Web Scan
+                                
+                                <button id="importDomainsBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white; cursor: pointer;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                    Import
                                 </button>
+                                <input type="file" id="importDomainsInput" accept=".txt,.json" style="display: none;">
+                                
+                                <div class="multi-select-dropdown" id="exportDropdown">
+                                    <button class="btn btn-outline" onclick="toggleDropdown('exportDropdown')" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white; cursor: pointer;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                        Export
+                                    </button>
+                                    <div class="multi-select-panel" style="right: 0; left: auto; width: 140px; top: 100%;">
+                                        <div class="multi-select-items">
+                                            <label class="multi-select-item" onclick="exportDomains('txt'); toggleDropdown('exportDropdown');" style="cursor: pointer; display: block; padding: 8px 12px; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'">
+                                                Export as .TXT
+                                            </label>
+                                            <label class="multi-select-item" onclick="exportDomains('json'); toggleDropdown('exportDropdown');" style="cursor: pointer; display: block; padding: 8px 12px; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'">
+                                                Export as .JSON
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -639,6 +617,59 @@
                                 <button class="btn btn-outline btn-sm" id="domainNextPageBtn"
                                     style="padding: 6px 12px; min-width: auto;">Selanjutnya</button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- VIEW: Web Scanner -->
+                <div id="view-web-scanner" class="view-container hidden">
+                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                        <div>
+                            <h1 style="margin-bottom: 4px;">Web Scans</h1>
+                            <p style="color: #64748b;">Showing all automated web vulnerability scans for active domains.</p>
+                        </div>
+                        <button class="btn btn-primary" onclick="openWebScanModal()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                            </svg> New Web Scan
+                        </button>
+                    </div>
+                    
+
+                    <div class="card" style="margin-bottom: 20px;">
+                        <div class="filter-controls" style="display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center;">
+                            <div class="search-box" style="display: flex; align-items: center; background: white; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; width: 100%; max-width: 300px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                </svg>
+                                <input type="text" id="webScannerSearch" placeholder="Search target or scan ID..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 13px; color: #1e293b; margin-left: 8px; font-family: inherit;">
+                            </div>
+                            <button class="btn btn-secondary">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                </svg> Filters off
+                            </button>
+                        </div>
+                        
+                        <div class="table-container">
+                            <table class="modern-table" id="webScannerTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px;"><input type="checkbox"></th>
+                                        <th style="text-align: left;">SCANS</th>
+                                        <th style="text-align: left;">STATUS</th>
+                                        <th style="text-align: left;">TARGET</th>
+                                        <th style="text-align: left;">SUMMARY</th>
+                                        <th style="text-align: left;">DATE</th>
+                                        <th style="text-align: left;">ACTION</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="7" style="text-align: center;">Loading...</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -903,6 +934,61 @@
         </div>
     </div>
 
+    <!-- Web Scan Launch Modal -->
+    <div class="modal-overlay" id="webScanModalOverlay">
+        <div class="modal-dialog" style="max-width: 520px;">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #0058bd 0%, #0071e3 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                    </div>
+                    <div>
+                        <h2 style="margin: 0; font-size: 17px; font-weight: 600; color: var(--color-ink);">Launch New Web Scan</h2>
+                        <p style="margin: 2px 0 0 0; font-size: 13px; color: var(--color-muted);">Configure and start a vulnerability scan</p>
+                    </div>
+                </div>
+                <button class="icon-btn" onclick="document.getElementById('webScanModalOverlay').classList.remove('active')">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="font-size: 13px; font-weight: 500; color: var(--color-ink); margin-bottom: 6px; display: block;">Target Domain</label>
+                    <select id="webScanTargetSelect" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; color: var(--color-ink); font-family: var(--font-sans); font-size: 14px; cursor: pointer; transition: border-color 0.2s; outline: none; appearance: none; -webkit-appearance: none; background-image: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%2364748b%22 stroke-width=%222%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>'); background-repeat: no-repeat; background-position: right 12px center;">
+                        <option value="">Loading domains...</option>
+                    </select>
+                    <p style="margin: 6px 0 0; font-size: 12px; color: var(--color-muted);">Select an active domain from your inventory to scan.</p>
+                </div>
+                <div class="form-group">
+                    <label style="font-size: 13px; font-weight: 500; color: var(--color-ink); margin-bottom: 6px; display: block;">Scan Type</label>
+                    <div style="display: flex; gap: 12px;">
+                        <label style="flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 2px solid var(--color-accent); border-radius: 8px; cursor: pointer; background: rgba(0, 88, 189, 0.04); transition: all 0.15s;">
+                            <input type="radio" name="webScanType" value="deep" checked style="accent-color: var(--color-accent); width: 16px; height: 16px;">
+                            <div>
+                                <div style="font-size: 13px; font-weight: 600; color: var(--color-ink);">Deep Scan</div>
+                                <div style="font-size: 11px; color: var(--color-muted); margin-top: 2px;">Full vulnerability analysis</div>
+                            </div>
+                        </label>
+                        <label style="flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; background: #fff; transition: all 0.15s;">
+                            <input type="radio" name="webScanType" value="light" style="accent-color: var(--color-accent); width: 16px; height: 16px;">
+                            <div>
+                                <div style="font-size: 13px; font-weight: 600; color: var(--color-ink);">Light Scan</div>
+                                <div style="font-size: 11px; color: var(--color-muted); margin-top: 2px;">Quick surface-level check</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div style="padding: 16px 24px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 10px; background: var(--color-bg); border-radius: 0 0 var(--radius-lg) var(--radius-lg);">
+                <button class="btn btn-secondary" onclick="document.getElementById('webScanModalOverlay').classList.remove('active')" style="padding: 9px 20px; font-size: 13px; font-weight: 500;">Cancel</button>
+                <button class="btn btn-primary" id="btnSubmitWebScan" onclick="submitWebScan()" style="padding: 9px 20px; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    Launch Scan
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Network Scan Detail Modal -->
     <div class="modal-overlay" id="networkScanModalOverlay" style="display: none;">
         <div class="modal-dialog" style="max-width: 800px;">
@@ -1047,10 +1133,114 @@
                     <button type="submit" class="auth-btn animate-slide-up" id="domainSubmitBtn" style="margin-top: 24px; animation-delay: 0.2s;">Simpan Domain</button>
                 </form>
             </div>
+    </div>
+
+    <!-- Generate Report Modal -->
+    <div class="modal-overlay" id="generateReportModalOverlay">
+        <div class="modal-dialog" style="max-width: 500px;">
+            <div class="modal-header" style="border-bottom: 1px solid #e2e8f0; padding-bottom: 16px;">
+                <div class="modal-title-group" style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">📄</span>
+                    <h2 id="generateReportModalTitle" style="font-size: 1.25rem;">Generate report</h2>
+                </div>
+                <div class="modal-actions">
+                    <button class="icon-btn" id="closeGenerateReportModalBtn">✕</button>
+                </div>
+            </div>
+            <div class="modal-body" style="padding-top: 16px;">
+                <form id="generateReportForm">
+                    <input type="hidden" id="reportHistoryId">
+                    
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label style="font-weight: 600; font-size: 14px; margin-bottom: 12px; display: block; color: #1e293b;">Report Type</label>
+                        <div style="display: flex; gap: 24px; align-items: center;">
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
+                                <input type="radio" name="report_type" value="raw_scan_results" checked>
+                                Raw scan results
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
+                                <input type="radio" name="report_type" value="pentest_report">
+                                Editable pentest report
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+                    
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label style="font-weight: 600; font-size: 14px; margin-bottom: 12px; display: block; color: #1e293b;">Report Format</label>
+                        <div style="display: flex; gap: 24px; align-items: center; flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
+                                <input type="radio" name="report_format" value="pdf" checked> PDF
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
+                                <input type="radio" name="report_format" value="html"> HTML
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
+                                <input type="radio" name="report_format" value="json"> JSON
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
+                                <input type="radio" name="report_format" value="csv"> CSV
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
+                                <input type="radio" name="report_format" value="xlsx"> XLSX
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+                    
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label style="font-weight: 600; font-size: 14px; margin-bottom: 12px; display: block; color: #1e293b;">Group findings by</label>
+                        <div style="display: flex; gap: 24px; align-items: center;">
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
+                                <input type="radio" name="group_by" value="target" checked> Targets
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
+                                <input type="radio" name="group_by" value="vulnerability"> Vulnerability
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+                    
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label style="font-weight: 600; font-size: 14px; margin-bottom: 12px; display: block; color: #1e293b;">Filters</label>
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; color: #475569;">
+                                <input type="checkbox" name="filter_reproduce"> Include <strong>How to reproduce</strong> section
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; color: #475569;">
+                                <input type="checkbox" name="filter_informational" checked> Include <strong>Informational</strong> findings
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; color: #475569;">
+                                <input type="checkbox" name="filter_false_positives"> Include <strong>False Positives</strong> findings
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; color: #475569;">
+                                <input type="checkbox" name="filter_ignored"> Include <strong>Ignored</strong> findings
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; color: #475569;">
+                                <input type="checkbox" name="filter_not_verified" checked> Include <strong>Not Verified</strong> findings
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; color: #475569;">
+                                <input type="checkbox" name="filter_accepted" checked> Include <strong>Accepted</strong> findings
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; color: #475569;">
+                                <input type="checkbox" name="filter_fixed" checked> Include <strong>Fixed</strong> findings
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; background: #f8fafc; margin-left: -24px; margin-right: -24px; padding-left: 24px; padding-right: 24px; padding-bottom: 8px; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;">
+                        <button type="button" class="auth-btn" id="btnCancelReport" style="background: #e2e8f0; color: #1e293b; width: auto; box-shadow: none;">Cancel</button>
+                        <button type="submit" class="auth-btn" id="btnSubmitReport" style="background: #eab308; color: #1e293b; width: auto; border: none; font-weight: 600;">Generate <span style="font-weight: 400; font-size: 12px; opacity: 0.8; margin-left: 4px;">Ctrl Enter</span></button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
-    <script src="app.js?v=33"></script>
+    <script src="app.js?v=44"></script>
 </body>
 
 </html>
