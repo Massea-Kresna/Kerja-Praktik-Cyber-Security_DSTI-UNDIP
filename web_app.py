@@ -645,11 +645,11 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
         }
         
         domains_by_sev = {
-            "CRITICAL": [set() for _ in range(num_buckets + 1)],
-            "HIGH": [set() for _ in range(num_buckets + 1)],
-            "MEDIUM": [set() for _ in range(num_buckets + 1)],
-            "LOW": [set() for _ in range(num_buckets + 1)],
-            "INFO": [set() for _ in range(num_buckets + 1)],
+            "CRITICAL": [{} for _ in range(num_buckets + 1)],
+            "HIGH": [{} for _ in range(num_buckets + 1)],
+            "MEDIUM": [{} for _ in range(num_buckets + 1)],
+            "LOW": [{} for _ in range(num_buckets + 1)],
+            "INFO": [{} for _ in range(num_buckets + 1)],
         }
         
         for scan in scans:
@@ -673,7 +673,7 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
                     sev = (v.get("severity") or "").upper()
                     if sev in severities_data:
                         severities_data[sev][bucket_index] += 1
-                        domains_by_sev[sev][bucket_index].add(domain_name)
+                        domains_by_sev[sev][bucket_index][domain_name] = domains_by_sev[sev][bucket_index].get(domain_name, 0) + 1
                         
                 # Hitung dari raw_json (Low/Info)
                 raw_json = scan.get("raw_json")
@@ -688,7 +688,7 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
                         sev = (v.get("severity") or "").upper()
                         if sev in severities_data:
                             severities_data[sev][bucket_index] += 1
-                            domains_by_sev[sev][bucket_index].add(domain_name)
+                            domains_by_sev[sev][bucket_index][domain_name] = domains_by_sev[sev][bucket_index].get(domain_name, 0) + 1
 
         return {
             "source": "supabase",
@@ -697,7 +697,7 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
                 {
                     "label": sev.capitalize(),
                     "data": data,
-                    "domains": [list(d_set) for d_set in domains_by_sev[sev]]
+                    "domains": domains_by_sev[sev]
                 }
                 for sev, data in severities_data.items()
             ]
