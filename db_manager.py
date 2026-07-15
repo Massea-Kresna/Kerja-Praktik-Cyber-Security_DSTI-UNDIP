@@ -69,9 +69,9 @@ def insert_technologies(supabase, history_id, tech_data):
     }
     supabase.table("technologies").insert(data).execute()
 
-def insert_vulnerabilities(supabase, history_id, vulnerabilities):
+def insert_scan_result(supabase, history_id, scan_result):
     """Menyimpan data kerentanan secara massal"""
-    if not vulnerabilities:
+    if not scan_result:
         return
         
     data = [
@@ -83,7 +83,7 @@ def insert_vulnerabilities(supabase, history_id, vulnerabilities):
             "description": v.get("detail", ""),
             "recommendation": v.get("recommendation", "")
         } 
-        for v in vulnerabilities
+        for v in scan_result
     ]
     supabase.table("scan_result").insert(data).execute()
 
@@ -129,13 +129,13 @@ def save_all_results(domain_list, port_results, tech_results, vuln_results):
             v_data = vuln_map.get(domain_name, {})
             risk_score = v_data.get("risk_score", 0.0)
             risk_level = v_data.get("risk_level", "SAFE")
-            vulns_list = v_data.get("vulnerabilities", [])
+            vulns_list = v_data.get("scan_result", [])
             
             # Pisahkan LOW/INFO untuk disimpan di raw_json
             low_info_vulns = []
             for v in vulns_list:
                 if v.get("severity", "").upper() not in ["MEDIUM", "HIGH", "CRITICAL"]:
-                    # Format ulang sedikit agar sesuai dengan struktur kolom di tabel vulnerabilities
+                    # Format ulang sedikit agar sesuai dengan struktur kolom di tabel scan_result
                     low_info_vulns.append({
                         "severity": v.get("severity", "LOW"),
                         "check_type": v.get("check", "UNKNOWN"),
@@ -154,9 +154,9 @@ def save_all_results(domain_list, port_results, tech_results, vuln_results):
             # 4. Simpan relasi (Ports, Techs, Vulns)
             insert_open_ports(supabase, history_id, port_map.get(domain_name, []))
             insert_technologies(supabase, history_id, tech_map.get(domain_name, {}))
-            # Filter: Hanya simpan vulnerability dengan severity MEDIUM ke atas
+            # Filter: Hanya simpan scan_result dengan severity MEDIUM ke atas
             filtered_vulns = [v for v in vulns_list if v.get("severity", "").upper() in ["MEDIUM", "HIGH", "CRITICAL"]]
-            insert_vulnerabilities(supabase, history_id, filtered_vulns)
+            insert_scan_result(supabase, history_id, filtered_vulns)
             
             saved_count += 1
             
@@ -205,7 +205,7 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type="Web Scanne
         low_count = 0
         
         # Menerjemahkan findings ke struktur database kita
-        vulnerabilities = []
+        scan_result = []
         low_info_vulns = []
         for f in findings:
             # Pentest-Tools v2 memakai integer risk_level (0=INFO, 1=LOW, 2=MED, 3=HIGH, 4=CRIT)
@@ -230,7 +230,7 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type="Web Scanne
             
             # Filter: Pisahkan MEDIUM+ dan LOW/INFO
             if severity in ["MEDIUM", "HIGH", "CRITICAL"]:
-                vulnerabilities.append(vuln_obj)
+                scan_result.append(vuln_obj)
             else:
                 # Format untuk raw_json (disamakan dengan response web_app.py)
                 low_info_vulns.append({
@@ -265,18 +265,18 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type="Web Scanne
         final_risk_score = min(risk_score, 10.0)
             
         if risk_level not in ["MEDIUM", "HIGH", "CRITICAL"]:
-            print(f"  [*] Menyimpan history ke Supabase tanpa detail vulnerabilities DB (Risk Level: {risk_level})")
+            print(f"  [*] Menyimpan history ke Supabase tanpa detail scan_result DB (Risk Level: {risk_level})")
             
         # 3. Buat History (Simpan LOW/INFO ke raw_json)
         history_id = create_scan_history(supabase, domain_id, final_risk_score, risk_level, low_info_vulns if low_info_vulns else None)
         if not history_id:
             return False
             
-        # 4. Simpan Vulnerabilities
-        if vulnerabilities:
-            insert_vulnerabilities(supabase, history_id, vulnerabilities)
+        # 4. Simpan Scan_result
+        if scan_result:
+            insert_scan_result(supabase, history_id, scan_result)
         
-        print(f"  [+] Tersimpan ke Supabase (Risk: {risk_level}, Temuan: {len(vulnerabilities)})")
+        print(f"  [+] Tersimpan ke Supabase (Risk: {risk_level}, Temuan: {len(scan_result)})")
         return True
         
     except Exception as e:
