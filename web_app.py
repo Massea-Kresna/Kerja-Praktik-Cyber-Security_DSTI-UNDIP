@@ -23,7 +23,7 @@ import uuid
 import os
 import json
 from typing import List, Optional
-import active_scan_manager
+
 from datetime import datetime, timedelta, timezone
 from scanner.pentest_tools_scheduler import process_domain_scan
 from scanner.pentest_tools_scheduler import process_network_scan
@@ -1149,7 +1149,7 @@ async def stop_active_scan(req: StopScanRequest, current_user = Depends(get_curr
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, timeout=15) as resp:
                 if resp.status in (200, 201, 202, 204):
-                    active_scan_manager.remove_active_scan(scan_id)
+
                     return {"status": "success", "message": f"Scan {scan_id} berhasil dihentikan."}
                 else:
                     err = await resp.text()
