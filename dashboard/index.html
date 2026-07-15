@@ -259,8 +259,21 @@
                                             <input type="text" placeholder="Cari domain..."
                                                 oninput="filterDropdownItems('vulnTrendDropdown', this.value)" />
                                         </div>
-                                        <div class="multi-select-items" id="vulnTrendItems">
-                                            <!-- Diisi oleh app.js -->
+                                    </div>
+                                    <div class="multi-select-dropdown" id="vulnTrendDropdown">
+                                        <button class="multi-select-btn" onclick="toggleDropdown('vulnTrendDropdown')">
+                                            <span class="multi-select-label">All Domains</span>
+                                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                                <path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                            </svg>
+                                        </button>
+                                        <div class="multi-select-panel">
+                                            <div class="multi-select-search">
+                                                <input type="text" placeholder="Cari domain..." oninput="filterDropdownItems('vulnTrendDropdown', this.value)" />
+                                            </div>
+                                            <div class="multi-select-items" id="vulnTrendItems">
+                                                <!-- Diisi oleh app.js -->
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -275,7 +288,7 @@
                             <div class="card-header-row">
                                 <div>
                                     <h3>Severity Trend</h3>
-                                    <p class="desc">Distribusi tingkat risiko 24 jam terakhir</p>
+                                    <p class="desc">Distribusi tingkat risiko kerentanan</p>
                                 </div>
                                 <div class="multi-select-dropdown" id="sevTrendDropdown">
                                     <button class="multi-select-btn" onclick="toggleDropdown('sevTrendDropdown')">
@@ -613,6 +626,7 @@
                     </div>
                 </div>
 
+
                 <!-- VIEW: Network Scanner -->
                 <div id="view-network-scanner" class="view-container hidden">
                     <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
@@ -720,6 +734,7 @@
                     <h1>User Management</h1>
                     <button class="auth-btn" id="openCreateUserModalBtn" style="width: auto; padding: 10px 20px; font-size: 13px;">Tambah User Baru</button>
                 </div>
+
 
                     <div class="table-card">
                         <table class="modern-table">

@@ -288,24 +288,125 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const networkScanModalOverlay = document.getElementById('networkScanModalOverlay');
-    if (networkScanModalOverlay) {
-        networkScanModalOverlay.addEventListener('click', (e) => {
-            if (e.target === networkScanModalOverlay) closeNetworkScanModal();
+    // Vuln Trend Date Range Logic
+    const vulnTrendStart = document.getElementById('vulnTrendStartDate');
+    const vulnTrendEnd = document.getElementById('vulnTrendEndDate');
+    const vulnTrendResetBtn = document.getElementById('vulnTrendResetBtn');
+    
+    if (vulnTrendStart && vulnTrendEnd) {
+        const triggerVulnLoad = async () => {
+            if (vulnTrendStart.value && vulnTrendEnd.value) {
+                await loadVulnTrendData();
+            }
+        };
+        vulnTrendStart.addEventListener('change', triggerVulnLoad);
+        vulnTrendEnd.addEventListener('change', triggerVulnLoad);
+    }
+    if (vulnTrendResetBtn) {
+        vulnTrendResetBtn.addEventListener('click', async () => {
+            if (vulnTrendStart) vulnTrendStart.value = '';
+            if (vulnTrendEnd) vulnTrendEnd.value = '';
+            await loadVulnTrendData();
         });
     }
 
-    const runNewNetworkScanBtn = document.getElementById('runNewNetworkScanBtn');
-    if (runNewNetworkScanBtn) {
-        runNewNetworkScanBtn.addEventListener('click', () => {
-            showToast('Scan Initiated', 'New network scan has been added to the queue.', '🚀');
+    // Sev Trend Date Range Logic
+    const sevTrendStart = document.getElementById('sevTrendStartDate');
+    const sevTrendEnd = document.getElementById('sevTrendEndDate');
+    const sevTrendResetBtn = document.getElementById('sevTrendResetBtn');
+
+    if (sevTrendStart && sevTrendEnd) {
+        const triggerSevLoad = async () => {
+            if (sevTrendStart.value && sevTrendEnd.value) {
+                await loadSevTrendData();
+            }
+        };
+        sevTrendStart.addEventListener('change', triggerSevLoad);
+        sevTrendEnd.addEventListener('change', triggerSevLoad);
+    }
+    if (sevTrendResetBtn) {
+        sevTrendResetBtn.addEventListener('click', async () => {
+            if (sevTrendStart) sevTrendStart.value = '';
+            if (sevTrendEnd) sevTrendEnd.value = '';
+            await loadSevTrendData();
+        });
+    }
+    
+    const exportBtn = document.getElementById('exportDomainsBtn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+            const domainsToExport = allDomains.map(d => d.domain_name);
+            if (domainsToExport.length === 0) {
+                showToast('Info', 'Tidak ada domain untuk diekspor', 'ℹ️');
+                return;
+            }
+            const blob = new Blob([domainsToExport.join('\n')], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'domains_export.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Sukses', 'Berhasil mengekspor domain', '✅');
         });
     }
 
-    const exportNetworkReportBtn = document.getElementById('exportNetworkReportBtn');
-    if (exportNetworkReportBtn) {
-        exportNetworkReportBtn.addEventListener('click', () => {
-            showToast('Exporting', 'Generating PDF report for Network Scans...', '📄');
+    const importBtn = document.getElementById('importDomainsBtn');
+    const importInput = document.getElementById('importDomainsInput');
+    if (importBtn && importInput) {
+        importBtn.addEventListener('click', () => {
+            importInput.click();
+        });
+        
+        importInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const content = e.target.result;
+                let importedDomains = [];
+                
+                if (file.name.endsWith('.json')) {
+                    try {
+                        const data = JSON.parse(content);
+                        if (Array.isArray(data)) {
+                            importedDomains = data.map(d => d.domain_name || d).filter(d => typeof d === 'string');
+                        }
+                    } catch (err) {
+                        showToast('Error', 'Format JSON tidak valid', '❌');
+                        return;
+                    }
+                } else {
+                    importedDomains = content.split('\n').map(d => d.trim()).filter(d => d.length > 0);
+                }
+                
+                if (importedDomains.length > 0) {
+                    const existingDomains = allDomains.map(d => d.domain_name);
+                    let selectedCount = 0;
+                    importedDomains.forEach(d => {
+                        if (existingDomains.includes(d)) {
+                            selectedDomains.add(d);
+                            selectedCount++;
+                        }
+                    });
+                    
+                    localStorage.setItem('dsti_saved_targets', JSON.stringify([...selectedDomains]));
+                    refreshCheckboxUI();
+                    
+                    if (selectedCount > 0) {
+                        showToast('Import', `Berhasil mengimpor dan memilih ${selectedCount} domain.`, '✅');
+                        // switch view to show the selected ones
+                        switchView('inventory');
+                    } else {
+                        showToast('Import', `Tidak ada domain yang cocok dengan database dari ${importedDomains.length} yang diimpor.`, '⚠️');
+                    }
+                }
+                
+                // reset input
+                importInput.value = '';
+            };
+            reader.readAsText(file);
         });
     }
 
@@ -354,26 +455,23 @@ function switchView(viewId) {
     });
 
     // Load admin data if switching to admin page
-    // Load admin data if switching to admin page
     if (viewId === 'admin') {
         loadAdminUsers();
-    } else if (viewId === 'network-scanner') {
-        loadNetworkScans();
-    }
     }
 }
 
 // ==========================================================================
 // Data Fetching
 // ==========================================================================
-async function refreshData() {
+async function refreshData(preservePage = true) {
 
     try {
         await checkHealth();
         await Promise.all([
-            loadOverview(),
-            loadVulnerabilities(),
-            loadDomains()
+            // Tidak perlu refresh overview terus menerus, karena chart berat
+            // loadOverview(),
+            loadVulnerabilities(preservePage),
+            loadDomains(preservePage)
         ]);
     } catch (err) {
         console.error('Refresh error:', err);
@@ -448,17 +546,17 @@ function filterDropdownItems(dropdownId, query) {
     });
 }
 
-function updateDropdownLabel(dropdownId, allLabel, items) {
+function updateDropdownLabel(dropdownId, allLabel) {
     const container = document.getElementById(dropdownId);
     if (!container) return;
     const label = container.querySelector('.multi-select-label');
-    const checkboxes = container.querySelectorAll('input[type="checkbox"]');
-    const checked = Array.from(checkboxes).filter(cb => cb.checked);
+    const checkboxes = Array.from(container.querySelectorAll('input[type="checkbox"]'));
+    const checked = checkboxes.filter(cb => cb.checked);
+    
+    const isAllChecked = checked.length === 1 && checked[0].value === 'All';
 
-    if (checked.length === 0 || checked.length === checkboxes.length) {
+    if (checked.length === 0 || checked.length === checkboxes.length || isAllChecked) {
         label.textContent = allLabel;
-    } else if (checked.length === 1) {
-        label.textContent = checked[0].value;
     } else {
         label.textContent = `${checked.length} dipilih`;
     }
@@ -475,19 +573,32 @@ document.addEventListener('click', function (e) {
 
 async function loadOverview() {
     try {
-        const [statsResp, trendResp, sevTrendResp] = await Promise.all([
-            fetch(`${API_BASE}/api/dashboard-stats`),
-            fetch(`${API_BASE}/api/trend-stats`),
-            fetch(`${API_BASE}/api/severity-trend-stats`)
-        ]);
-
+        const statsResp = await fetch(`${API_BASE}/api/dashboard-stats`);
         const statsData = await statsResp.json();
-        rawTrendData = await trendResp.json();
-        rawSevTrendData = await sevTrendResp.json();
 
         // Update summary cards
         document.getElementById('overviewTotalDomains').textContent = statsData.total_domains || 0;
         document.getElementById('overviewTotalVulns').textContent = statsData.total_vulnerabilities || 0;
+
+        await Promise.all([
+            loadVulnTrendData(),
+            loadSevTrendData()
+        ]);
+    } catch (err) {
+        console.error('Error loading overview:', err);
+    }
+}
+
+async function loadVulnTrendData() {
+    try {
+        const startDate = document.getElementById('vulnTrendStartDate')?.value || '';
+        const endDate = document.getElementById('vulnTrendEndDate')?.value || '';
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        
+        const trendResp = await fetch(`${API_BASE}/api/trend-stats?${params.toString()}`);
+        rawTrendData = await trendResp.json();
 
         // Populate Domain Filter Checkboxes
         const vulnItemsContainer = document.getElementById('vulnTrendItems');
@@ -532,11 +643,25 @@ async function loadOverview() {
 
         // Initial Render
         if (window.renderVulnTrendChart) window.renderVulnTrendChart();
-        if (window.renderSevTrendChart) window.renderSevTrendChart();
-        if (window.renderNetworkSevChart) window.renderNetworkSevChart();
-
     } catch (err) {
-        console.error('Error loading overview:', err);
+        console.error('Error loading vuln trend data:', err);
+    }
+}
+
+async function loadSevTrendData() {
+    try {
+        const startDate = document.getElementById('sevTrendStartDate')?.value || '';
+        const endDate = document.getElementById('sevTrendEndDate')?.value || '';
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        
+        const sevTrendResp = await fetch(`${API_BASE}/api/severity-trend-stats?${params.toString()}`);
+        rawSevTrendData = await sevTrendResp.json();
+
+        if (window.renderSevTrendChart) window.renderSevTrendChart();
+    } catch (err) {
+        console.error('Error loading sev trend data:', err);
     }
 }
 
@@ -604,6 +729,10 @@ window.renderVulnTrendChart = function () {
     }
 
     let allDatasets = [...(rawTrendData.datasets || [])];
+    
+    // Remove 0 count trend chart datasets
+    allDatasets = allDatasets.filter(ds => Math.max(...ds.data) > 0);
+    
     let finalDatasets = [];
 
     if (!allChecked && selectedDomains.length > 0) {
@@ -926,14 +1055,14 @@ async function loadVulnerabilities() {
         const resp = await fetch(`${API_BASE}/api/scan-history?limit=1000`);
         const data = await resp.json();
         allVulns = data.data || [];
-        applyVulnFilters();
+        applyVulnFilters(preservePage);
         renderLowerGrid();
     } catch (err) {
         console.error('Error loading scans:', err);
     }
 }
 
-function applyVulnFilters() {
+function applyVulnFilters(preservePage = false) {
     const startInput = document.getElementById('vulnStartDate')?.value;
     const endInput = document.getElementById('vulnEndDate')?.value;
 
@@ -1743,7 +1872,6 @@ function showLoginOverlay() {
 }
 
 function handleSuccessfulLogin(user) {
-    isSessionExpiredToastShown = false; // Reset the flag on successful login
     currentUser = user;
     document.getElementById('authOverlay').classList.add('hidden');
 
@@ -1763,7 +1891,6 @@ function handleSuccessfulLogin(user) {
             topbarProfile.textContent = user.username;
         }
     }
-
     const roleEl = document.getElementById('sidebar-user-role');
     if (user.role === 'admin') {
         roleEl.innerHTML = `<span class="badge-admin-role">Admin</span>`;
@@ -1792,17 +1919,17 @@ function handleSuccessfulLogin(user) {
     document.getElementById('authErrorMsg').style.display = 'none';
 
     refreshData();
+    loadOverview(); // Load the overview/charts at least once on startup
 
     // Mulai refresh otomatis 5 detik HANYA setelah sukses login
     if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-    autoRefreshInterval = setInterval(refreshData, 5000);
+    autoRefreshInterval = setInterval(() => refreshData(true), 5000);
 }
 
 async function handleAuthSubmit(e) {
     e.preventDefault();
     const username = document.getElementById('authUsername').value.trim();
     const password = document.getElementById('authPassword').value;
-    const rememberMe = document.getElementById('rememberMe').checked;
     const errMsg = document.getElementById('authErrorMsg');
     const submitBtn = document.getElementById('authSubmitBtn');
 
@@ -1813,12 +1940,11 @@ async function handleAuthSubmit(e) {
     submitBtn.textContent = 'Memverifikasi...';
     submitBtn.style.opacity = '0.7';
     submitBtn.disabled = true;
-
     try {
         const resp = await fetch(`${API_BASE}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, remember_me: rememberMe })
+            body: JSON.stringify({ username, password })
         });
         const data = await resp.json();
 
@@ -1831,30 +1957,17 @@ async function handleAuthSubmit(e) {
     } catch (err) {
         errMsg.innerText = "Koneksi ke server gagal.";
         errMsg.style.display = 'block';
-    } finally {
-        submitBtn.textContent = originalText;
-        submitBtn.style.opacity = '1';
-        submitBtn.disabled = false;
     }
 }
 
-let isLoggingOut = false;
-function handleLogout() {
-    if (isLoggingOut) return;
-    isLoggingOut = true;
-
-    currentUser = null; // Pastikan user di-reset agar websocket tidak auto-reconnect
-
-    // Update UI seketika tanpa menunggu respons server
-    showLoginOverlay();
+async function handleLogout() {
+    try {
+        await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST' });
+    } catch (err) {
+        console.error("Gagal mengirim request logout:", err);
+    }
     showToast("Logout", "Anda berhasil keluar.", "👋");
-
-    // Tembak API di background
-    fetch(`${API_BASE}/api/auth/logout`, { method: 'POST' })
-        .catch(err => console.error("Gagal mengirim request logout:", err))
-        .finally(() => {
-            setTimeout(() => { isLoggingOut = false; }, 2000);
-        });
+    showLoginOverlay();
 }
 
 // Interceptor global untuk response 401
@@ -1868,13 +1981,8 @@ window.fetch = async function (...args) {
         if (!args[1]) args[1] = {};
         if (!args[1].credentials) args[1].credentials = 'include';
     }
-
     const response = await originalFetch(...args);
-
-    // Pastikan kita bisa membaca string URL
-    const urlStr = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url ? args[0].url : String(args[0]));
-
-    if (response.status === 401 && !urlStr.includes('/api/auth/me') && !urlStr.includes('/api/auth/login') && !urlStr.includes('/api/auth/logout')) {
+    if (response.status === 401 && !args[0].includes('/api/auth/me') && !args[0].includes('/api/auth/login')) {
         showLoginOverlay();
         // Notifikasi "Sesi Berakhir" dinonaktifkan sesuai permintaan
     }
@@ -2314,324 +2422,4 @@ function showToast(title, message, icon = "🔔") {
     setTimeout(() => {
         toast.remove();
     }, 5000);
-}
-
-// ==========================================================================
-// Network Scanner Modal & Chart
-// ==========================================================================
-
-function openNetworkScanModal(target, ip, status, auth) {
-    document.getElementById('networkScanModalOverlay').classList.add('active');
-    document.getElementById('networkScanModalOverlay').style.display = 'flex';
-    
-    document.getElementById('networkScanModalTarget').textContent = target || '-';
-    document.getElementById('networkScanModalIp').textContent = ip || '-';
-    document.getElementById('networkScanModalAuth').textContent = auth || '-';
-    document.getElementById('networkScanModalStatus').textContent = status || 'Unknown';
-    
-    if(status === 'Scanning') {
-        document.getElementById('networkScanModalStatus').className = 'badge badge-low';
-        document.getElementById('networkScanModalStatus').style.background = '#eff6ff';
-        document.getElementById('networkScanModalStatus').style.color = '#3b82f6';
-    } else {
-        document.getElementById('networkScanModalStatus').className = 'badge badge-low';
-        document.getElementById('networkScanModalStatus').style.background = '#ecfdf5';
-        document.getElementById('networkScanModalStatus').style.color = '#10b981';
-    }
-}
-
-function closeNetworkScanModal() {
-    const overlay = document.getElementById('networkScanModalOverlay');
-    if (overlay) {
-        overlay.classList.remove('active');
-        setTimeout(() => {
-            overlay.style.display = 'none';
-        }, 300);
-    }
-}
-
-window.renderNetworkSevChart = function() {
-    const ctx = document.getElementById('networkSevChart');
-    if (!ctx) return;
-    
-    if (window.networkSevChartInstance) {
-        window.networkSevChartInstance.destroy();
-    }
-
-    window.networkSevChartInstance = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['Corporate Network', 'Engineering Lab', 'Guest Wi-Fi', 'DMZ Servers'],
-            datasets: [
-                {
-                    label: 'Critical',
-                    data: [2, 0, 1, 0],
-                    backgroundColor: '#ef4444',
-                    borderRadius: 4
-                },
-                {
-                    label: 'High',
-                    data: [14, 3, 5, 2],
-                    backgroundColor: '#f97316',
-                    borderRadius: 4
-                },
-                {
-                    label: 'Medium',
-                    data: [38, 12, 10, 8],
-                    backgroundColor: '#3b82f6',
-                    borderRadius: 4
-                },
-                {
-                    label: 'Low',
-                    data: [124, 45, 80, 20],
-                    backgroundColor: '#10b981',
-                    borderRadius: 4
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    stacked: true,
-                    grid: { display: false }
-                },
-                y: {
-                    stacked: true,
-                    beginAtZero: true,
-                    grid: { color: 'rgba(0,0,0,0.05)' }
-                }
-            },
-            plugins: {
-                legend: {
-                    position: 'top',
-                    labels: { usePointStyle: true, boxWidth: 6 }
-                }
-            }
-        }
-    });
-};
-
-// ==========================================================================
-// Network Scanner Dynamic Logic
-// ==========================================================================
-
-let allNetworkScans = [];
-
-// Mock fetch function (replace with real API call later)
-async function fetchNetworkScans() {
-    return Promise.resolve([
-        {
-            id: 1,
-            target: 'Corporate Network',
-            ipRange: '192.168.10.0/24',
-            status: 'Scanning',
-            progress: 45,
-            critical: 2,
-            high: 14,
-            medium: 38,
-            low: 124,
-            date: 'Aug 22, 2024',
-            time: '08:30 AM',
-            authorizedBy: 'Admin DSTI',
-            authorizedInitial: 'A',
-            authorizedColor: '#0F1C2C',
-            devices: 120
-        },
-        {
-            id: 2,
-            target: 'Engineering Lab',
-            ipRange: '10.0.5.0/24',
-            status: 'Completed',
-            progress: 100,
-            critical: 0,
-            high: 3,
-            medium: 12,
-            low: 45,
-            date: 'Aug 21, 2024',
-            time: '11:45 PM',
-            authorizedBy: 'System Auto',
-            authorizedInitial: 'S',
-            authorizedColor: '#64748b',
-            devices: 45
-        },
-        {
-            id: 3,
-            target: 'Guest Wi-Fi',
-            ipRange: '192.168.20.0/24',
-            status: 'Completed',
-            progress: 100,
-            critical: 1,
-            high: 5,
-            medium: 10,
-            low: 80,
-            date: 'Aug 20, 2024',
-            time: '10:00 AM',
-            authorizedBy: 'Admin DSTI',
-            authorizedInitial: 'A',
-            authorizedColor: '#0F1C2C',
-            devices: 300
-        },
-        {
-            id: 4,
-            target: 'DMZ Servers',
-            ipRange: '172.16.0.0/24',
-            status: 'Completed',
-            progress: 100,
-            critical: 0,
-            high: 2,
-            medium: 8,
-            low: 20,
-            date: 'Aug 19, 2024',
-            time: '02:15 PM',
-            authorizedBy: 'Security Team',
-            authorizedInitial: 'S',
-            authorizedColor: '#3b82f6',
-            devices: 15
-        }
-    ]);
-}
-
-async function loadNetworkScans() {
-    try {
-        const data = await fetchNetworkScans();
-        allNetworkScans = data || [];
-        
-        // Calculate summaries
-        let activeScansCount = 0;
-        let totalVulns = 0;
-
-        allNetworkScans.forEach(scan => {
-            if (scan.status === 'Scanning') {
-                activeScansCount++;
-            }
-            totalVulns += (scan.critical || 0) + (scan.high || 0) + (scan.medium || 0) + (scan.low || 0);
-        });
-
-        // Update Summary Cards
-        const activeScansEl = document.getElementById('summaryActiveScans');
-        if (activeScansEl) activeScansEl.innerHTML = `${activeScansCount} <span style="font-size: 16px; font-weight: 500; color: var(--text-primary);">Network${activeScansCount !== 1 ? 's' : ''}</span>`;
-        
-        const totalVulnsEl = document.getElementById('summaryTotalVulns');
-        if (totalVulnsEl) totalVulnsEl.textContent = totalVulns.toLocaleString();
-
-
-
-        renderNetworkScansList();
-        renderDynamicNetworkSevChart();
-
-    } catch (err) {
-        console.error("Error loading network scans:", err);
-    }
-}
-
-function renderNetworkScansList() {
-    const tbody = document.getElementById('networkScansTableBody');
-    if (!tbody) return;
-    
-    tbody.innerHTML = '';
-    
-    if (allNetworkScans.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-secondary);">No network scans found</td></tr>';
-        return;
-    }
-
-    allNetworkScans.forEach(scan => {
-        const tr = document.createElement('tr');
-        tr.style.cursor = 'pointer';
-        tr.onclick = () => openNetworkScanModal(scan.target, scan.ipRange, scan.status, scan.authorizedBy);
-
-        let statusHtml = '';
-        if (scan.status === 'Scanning') {
-            statusHtml = `
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;">
-                        <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
-                    </svg>
-                    <span style="font-size: 12px; font-weight: 600; color: #3b82f6;">Scanning (${scan.progress}%)</span>
-                </div>
-            `;
-        } else {
-            statusHtml = `<svg width="18" height="18" stroke="#10b981" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-check-circle"></use></svg>`;
-        }
-
-        tr.innerHTML = `
-            <td style="text-align: center;" onclick="event.stopPropagation()"><input type="checkbox" style="cursor: pointer;"></td>
-            <td>
-                <div style="display: flex; align-items: center; gap: 8px; font-weight: 500;">
-                    <svg width="16" height="16" stroke="#3b82f6" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-zap"></use></svg>
-                    Network Scanner
-                </div>
-            </td>
-            <td>${statusHtml}</td>
-            <td>
-                <div style="font-weight: 500;">${scan.target}</div>
-                <div style="font-size: 12px; color: var(--text-secondary);">${scan.ipRange}</div>
-            </td>
-            <td>
-                <div style="display: flex; gap: 4px;">
-                    <span style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">${scan.critical}</span>
-                    <span style="background: #f97316; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">${scan.high}</span>
-                    <span style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">${scan.medium}</span>
-                    <span style="background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">${scan.low}</span>
-                </div>
-            </td>
-            <td>
-                <div style="font-size: 13px;">${scan.date}</div>
-                <div style="font-size: 12px; color: var(--text-secondary);">${scan.time}</div>
-            </td>
-            <td>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <div style="width: 20px; height: 20px; border-radius: 50%; background: ${scan.authorizedColor}; color: white; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold;">${scan.authorizedInitial}</div>
-                    <span style="font-size: 13px; font-weight: 500;">${scan.authorizedBy}</span>
-                </div>
-            </td>
-            <td onclick="event.stopPropagation()">
-                <button class="icon-btn" style="color: var(--text-secondary);">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
-                </button>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-function renderDynamicNetworkSevChart() {
-    const ctx = document.getElementById('networkSevChart');
-    if (!ctx) return;
-    
-    if (window.networkSevChartInstance) {
-        window.networkSevChartInstance.destroy();
-    }
-
-    const labels = allNetworkScans.map(s => s.target);
-    const dataCrit = allNetworkScans.map(s => s.critical);
-    const dataHigh = allNetworkScans.map(s => s.high);
-    const dataMed = allNetworkScans.map(s => s.medium);
-    const dataLow = allNetworkScans.map(s => s.low);
-
-    window.networkSevChartInstance = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [
-                { label: 'Critical', data: dataCrit, backgroundColor: '#ef4444', borderRadius: 4 },
-                { label: 'High', data: dataHigh, backgroundColor: '#f97316', borderRadius: 4 },
-                { label: 'Medium', data: dataMed, backgroundColor: '#3b82f6', borderRadius: 4 },
-                { label: 'Low', data: dataLow, backgroundColor: '#10b981', borderRadius: 4 }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: { stacked: true, grid: { display: false } },
-                y: { stacked: true, beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } }
-            },
-            plugins: {
-                legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 6 } }
-            }
-        }
-    });
 }
