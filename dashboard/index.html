@@ -244,7 +244,6 @@
                             <div class="card-header-row">
                                 <div>
                                     <h3>Vulnerability Trend</h3>
-                                    <p class="desc">Visualisasi kerentanan berdasarkan domain</p>
                                 </div>
                                 <div class="multi-select-dropdown" id="vulnTrendDropdown">
                                     <button class="multi-select-btn" onclick="toggleDropdown('vulnTrendDropdown')">
@@ -259,21 +258,8 @@
                                             <input type="text" placeholder="Cari domain..."
                                                 oninput="filterDropdownItems('vulnTrendDropdown', this.value)" />
                                         </div>
-                                    </div>
-                                    <div class="multi-select-dropdown" id="vulnTrendDropdown">
-                                        <button class="multi-select-btn" onclick="toggleDropdown('vulnTrendDropdown')">
-                                            <span class="multi-select-label">All Domains</span>
-                                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                                                <path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-                                            </svg>
-                                        </button>
-                                        <div class="multi-select-panel">
-                                            <div class="multi-select-search">
-                                                <input type="text" placeholder="Cari domain..." oninput="filterDropdownItems('vulnTrendDropdown', this.value)" />
-                                            </div>
-                                            <div class="multi-select-items" id="vulnTrendItems">
-                                                <!-- Diisi oleh app.js -->
-                                            </div>
+                                        <div class="multi-select-items" id="vulnTrendItems">
+                                            <!-- Diisi oleh app.js -->
                                         </div>
                                     </div>
                                 </div>
@@ -288,7 +274,6 @@
                             <div class="card-header-row">
                                 <div>
                                     <h3>Severity Trend</h3>
-                                    <p class="desc">Distribusi tingkat risiko kerentanan</p>
                                 </div>
                                 <div class="multi-select-dropdown" id="sevTrendDropdown">
                                     <button class="multi-select-btn" onclick="toggleDropdown('sevTrendDropdown')">
@@ -519,16 +504,39 @@
                     <div class="view-header"
                         style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                         <h1>Domains</h1>
-                        <div class="topbar-search"
-                            style="display: flex; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; width: 320px; transition: border-color 0.2s;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                                style="min-width: 16px;">
-                                <circle cx="11" cy="11" r="8"></circle>
-                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                            </svg>
-                            <input type="text" id="domainSearchInput" placeholder="Search domains or IP..."
-                                style="border: none; outline: none; background: transparent; width: 100%; font-size: 14px; color: var(--text-primary); margin-left: 10px; font-family: inherit;">
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <div class="topbar-search" style="display: flex; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; width: 320px; transition: border-color 0.2s;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="min-width: 16px;">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                </svg>
+                                <input type="text" id="domainSearchInput" placeholder="Search domains or IP..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 14px; color: var(--text-primary); margin-left: 10px; font-family: inherit;">
+                            </div>
+                            <button id="addDomainBtn" class="auth-btn" style="width: auto; padding: 8px 16px; display: flex; align-items: center; gap: 6px; font-size: 13px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                Add Domain
+                            </button>
+                            <button id="importDomainsBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white; cursor: pointer;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                Import
+                            </button>
+                            <input type="file" id="importDomainsInput" accept=".txt,.json" style="display: none;">
+                            <div class="multi-select-dropdown" id="exportDropdown">
+                                <button class="btn btn-outline" onclick="toggleDropdown('exportDropdown')" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white; cursor: pointer;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                    Export
+                                </button>
+                                <div class="multi-select-panel" style="right: 0; left: auto; width: 140px; top: 100%;">
+                                    <div class="multi-select-items">
+                                        <label class="multi-select-item" onclick="exportDomains('txt'); toggleDropdown('exportDropdown');" style="cursor: pointer; display: block; padding: 8px 12px; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'">
+                                            Export as .TXT
+                                        </label>
+                                        <label class="multi-select-item" onclick="exportDomains('json'); toggleDropdown('exportDropdown');" style="cursor: pointer; display: block; padding: 8px 12px; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'">
+                                            Export as .JSON
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -584,11 +592,12 @@
                                     <th>Domain</th>
                                     <th>IP Address</th>
                                     <th>Status</th>
+                                    <th style="width: 80px; text-align: center;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="inventoryTableBody">
                                 <tr>
-                                    <td colspan="4" class="empty-state">Loading domains...</td>
+                                    <td colspan="5" class="empty-state">Loading domains...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1017,6 +1026,36 @@
                     </div>
                     <button type="submit" class="auth-btn animate-slide-up"
                         style="margin-top: 24px; animation-delay: 0.25s;">Buat Akun</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Domain Modal -->
+    <div class="modal-overlay" id="domainModalOverlay">
+        <div class="modal-dialog" style="max-width: 450px;">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <h2 id="domainModalTitle">Tambah Domain</h2>
+                </div>
+                <div class="modal-actions">
+                    <button class="icon-btn" id="closeDomainModalBtn">✕</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="auth-error-msg" id="domainErrorMsg" style="margin-bottom: 16px;">Error message</div>
+                
+                <form class="auth-form" id="domainForm">
+                    <input type="hidden" id="domainIdInput">
+                    <div class="form-group animate-slide-up">
+                        <label for="domainNameInput">Domain Name</label>
+                        <input type="text" id="domainNameInput" class="auth-input" placeholder="contoh: example.com" required autocomplete="off">
+                    </div>
+                    <div class="form-group animate-slide-up" style="animation-delay: 0.1s;">
+                        <label for="domainIpInput">IP Address</label>
+                        <input type="text" id="domainIpInput" class="auth-input" placeholder="contoh: 192.168.1.1 (Opsional)" autocomplete="off">
+                    </div>
+                    <button type="submit" class="auth-btn animate-slide-up" id="domainSubmitBtn" style="margin-top: 24px; animation-delay: 0.2s;">Simpan Domain</button>
                 </form>
             </div>
         </div>
