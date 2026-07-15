@@ -1975,15 +1975,72 @@ function setupTabs() {
 function openThreatModal(vuln) {
     document.getElementById('threatModalOverlay').classList.add('active');
 
+    // Mengisi data inti
     document.getElementById('modalTitle').textContent = vuln.title || 'Vulnerability Alert';
     document.getElementById('modalRuleId').textContent = vuln.check_type || 'Unknown Scanner';
     document.getElementById('modalSeverity').textContent = vuln.severity || 'LOW';
     document.getElementById('modalSeverity').className = `meta-value text-${getSeverityClass(vuln.severity)}`;
-
     document.getElementById('modalDesc').textContent = vuln.description || 'No description available.';
     document.getElementById('modalRecommendation').textContent = vuln.recommendation || 'No recommendation provided.';
 
-    // Mock data for evidence logs based on vuln
+    // ==========================================
+    // LOGIKA PENGKATEGORIAN OTOMATIS (ADVANCED)
+    // ==========================================
+    const checkType = (vuln.check_type || '').toLowerCase();
+    const titleLower = (vuln.title || '').toLowerCase();
+    
+    // Gabungkan string untuk pencarian kata kunci yang lebih luas
+    const threatSignature = checkType + " " + titleLower;
+    
+    // 1. Kategori Ancaman (Badge Atas) yang Sangat Mendetail
+    const categoryBadge = document.getElementById('modalThreatCategory');
+    if (categoryBadge) {
+        let badgeText = 'Anomaly Detection';
+        let badgeClass = 'badge badge-orange-outline';
+
+if (threatSignature.includes('sql') || threatSignature.includes('injection') || threatSignature.includes('xss')) {
+            badgeText = 'Critical Web Exploit';
+            badgeClass = 'badge badge-critical'; 
+        } else if (threatSignature.includes('ssl') || threatSignature.includes('tls') || threatSignature.includes('certificate')) {
+            badgeText = 'SSL/TLS Misconfiguration';
+            badgeClass = 'badge badge-info'; 
+        } else if (threatSignature.includes('header') || threatSignature.includes('hsts') || threatSignature.includes('cors') || threatSignature.includes('clickjacking')) {
+            // Kategori baru khusus untuk HTTP Headers yang hilang/salah
+            badgeText = 'Security Header Missing';
+            badgeClass = 'badge badge-low'; // Warna biru muda
+        } else if (threatSignature.includes('wordpress') || threatSignature.includes('cms')) {
+            badgeText = 'CMS Vulnerability';
+            badgeClass = 'badge badge-medium'; 
+        } else if (threatSignature.includes('information') || threatSignature.includes('disclosure') || threatSignature.includes('leak') || threatSignature.includes('directory')) {
+            badgeText = 'Information Disclosure';
+            badgeClass = 'badge badge-low'; 
+        } else if (threatSignature.includes('vulnerabilities found for') || threatSignature.includes('outdated') || threatSignature.includes('version')) {
+            badgeText = 'Vulnerable Component';
+            badgeClass = 'badge badge-medium';
+        } else if (threatSignature.includes('network ') || /\bport\b/.test(threatSignature)) {
+            badgeText = 'Network Vulnerability';
+            badgeClass = 'badge badge-high'; 
+        } else {
+            badgeText = 'Web Vulnerability'; 
+            badgeClass = 'badge badge-orange-outline';
+        }
+
+        categoryBadge.textContent = badgeText;
+        categoryBadge.className = badgeClass;
+    }
+
+    // 2. Threat Type (Format snake_case)
+    let threatTypeStr = checkType.replace(/\s+/g, '_') || 'unknown_threat';
+    const typeBadge = document.getElementById('modalThreatType');
+    if (typeBadge) typeBadge.textContent = threatTypeStr;
+
+    // 3. Program Pemindai
+    const programName = threatSignature.includes('network') ? 'network-scanner' : 'web-scanner';
+    const progBadge = document.getElementById('modalProgramName');
+    if (progBadge) progBadge.textContent = programName;
+    // ==========================================
+
+    // Mock data for evidence logs
     const now = new Date().toISOString();
     document.getElementById('modalFirstSeen').textContent = formatDate(now);
     document.getElementById('modalLastSeen').textContent = formatDate(now);
