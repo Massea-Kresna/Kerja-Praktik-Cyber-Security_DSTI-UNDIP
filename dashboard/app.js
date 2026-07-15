@@ -288,6 +288,128 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Vuln Trend Date Range Logic
+    const vulnTrendStart = document.getElementById('vulnTrendStartDate');
+    const vulnTrendEnd = document.getElementById('vulnTrendEndDate');
+    const vulnTrendResetBtn = document.getElementById('vulnTrendResetBtn');
+    
+    if (vulnTrendStart && vulnTrendEnd) {
+        const triggerVulnLoad = async () => {
+            if (vulnTrendStart.value && vulnTrendEnd.value) {
+                await loadVulnTrendData();
+            }
+        };
+        vulnTrendStart.addEventListener('change', triggerVulnLoad);
+        vulnTrendEnd.addEventListener('change', triggerVulnLoad);
+    }
+    if (vulnTrendResetBtn) {
+        vulnTrendResetBtn.addEventListener('click', async () => {
+            if (vulnTrendStart) vulnTrendStart.value = '';
+            if (vulnTrendEnd) vulnTrendEnd.value = '';
+            await loadVulnTrendData();
+        });
+    }
+
+    // Sev Trend Date Range Logic
+    const sevTrendStart = document.getElementById('sevTrendStartDate');
+    const sevTrendEnd = document.getElementById('sevTrendEndDate');
+    const sevTrendResetBtn = document.getElementById('sevTrendResetBtn');
+
+    if (sevTrendStart && sevTrendEnd) {
+        const triggerSevLoad = async () => {
+            if (sevTrendStart.value && sevTrendEnd.value) {
+                await loadSevTrendData();
+            }
+        };
+        sevTrendStart.addEventListener('change', triggerSevLoad);
+        sevTrendEnd.addEventListener('change', triggerSevLoad);
+    }
+    if (sevTrendResetBtn) {
+        sevTrendResetBtn.addEventListener('click', async () => {
+            if (sevTrendStart) sevTrendStart.value = '';
+            if (sevTrendEnd) sevTrendEnd.value = '';
+            await loadSevTrendData();
+        });
+    }
+    
+    const exportBtn = document.getElementById('exportDomainsBtn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+            const domainsToExport = allDomains.map(d => d.domain_name);
+            if (domainsToExport.length === 0) {
+                showToast('Info', 'Tidak ada domain untuk diekspor', 'ℹ️');
+                return;
+            }
+            const blob = new Blob([domainsToExport.join('\n')], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'domains_export.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Sukses', 'Berhasil mengekspor domain', '✅');
+        });
+    }
+
+    const importBtn = document.getElementById('importDomainsBtn');
+    const importInput = document.getElementById('importDomainsInput');
+    if (importBtn && importInput) {
+        importBtn.addEventListener('click', () => {
+            importInput.click();
+        });
+        
+        importInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const content = e.target.result;
+                let importedDomains = [];
+                
+                if (file.name.endsWith('.json')) {
+                    try {
+                        const data = JSON.parse(content);
+                        if (Array.isArray(data)) {
+                            importedDomains = data.map(d => d.domain_name || d).filter(d => typeof d === 'string');
+                        }
+                    } catch (err) {
+                        showToast('Error', 'Format JSON tidak valid', '❌');
+                        return;
+                    }
+                } else {
+                    importedDomains = content.split('\n').map(d => d.trim()).filter(d => d.length > 0);
+                }
+                
+                if (importedDomains.length > 0) {
+                    const existingDomains = allDomains.map(d => d.domain_name);
+                    let selectedCount = 0;
+                    importedDomains.forEach(d => {
+                        if (existingDomains.includes(d)) {
+                            selectedDomains.add(d);
+                            selectedCount++;
+                        }
+                    });
+                    
+                    localStorage.setItem('dsti_saved_targets', JSON.stringify([...selectedDomains]));
+                    refreshCheckboxUI();
+                    
+                    if (selectedCount > 0) {
+                        showToast('Import', `Berhasil mengimpor dan memilih ${selectedCount} domain.`, '✅');
+                        // switch view to show the selected ones
+                        switchView('inventory');
+                    } else {
+                        showToast('Import', `Tidak ada domain yang cocok dengan database dari ${importedDomains.length} yang diimpor.`, '⚠️');
+                    }
+                }
+                
+                // reset input
+                importInput.value = '';
+            };
+            reader.readAsText(file);
+        });
+    }
+
     // Refresh otomatis setiap 5 detik
     // setInterval(refreshData, 5000);
 });
@@ -341,14 +463,15 @@ function switchView(viewId) {
 // ==========================================================================
 // Data Fetching
 // ==========================================================================
-async function refreshData() {
+async function refreshData(preservePage = true) {
 
     try {
         await checkHealth();
         await Promise.all([
-            loadOverview(),
-            loadVulnerabilities(),
-            loadDomains()
+            // Tidak perlu refresh overview terus menerus, karena chart berat
+            // loadOverview(),
+            loadVulnerabilities(preservePage),
+            loadDomains(preservePage)
         ]);
     } catch (err) {
         console.error('Refresh error:', err);
@@ -423,17 +546,17 @@ function filterDropdownItems(dropdownId, query) {
     });
 }
 
-function updateDropdownLabel(dropdownId, allLabel, items) {
+function updateDropdownLabel(dropdownId, allLabel) {
     const container = document.getElementById(dropdownId);
     if (!container) return;
     const label = container.querySelector('.multi-select-label');
-    const checkboxes = container.querySelectorAll('input[type="checkbox"]');
-    const checked = Array.from(checkboxes).filter(cb => cb.checked);
+    const checkboxes = Array.from(container.querySelectorAll('input[type="checkbox"]'));
+    const checked = checkboxes.filter(cb => cb.checked);
+    
+    const isAllChecked = checked.length === 1 && checked[0].value === 'All';
 
-    if (checked.length === 0 || checked.length === checkboxes.length) {
+    if (checked.length === 0 || checked.length === checkboxes.length || isAllChecked) {
         label.textContent = allLabel;
-    } else if (checked.length === 1) {
-        label.textContent = checked[0].value;
     } else {
         label.textContent = `${checked.length} dipilih`;
     }
@@ -450,19 +573,32 @@ document.addEventListener('click', function (e) {
 
 async function loadOverview() {
     try {
-        const [statsResp, trendResp, sevTrendResp] = await Promise.all([
-            fetch(`${API_BASE}/api/dashboard-stats`),
-            fetch(`${API_BASE}/api/trend-stats`),
-            fetch(`${API_BASE}/api/severity-trend-stats`)
-        ]);
-
+        const statsResp = await fetch(`${API_BASE}/api/dashboard-stats`);
         const statsData = await statsResp.json();
-        rawTrendData = await trendResp.json();
-        rawSevTrendData = await sevTrendResp.json();
 
         // Update summary cards
         document.getElementById('overviewTotalDomains').textContent = statsData.total_domains || 0;
         document.getElementById('overviewTotalVulns').textContent = statsData.total_vulnerabilities || 0;
+
+        await Promise.all([
+            loadVulnTrendData(),
+            loadSevTrendData()
+        ]);
+    } catch (err) {
+        console.error('Error loading overview:', err);
+    }
+}
+
+async function loadVulnTrendData() {
+    try {
+        const startDate = document.getElementById('vulnTrendStartDate')?.value || '';
+        const endDate = document.getElementById('vulnTrendEndDate')?.value || '';
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        
+        const trendResp = await fetch(`${API_BASE}/api/trend-stats?${params.toString()}`);
+        rawTrendData = await trendResp.json();
 
         // Populate Domain Filter Checkboxes
         const vulnItemsContainer = document.getElementById('vulnTrendItems');
@@ -507,10 +643,25 @@ async function loadOverview() {
 
         // Initial Render
         if (window.renderVulnTrendChart) window.renderVulnTrendChart();
-        if (window.renderSevTrendChart) window.renderSevTrendChart();
-
     } catch (err) {
-        console.error('Error loading overview:', err);
+        console.error('Error loading vuln trend data:', err);
+    }
+}
+
+async function loadSevTrendData() {
+    try {
+        const startDate = document.getElementById('sevTrendStartDate')?.value || '';
+        const endDate = document.getElementById('sevTrendEndDate')?.value || '';
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        
+        const sevTrendResp = await fetch(`${API_BASE}/api/severity-trend-stats?${params.toString()}`);
+        rawSevTrendData = await sevTrendResp.json();
+
+        if (window.renderSevTrendChart) window.renderSevTrendChart();
+    } catch (err) {
+        console.error('Error loading sev trend data:', err);
     }
 }
 
@@ -578,6 +729,10 @@ window.renderVulnTrendChart = function () {
     }
 
     let allDatasets = [...(rawTrendData.datasets || [])];
+    
+    // Remove 0 count trend chart datasets
+    allDatasets = allDatasets.filter(ds => Math.max(...ds.data) > 0);
+    
     let finalDatasets = [];
 
     if (!allChecked && selectedDomains.length > 0) {
@@ -900,14 +1055,14 @@ async function loadVulnerabilities() {
         const resp = await fetch(`${API_BASE}/api/scan-history?limit=1000`);
         const data = await resp.json();
         allVulns = data.data || [];
-        applyVulnFilters();
+        applyVulnFilters(preservePage);
         renderLowerGrid();
     } catch (err) {
         console.error('Error loading scans:', err);
     }
 }
 
-function applyVulnFilters() {
+function applyVulnFilters(preservePage = false) {
     const startInput = document.getElementById('vulnStartDate')?.value;
     const endInput = document.getElementById('vulnEndDate')?.value;
 
@@ -1755,10 +1910,11 @@ function handleSuccessfulLogin(user) {
     document.getElementById('authErrorMsg').style.display = 'none';
 
     refreshData();
+    loadOverview(); // Load the overview/charts at least once on startup
 
     // Mulai refresh otomatis 5 detik HANYA setelah sukses login
     if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-    autoRefreshInterval = setInterval(refreshData, 5000);
+    autoRefreshInterval = setInterval(() => refreshData(true), 5000);
 }
 
 async function handleAuthSubmit(e) {

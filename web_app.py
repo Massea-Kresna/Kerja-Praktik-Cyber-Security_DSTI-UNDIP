@@ -82,6 +82,7 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     username: str
     password: str
+    remember_me: Optional[bool] = False
 
 # ===================================================================
 # Auth Dependencies
@@ -215,12 +216,13 @@ async def login_user(user_data: UserLogin, response: Response):
     session_id = str(uuid.uuid4())
     db_manager.update_user_session(user["username"], session_id, True)
     
-    # Simpan di cookie (maksimal aktif 24 jam)
+    # Simpan di cookie (maksimal aktif 30 hari jika remember me)
+    cookie_max_age = 2592000 if user_data.remember_me else 86400
     response.set_cookie(
         key="session_id", 
         value=session_id, 
         httponly=True, 
-        max_age=86400, 
+        max_age=cookie_max_age, 
         samesite="lax",
         path="/"
     )
@@ -436,50 +438,82 @@ def get_dashboard_stats(current_user = Depends(get_current_user)):
 # API: Trend Stats (Line Chart) - By Domain
 # ===================================================================
 @app.get("/api/trend-stats")
-def get_trend_stats(current_user = Depends(get_current_user)):
-    """Mengambil data tren kerentanan per domain (24 jam terakhir, interval 30 menit)"""
+def get_trend_stats(start_date: str | None = Query(None), end_date: str | None = Query(None), current_user = Depends(get_current_user)):
+    """Mengambil data tren kerentanan per domain"""
     supabase = _get_supabase_or_none()
 
     if not supabase:
         raise HTTPException(status_code=503, detail="Database not configured")
 
     try:
-        # Gunakan zona waktu lokal WIB (UTC+7)
+        import math
         wib_tz = timezone(timedelta(hours=7))
         now_utc = datetime.now(timezone.utc)
         now_wib = now_utc.astimezone(wib_tz)
         
-        # Snap ke interval 30 menit ke bawah (misal: 09:12 -> 09:00, 09:45 -> 09:30)
-        minute_snapped = 30 if now_wib.minute >= 30 else 0
-        snapped_wib = now_wib.replace(minute=minute_snapped, second=0, microsecond=0)
+        if not start_date or not end_date:
+            days_diff = 1
+            interval_minutes = 30
+            num_buckets = 48
+            minute_snapped = 30 if now_wib.minute >= 30 else 0
+            end_snapped_wib = now_wib.replace(minute=minute_snapped, second=0, microsecond=0)
+            start_snapped_wib = end_snapped_wib - timedelta(hours=24)
+            date_format = "%H:%M"
+        else:
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=wib_tz)
+                end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=wib_tz)
+                if end_dt > now_wib:
+                    end_dt = now_wib
+                    
+                delta = end_dt - start_dt
+                days_diff = delta.total_seconds() / 86400
+                
+                if days_diff <= 1:
+                    interval_minutes = 30
+                    num_buckets = 48
+                    minute_snapped = 30 if end_dt.minute >= 30 else 0
+                    end_snapped_wib = end_dt.replace(minute=minute_snapped, second=0, microsecond=0)
+                    start_snapped_wib = end_snapped_wib - timedelta(hours=24)
+                    date_format = "%H:%M"
+                elif days_diff <= 7:
+                    interval_minutes = 6 * 60
+                    num_buckets = int((days_diff * 24) // 6)
+                    hour_snapped = (end_dt.hour // 6) * 6
+                    end_snapped_wib = end_dt.replace(hour=hour_snapped, minute=0, second=0, microsecond=0)
+                    start_snapped_wib = end_snapped_wib - timedelta(minutes=num_buckets * interval_minutes)
+                    date_format = "%d %b %H:%M"
+                else:
+                    interval_minutes = 24 * 60
+                    num_buckets = max(1, math.ceil(days_diff))
+                    end_snapped_wib = end_dt.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                    start_snapped_wib = end_snapped_wib - timedelta(days=num_buckets)
+                    date_format = "%d %b %Y"
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Format tanggal tidak valid. Gunakan YYYY-MM-DD.")
         
-        # Ambil 24 jam ke belakang dari waktu yg sudah di-snap (48 bucket + 1 untuk sekarang)
-        start_time_wib = snapped_wib - timedelta(hours=24)
-        
-        # Kembalikan ke format UTC untuk query Supabase
-        start_time_utc = start_time_wib.astimezone(timezone.utc)
-        start_time_iso = start_time_utc.isoformat()
+        start_time_iso = start_snapped_wib.astimezone(timezone.utc).isoformat()
+        end_time_iso = end_snapped_wib.astimezone(timezone.utc).isoformat()
         
         resp = (
             supabase.table("scan_history")
             .select("id, scan_date, raw_json, domains(domain_name), scan_result(id)")
             .gte("scan_date", start_time_iso)
+            .lte("scan_date", end_time_iso)
             .order("scan_date", desc=False)
             .execute()
         )
         scans = resp.data
         
-        # Kita buat 49 label agar menutupi tepat 24 jam (48 interval)
         labels = []
-        for i in range(49):
-            bucket_time_wib = start_time_wib + timedelta(minutes=i*30)
-            labels.append(bucket_time_wib.strftime("%H:%M"))
+        for i in range(num_buckets + 1):
+            bucket_time_wib = start_snapped_wib + timedelta(minutes=i*interval_minutes)
+            labels.append(bucket_time_wib.strftime(date_format))
             
-        # Ambil daftar semua domain agar yang tidak discan tetap bernilai 0
         domains_resp = supabase.table("domains").select("domain_name").execute()
         all_domains = [d.get("domain_name") for d in domains_resp.data if d.get("domain_name")]
             
-        domains_data = {domain: [0] * 49 for domain in all_domains}
+        domains_data = {domain: [0] * (num_buckets + 1) for domain in all_domains}
         
         for scan in scans:
             domain_name = scan.get("domains", {}).get("domain_name", "Unknown")
@@ -492,12 +526,12 @@ def get_trend_stats(current_user = Depends(get_current_user)):
             except Exception:
                 continue
                 
-            delta = scan_date_wib - start_time_wib
-            bucket_index = int(delta.total_seconds() // 1800)
+            delta = scan_date_wib - start_snapped_wib
+            bucket_index = int(delta.total_seconds() // (interval_minutes * 60))
             
-            if 0 <= bucket_index < 49:
+            if 0 <= bucket_index <= num_buckets:
                 if domain_name not in domains_data:
-                    domains_data[domain_name] = [0] * 49
+                    domains_data[domain_name] = [0] * (num_buckets + 1)
                 
                 vuln_count = len(scan.get("scan_result") or [])
                 raw_json = scan.get("raw_json")
@@ -524,53 +558,92 @@ def get_trend_stats(current_user = Depends(get_current_user)):
 # API: Severity Trend Stats (Line Chart)
 # ===================================================================
 @app.get("/api/severity-trend-stats")
-def get_severity_trend_stats(current_user = Depends(get_current_user)):
-    """Mengambil data tren kerentanan berdasarkan severity (24 jam terakhir, interval 30 menit)"""
+def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str | None = Query(None), current_user = Depends(get_current_user)):
+    """Mengambil data tren kerentanan berdasarkan severity"""
     supabase = _get_supabase_or_none()
 
     if not supabase:
         raise HTTPException(status_code=503, detail="Database not configured")
 
     try:
+        import math
         wib_tz = timezone(timedelta(hours=7))
         now_utc = datetime.now(timezone.utc)
         now_wib = now_utc.astimezone(wib_tz)
         
-        minute_snapped = 30 if now_wib.minute >= 30 else 0
-        snapped_wib = now_wib.replace(minute=minute_snapped, second=0, microsecond=0)
+        if not start_date or not end_date:
+            days_diff = 1
+            interval_minutes = 30
+            num_buckets = 48
+            minute_snapped = 30 if now_wib.minute >= 30 else 0
+            end_snapped_wib = now_wib.replace(minute=minute_snapped, second=0, microsecond=0)
+            start_snapped_wib = end_snapped_wib - timedelta(hours=24)
+            date_format = "%H:%M"
+        else:
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=wib_tz)
+                end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=wib_tz)
+                if end_dt > now_wib:
+                    end_dt = now_wib
+                    
+                delta = end_dt - start_dt
+                days_diff = delta.total_seconds() / 86400
+                
+                if days_diff <= 1:
+                    interval_minutes = 30
+                    num_buckets = 48
+                    minute_snapped = 30 if end_dt.minute >= 30 else 0
+                    end_snapped_wib = end_dt.replace(minute=minute_snapped, second=0, microsecond=0)
+                    start_snapped_wib = end_snapped_wib - timedelta(hours=24)
+                    date_format = "%H:%M"
+                elif days_diff <= 7:
+                    interval_minutes = 6 * 60
+                    num_buckets = int((days_diff * 24) // 6)
+                    hour_snapped = (end_dt.hour // 6) * 6
+                    end_snapped_wib = end_dt.replace(hour=hour_snapped, minute=0, second=0, microsecond=0)
+                    start_snapped_wib = end_snapped_wib - timedelta(minutes=num_buckets * interval_minutes)
+                    date_format = "%d %b %H:%M"
+                else:
+                    interval_minutes = 24 * 60
+                    num_buckets = max(1, math.ceil(days_diff))
+                    end_snapped_wib = end_dt.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                    start_snapped_wib = end_snapped_wib - timedelta(days=num_buckets)
+                    date_format = "%d %b %Y"
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Format tanggal tidak valid. Gunakan YYYY-MM-DD.")
         
-        start_time_wib = snapped_wib - timedelta(hours=24)
-        start_time_utc = start_time_wib.astimezone(timezone.utc)
-        start_time_iso = start_time_utc.isoformat()
+        start_time_iso = start_snapped_wib.astimezone(timezone.utc).isoformat()
+        end_time_iso = end_snapped_wib.astimezone(timezone.utc).isoformat()
         
         resp = (
             supabase.table("scan_history")
             .select("id, scan_date, raw_json, scan_result(severity), domains(domain_name)")
             .gte("scan_date", start_time_iso)
+            .lte("scan_date", end_time_iso)
             .order("scan_date", desc=False)
             .execute()
         )
         scans = resp.data
         
         labels = []
-        for i in range(49):
-            bucket_time_wib = start_time_wib + timedelta(minutes=i*30)
-            labels.append(bucket_time_wib.strftime("%H:%M"))
+        for i in range(num_buckets + 1):
+            bucket_time_wib = start_snapped_wib + timedelta(minutes=i*interval_minutes)
+            labels.append(bucket_time_wib.strftime(date_format))
             
         severities_data = {
-            "CRITICAL": [0] * 49,
-            "HIGH": [0] * 49,
-            "MEDIUM": [0] * 49,
-            "LOW": [0] * 49,
-            "INFO": [0] * 49,
+            "CRITICAL": [0] * (num_buckets + 1),
+            "HIGH": [0] * (num_buckets + 1),
+            "MEDIUM": [0] * (num_buckets + 1),
+            "LOW": [0] * (num_buckets + 1),
+            "INFO": [0] * (num_buckets + 1),
         }
         
         domains_by_sev = {
-            "CRITICAL": [set() for _ in range(49)],
-            "HIGH": [set() for _ in range(49)],
-            "MEDIUM": [set() for _ in range(49)],
-            "LOW": [set() for _ in range(49)],
-            "INFO": [set() for _ in range(49)],
+            "CRITICAL": [set() for _ in range(num_buckets + 1)],
+            "HIGH": [set() for _ in range(num_buckets + 1)],
+            "MEDIUM": [set() for _ in range(num_buckets + 1)],
+            "LOW": [set() for _ in range(num_buckets + 1)],
+            "INFO": [set() for _ in range(num_buckets + 1)],
         }
         
         for scan in scans:
@@ -584,10 +657,10 @@ def get_severity_trend_stats(current_user = Depends(get_current_user)):
             except Exception:
                 continue
                 
-            delta = scan_date_wib - start_time_wib
-            bucket_index = int(delta.total_seconds() // 1800)
+            delta = scan_date_wib - start_snapped_wib
+            bucket_index = int(delta.total_seconds() // (interval_minutes * 60))
             
-            if 0 <= bucket_index < 49:
+            if 0 <= bucket_index <= num_buckets:
                 # Hitung dari tabel vulnerabilities (Medium/High/Critical)
                 vulns = scan.get("scan_result") or []
                 for v in vulns:

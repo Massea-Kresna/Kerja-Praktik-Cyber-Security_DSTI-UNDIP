@@ -49,6 +49,22 @@
             <circle cx="11" cy="11" r="7" />
             <path d="m21 21-4.3-4.3" />
         </symbol>
+        <symbol id="icon-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
+            <line x1="6" y1="6" x2="6.01" y2="6" />
+            <line x1="6" y1="18" x2="6.01" y2="18" />
+        </symbol>
+        <symbol id="icon-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+        </symbol>
+        <symbol id="icon-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+        </symbol>
+        <symbol id="icon-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+        </symbol>
     </svg>
 
     <!-- Toast Container untuk Notifikasi Real-time -->
@@ -136,6 +152,11 @@
                     <svg class="icon">
                         <use href="#icon-globe" />
                     </svg> Domains
+                </a>
+                <a href="#" class="nav-item" onclick="switchView('network-scanner')">
+                    <svg class="icon">
+                        <use href="#icon-server" />
+                    </svg> Network Scanner
                 </a>
                 <a href="#" class="nav-item hidden" id="nav-admin" onclick="switchView('admin')" style="display: none;">
                     User Management
@@ -238,8 +259,21 @@
                                             <input type="text" placeholder="Cari domain..."
                                                 oninput="filterDropdownItems('vulnTrendDropdown', this.value)" />
                                         </div>
-                                        <div class="multi-select-items" id="vulnTrendItems">
-                                            <!-- Diisi oleh app.js -->
+                                    </div>
+                                    <div class="multi-select-dropdown" id="vulnTrendDropdown">
+                                        <button class="multi-select-btn" onclick="toggleDropdown('vulnTrendDropdown')">
+                                            <span class="multi-select-label">All Domains</span>
+                                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                                <path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                            </svg>
+                                        </button>
+                                        <div class="multi-select-panel">
+                                            <div class="multi-select-search">
+                                                <input type="text" placeholder="Cari domain..." oninput="filterDropdownItems('vulnTrendDropdown', this.value)" />
+                                            </div>
+                                            <div class="multi-select-items" id="vulnTrendItems">
+                                                <!-- Diisi oleh app.js -->
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -254,7 +288,7 @@
                             <div class="card-header-row">
                                 <div>
                                     <h3>Severity Trend</h3>
-                                    <p class="desc">Distribusi tingkat risiko 24 jam terakhir</p>
+                                    <p class="desc">Distribusi tingkat risiko kerentanan</p>
                                 </div>
                                 <div class="multi-select-dropdown" id="sevTrendDropdown">
                                     <button class="multi-select-btn" onclick="toggleDropdown('sevTrendDropdown')">
@@ -761,6 +795,85 @@
                                     <td id="modalLogHost">-</td>
                                     <td>pentest-tools</td>
                                     <td id="modalLogMsg" class="font-mono text-truncate">...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Network Scan Detail Modal -->
+    <div class="modal-overlay" id="networkScanModalOverlay" style="display: none;">
+        <div class="modal-dialog" style="max-width: 800px;">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <h2 id="networkScanModalTitle">Network Scan Details</h2>
+                    <span class="badge badge-medium" id="networkScanModalStatus">Status</span>
+                </div>
+                <div class="modal-actions" style="display: flex; gap: 12px; align-items: center;">
+                    <a id="btnDownloadNetworkReport" href="#" target="_blank" class="badge badge-high" style="text-decoration: none; cursor: pointer; border: 1px solid rgba(255,255,255,0.2);">
+                        📄 Export Details
+                    </a>
+                    <button class="icon-btn" onclick="closeNetworkScanModal()">✕</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="modal-meta-grid" style="grid-template-columns: repeat(4, 1fr);">
+                    <div>
+                        <div class="meta-label">NETWORK TARGET</div>
+                        <div class="meta-value" id="networkScanModalTarget">-</div>
+                    </div>
+                    <div>
+                        <div class="meta-label">IP RANGE</div>
+                        <div class="meta-value" id="networkScanModalIp">-</div>
+                    </div>
+                    <div>
+                        <div class="meta-label">AUTHORIZED BY</div>
+                        <div class="meta-value" id="networkScanModalAuth">-</div>
+                    </div>
+                    <div>
+                        <div class="meta-label">DEVICES DISCOVERED</div>
+                        <div class="meta-value" id="networkScanModalDevices">45</div>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <div class="meta-label mb-2">DISCOVERED DEVICES & VULNERABILITIES</div>
+                    <div class="table-wrapper" style="border: 1px solid var(--color-border); border-radius: 8px; overflow:hidden;">
+                        <table class="modern-table" style="margin:0;">
+                            <thead>
+                                <tr>
+                                    <th>IP ADDRESS</th>
+                                    <th>HOSTNAME</th>
+                                    <th>OS / DEVICE TYPE</th>
+                                    <th>OPEN PORTS</th>
+                                    <th>CRITICAL VULNS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="networkScanModalDeviceBody">
+                                <!-- Mockup devices -->
+                                <tr>
+                                    <td class="font-mono">192.168.10.15</td>
+                                    <td>DB-SERVER-01</td>
+                                    <td>Linux / Ubuntu</td>
+                                    <td>22, 5432</td>
+                                    <td><span style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">1</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="font-mono">192.168.10.42</td>
+                                    <td>WEB-NODE-A</td>
+                                    <td>Linux / Nginx</td>
+                                    <td>80, 443, 22</td>
+                                    <td><span style="color: var(--text-secondary); font-size: 11px;">None</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="font-mono">192.168.10.110</td>
+                                    <td>DESKTOP-HR2</td>
+                                    <td>Windows 10</td>
+                                    <td>135, 139, 445</td>
+                                    <td><span style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">3</span></td>
                                 </tr>
                             </tbody>
                         </table>
