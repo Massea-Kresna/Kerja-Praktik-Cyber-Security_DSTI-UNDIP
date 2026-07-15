@@ -1601,7 +1601,7 @@ function renderLowerGrid() {
 
 // Function helper untuk membuka modal dari index
 function openScanModalIndex(index) {
-    const scan = filteredVulns[index];
+    const scan = allVulns[index];
     if (scan) {
         openScanModal(scan);
     }
