@@ -329,33 +329,33 @@ body {
 }
 
 .badge-critical {
-    background: #E53E3E;
+    background: var(--sev-critical);
     color: #FFFFFF;
-    border: 1px solid #C53030;
+    border: 1px solid var(--sev-critical);
 }
 
 .badge-high {
-    background: #ED8936;
-    color: #1A202C;
-    border: 1px solid #DD6B20;
+    background: var(--sev-high);
+    color: #FFFFFF;
+    border: 1px solid var(--sev-high);
 }
 
 .badge-medium {
-    background: #ECC94B;
-    color: #1A202C;
-    border: 1px solid #D69E2E;
+    background: var(--sev-medium);
+    color: #FFFFFF;
+    border: 1px solid var(--sev-medium);
 }
 
 .badge-low {
-    background: #4299E1;
+    background: var(--sev-low);
     color: #FFFFFF;
-    border: 1px solid #3182CE;
+    border: 1px solid var(--sev-low);
 }
 
 .badge-info {
-    background: #48BB78;
+    background: var(--sev-info);
     color: #FFFFFF;
-    border: 1px solid #38A169;
+    border: 1px solid var(--sev-info);
 }
 
 .badge-active {

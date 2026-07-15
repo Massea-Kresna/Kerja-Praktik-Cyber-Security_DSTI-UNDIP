@@ -786,6 +786,10 @@ window.renderVulnTrendChart = function () {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -844,9 +848,10 @@ window.renderVulnTrendChart = function () {
                             },
                             label: function (context) {
                                 let label = context.dataset.label || '';
-                                if (label) label += ' | Vulns: ';
-                                if (context.parsed.y !== null) label += context.parsed.y;
-                                return label;
+                                if (label) {
+                                    return `${label} (${context.parsed.y})`;
+                                }
+                                return context.parsed.y;
                             }
                         }
                     }
@@ -879,11 +884,11 @@ window.renderSevTrendChart = function () {
     updateDropdownLabel('sevTrendDropdown', 'All Severities');
 
     const sevColors = {
-        'Critical': '#ef4444',
-        'High': '#f97316',
-        'Medium': '#eab308',
-        'Low': '#3b82f6',
-        'Info': '#22c55e'
+        'Critical': '#8A2E2E',
+        'High': '#FF4A4A',
+        'Medium': '#FF9F2A',
+        'Low': '#4287F5',
+        'Info': '#00D182'
     };
 
     let baseDatasets = rawSevTrendData.datasets || [];
@@ -934,6 +939,10 @@ window.renderSevTrendChart = function () {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -991,12 +1000,19 @@ window.renderSevTrendChart = function () {
                                 label += val;
 
                                 let domainsList = context.dataset.domains ? context.dataset.domains[context.dataIndex] : null;
-                                if (val > 0 && domainsList && domainsList.length > 0) {
+                                if (val > 0 && domainsList) {
                                     let lines = [label];
-                                    domainsList.forEach(d => {
-                                        lines.push('   • ' + d);
-                                    });
-                                    return lines;
+                                    if (Array.isArray(domainsList) && domainsList.length > 0) {
+                                        domainsList.forEach(d => {
+                                            lines.push('   • ' + d);
+                                        });
+                                        return lines;
+                                    } else if (typeof domainsList === 'object' && !Array.isArray(domainsList) && Object.keys(domainsList).length > 0) {
+                                        Object.entries(domainsList).forEach(([d, count]) => {
+                                            lines.push(`   • ${d} (${count})`);
+                                        });
+                                        return lines;
+                                    }
                                 }
                                 return label;
                             }
