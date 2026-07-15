@@ -30,13 +30,16 @@ def upsert_domain(supabase, domain_name, ip_address):
     # Mengembalikan ID domain yang baru saja di-upsert
     return response.data[0]['id'] if response.data else None
 
-def create_scan_history(supabase, domain_id, risk_score, risk_level, raw_json=None):
+def create_scan_history(supabase, domain_id, risk_score, risk_level, raw_json=None, scan_date=None):
     """Mencatat histori scan baru"""
+    if not scan_date:
+        scan_date = datetime.now(timezone(timedelta(hours=7))).isoformat()
+        
     data = {
         "domain_id": domain_id,
         "risk_score": risk_score,
         "risk_level": risk_level,
-        "scan_date": datetime.now(timezone(timedelta(hours=7))).isoformat(),
+        "scan_date": scan_date,
         "raw_json": raw_json
     }
     response = supabase.table("scan_history").insert(data).execute()
@@ -167,10 +170,11 @@ def save_all_results(domain_list, port_results, tech_results, vuln_results):
         print(f"[-] ERROR saat menyimpan ke Supabase: {e}")
         return False
 
-def save_pentest_tools_result(domain_name, report_json, scanner_type="Web Scanner", pt_scan_id=None):
+def save_pentest_tools_result(domain_name, report_json, scanner_type="Web Scanner", pt_scan_id=None, scan_date=None):
     """
     Mengadaptasi laporan dari Pentest-Tools API dan menyimpannya ke Supabase.
     """
+    print(f"[*] Parse & Save ke DB: {domain_name} ({scanner_type})")
     supabase = get_supabase_client()
     if not supabase:
         print("  [!] Gagal menyimpan ke Supabase: Client tidak tersedia.")
@@ -274,7 +278,7 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type="Web Scanne
         else:
             raw_json_data = low_info_vulns if low_info_vulns else None
 
-        history_id = create_scan_history(supabase, domain_id, final_risk_score, risk_level, raw_json_data)
+        history_id = create_scan_history(supabase, domain_id, final_risk_score, risk_level, raw_json_data, scan_date=scan_date)
         if not history_id:
             return None
             

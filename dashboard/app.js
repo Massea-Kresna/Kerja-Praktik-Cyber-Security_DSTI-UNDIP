@@ -11,6 +11,12 @@ let allVulns = [];
 let filteredVulns = null;
 let currentDomainData = null;
 
+// Network Scanner Logic
+let networkScans = [];
+let filteredNetworkScans = [];
+let netCurrentPage = 1;
+let netRowsPerPage = 4;
+
 // Pagination State for Scan History
 let vulnCurrentPage = 1;
 let vulnRowsPerPage = 15;
@@ -417,9 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // setInterval(refreshData, 5000);
 });
 
-// ==========================================================================
 // Navigation & Views
-// ==========================================================================
 function switchView(viewId) {
     // Hide all views
     document.querySelectorAll('.view-container').forEach(v => {
@@ -476,11 +480,8 @@ function switchView(viewId) {
     }
 }
 
-// ==========================================================================
 // Data Fetching
-// ==========================================================================
 async function refreshData(preservePage = true) {
-
     try {
         await checkHealth();
         await Promise.all([
@@ -489,6 +490,9 @@ async function refreshData(preservePage = true) {
             loadVulnerabilities(preservePage),
             loadDomains(preservePage)
         ]);
+        
+        // Memanggil fungsi render tabel network khusus
+        if (typeof processNetworkScans === 'function') processNetworkScans();
     } catch (err) {
         console.error('Refresh error:', err);
     }
@@ -506,9 +510,7 @@ async function checkHealth() {
     }
 }
 
-// ==========================================================================
 // Overview (Dashboard Stats & Chart)
-// ==========================================================================
 let vulnChartInstance = null;
 let sevChartInstance = null;
 let rawTrendData = null;
@@ -812,10 +814,6 @@ window.renderVulnTrendChart = function () {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -874,10 +872,9 @@ window.renderVulnTrendChart = function () {
                             },
                             label: function (context) {
                                 let label = context.dataset.label || '';
-                                if (label) {
-                                    return `${label} (${context.parsed.y})`;
-                                }
-                                return context.parsed.y;
+                                if (label) label += ' | Vulns: ';
+                                if (context.parsed.y !== null) label += context.parsed.y;
+                                return label;
                             }
                         }
                     }
@@ -910,11 +907,11 @@ window.renderSevTrendChart = function () {
     updateDropdownLabel('sevTrendDropdown', 'All Severities');
 
     const sevColors = {
-        'Critical': '#8A2E2E',
-        'High': '#FF4A4A',
-        'Medium': '#FF9F2A',
-        'Low': '#4287F5',
-        'Info': '#00D182'
+        'Critical': '#ef4444',
+        'High': '#f97316',
+        'Medium': '#eab308',
+        'Low': '#3b82f6',
+        'Info': '#22c55e'
     };
 
     let baseDatasets = rawSevTrendData.datasets || [];
@@ -965,10 +962,6 @@ window.renderSevTrendChart = function () {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -1026,19 +1019,12 @@ window.renderSevTrendChart = function () {
                                 label += val;
 
                                 let domainsList = context.dataset.domains ? context.dataset.domains[context.dataIndex] : null;
-                                if (val > 0 && domainsList) {
+                                if (val > 0 && domainsList && domainsList.length > 0) {
                                     let lines = [label];
-                                    if (Array.isArray(domainsList) && domainsList.length > 0) {
-                                        domainsList.forEach(d => {
-                                            lines.push('   • ' + d);
-                                        });
-                                        return lines;
-                                    } else if (typeof domainsList === 'object' && !Array.isArray(domainsList) && Object.keys(domainsList).length > 0) {
-                                        Object.entries(domainsList).forEach(([d, count]) => {
-                                            lines.push(`   • ${d} (${count})`);
-                                        });
-                                        return lines;
-                                    }
+                                    domainsList.forEach(d => {
+                                        lines.push('   • ' + d);
+                                    });
+                                    return lines;
                                 }
                                 return label;
                             }
@@ -1050,9 +1036,7 @@ window.renderSevTrendChart = function () {
     }
 };
 
-// ==========================================================================
 // Automated Pentests (Vulnerabilities View)
-// ==========================================================================
 let vulnSortCol = 'date';
 let vulnSortDesc = true;
 
@@ -1278,9 +1262,197 @@ function renderVulnerabilitiesList() {
     }
 }
 
-// ==========================================================================
+function processNetworkScans() {
+    // 1. Filter: Hanya ambil scan yang check_type-nya adalah 'Network Scanner'
+    networkScans = allVulns.filter(scan => {
+        if (scan.vulnerabilities && scan.vulnerabilities.length > 0) {
+            const scanType = scan.vulnerabilities[0].check_type || "";
+            // Mengecek apakah jenis scan mengandung kata "Network"
+            return scanType.toLowerCase().includes("network");
+        }
+        return false;
+    }); 
+    
+    // 2. Menghitung Top Cards khusus dari data Network Scanner
+    // Hitung jumlah target domain unik yang pernah di-scan jaringannya
+    const uniqueDomains = new Set(networkScans.map(s => s.domains?.domain_name).filter(Boolean)).size;
+    document.getElementById('netActiveScans').textContent = `${uniqueDomains} Networks`;
+    
+    // Hitung jumlah IP Address unik yang ditemukan dari scan jaringan tersebut
+    const uniqueIPs = new Set(networkScans.map(s => s.domains?.ip_address).filter(Boolean)).size;
+    document.getElementById('netDevicesDiscovered').textContent = uniqueIPs.toLocaleString() || "0";
+
+    // 3. Terapkan filter pencarian (jika ada) dan render tabelnya
+    applyNetworkFilters();
+}
+
+function applyNetworkFilters() {
+    const searchInput = document.getElementById('netSearchInput')?.value.toLowerCase() || '';
+    
+    filteredNetworkScans = networkScans.filter(scan => {
+        const domainName = (scan.domains?.domain_name || '').toLowerCase();
+        const ip = (scan.domains?.ip_address || '').toLowerCase();
+        if (searchInput && !domainName.includes(searchInput) && !ip.includes(searchInput)) return false;
+        return true;
+    });
+
+    netCurrentPage = 1;
+    renderNetworkScans();
+}
+
+function renderNetworkScans() {
+    const tbody = document.getElementById('networkScansTableBody');
+    const paginationContainer = document.getElementById('networkPaginationControls');
+    const thCount = document.getElementById('thNetworkScansCount');
+    
+    if (!filteredNetworkScans || filteredNetworkScans.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No network scans found.</td></tr>`;
+        if (paginationContainer) paginationContainer.innerHTML = '';
+        if (thCount) thCount.textContent = 'SCANS (0)';
+        return;
+    }
+
+    const totalItems = filteredNetworkScans.length;
+    if (thCount) thCount.textContent = `SCANS (${totalItems})`;
+
+    const totalPages = Math.ceil(totalItems / netRowsPerPage) || 1;
+    if (netCurrentPage > totalPages) netCurrentPage = totalPages;
+    
+    const startIdx = (netCurrentPage - 1) * netRowsPerPage;
+    const endIdx = Math.min(startIdx + netRowsPerPage, totalItems);
+    const paginatedScans = filteredNetworkScans.slice(startIdx, endIdx);
+
+    tbody.innerHTML = paginatedScans.map(scan => {
+        const actualIndex = allVulns.indexOf(scan);
+        const domainName = scan.domains?.domain_name || 'Unknown Target';
+        const ipAddress = scan.domains?.ip_address || '-';
+        
+        // Konversi Format Tanggal
+        let dateStr = '-';
+        if (scan.scan_date) {
+            const d = new Date(scan.scan_date);
+            if (!isNaN(d.getTime())) {
+                const month = d.toLocaleString('en-US', { month: 'short' });
+                const day = d.getDate();
+                const year = d.getFullYear();
+                const time = d.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                dateStr = `${month} ${day}, ${year}<br><span style="color:var(--text-secondary);font-size:11px;">${time}</span>`;
+            }
+        }
+
+        // Hitung Summary Badge
+        let crit = 0, high = 0, med = 0, low = 0;
+        if (scan.vulnerabilities) {
+            scan.vulnerabilities.forEach(v => {
+                const s = (v.severity || '').toUpperCase();
+                if (s === 'CRITICAL') crit++;
+                else if (s === 'HIGH') high++;
+                else if (s === 'MEDIUM') med++;
+                else if (s === 'LOW' || s === 'INFO') low++;
+            });
+        }
+        
+        const summaryHtml = `
+            <div style="display:flex; gap:6px;">
+                <span style="background:#ef4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${crit}</span>
+                <span style="background:#f97316; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${high}</span>
+                <span style="background:#2563eb; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${med}</span>
+                <span style="background:#10b981; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${low}</span>
+            </div>
+        `;
+
+        // LOGIKA STATUS PROGRESS BAR DINAMIS
+        const statusVal = (scan.status || 'finished').toLowerCase();
+        const progressVal = scan.progress || 0;
+        let statusHtml = '';
+
+        if (statusVal === 'running' || statusVal === 'processing' || statusVal === 'pending') {
+            statusHtml = `
+                <div style="width: 100px;">
+                    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; font-weight:600; color:#3b82f6;">
+                        <span>Running</span>
+                        <span>${progressVal}%</span>
+                    </div>
+                    <div style="width:100%; background:#e2e8f0; border-radius:4px; height:6px; overflow:hidden;">
+                        <div style="width:${progressVal}%; background:#3b82f6; height:100%; border-radius:4px; transition:width 0.5s;"></div>
+                    </div>
+                </div>
+            `;
+        } else if (statusVal === 'failed' || statusVal === 'error') {
+            statusHtml = `
+                <div style="color:#ef4444; font-size:12px; font-weight:600; display:flex; align-items:center; gap:4px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    Failed
+                </div>
+            `;
+        } else {
+            statusHtml = `
+                <div style="color:#10b981; font-size:12px; font-weight:600; display:flex; align-items:center; gap:4px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    Completed
+                </div>
+            `;
+        }
+
+        return `
+            <tr onclick="openScanModalIndex(${actualIndex})" style="cursor: pointer;">
+                <td style="text-align: center;" onclick="event.stopPropagation();"><input type="checkbox" style="cursor: pointer;"></td>
+                <td style="font-weight:500;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                        Network Scanner
+                    </div>
+                </td>
+                <td>
+                    ${statusHtml}
+                </td>
+                <td>
+                    <div style="font-weight:500; color:var(--text-primary);">${escapeHtml(domainName)}</div>
+                    <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">${escapeHtml(ipAddress)}</div>
+                </td>
+                <td>${summaryHtml}</td>
+                <td style="font-size: 13px;">${dateStr}</td>
+                <td style="text-align:center;" onclick="event.stopPropagation();">
+                    <div style="display: flex; gap: 6px; justify-content: center; align-items: center;">
+                        <!-- TOMBOL RUN SCAN KHUSUS BARIS INI -->
+                        <button class="icon-btn-sm" title="Jalankan Network Scan" onclick="triggerSingleNetworkScan('${escapeHtml(domainName)}')" style="color: #2563eb; background: #eff6ff; border: none; border-radius: 6px; padding: 6px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        </button>
+                        <button class="icon-btn-sm" title="Options" style="border: none; background: transparent; padding: 6px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    // Pagination
+    if (paginationContainer) {
+        paginationContainer.innerHTML = `
+            <div style="font-size: 13px; color: var(--text-secondary);">
+                Showing ${startIdx + 1} to ${endIdx} of ${totalItems} results
+            </div>
+            <div class="pagination-right" style="display: flex; align-items: center; gap: 4px;">
+                <button class="btn btn-outline btn-sm" onclick="changeNetPage(${netCurrentPage - 1})" ${netCurrentPage === 1 ? 'disabled' : ''} style="padding: 6px 10px; min-width: auto; border: none; color: ${netCurrentPage === 1 ? '#cbd5e1' : '#64748b'}; cursor: ${netCurrentPage === 1 ? 'not-allowed' : 'pointer'};">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </button>
+                <span style="padding: 4px 10px; min-width: auto; background: #2563eb; color: white; border: none; border-radius: 4px; font-size: 13px;">${netCurrentPage}</span>
+                <span style="padding: 4px 6px; font-size: 14px; color: #64748b;">/ ${totalPages}</span>
+                <button class="btn btn-outline btn-sm" onclick="changeNetPage(${netCurrentPage + 1})" ${netCurrentPage === totalPages ? 'disabled' : ''} style="padding: 6px 10px; min-width: auto; border: none; color: ${netCurrentPage === totalPages ? '#cbd5e1' : '#64748b'}; cursor: ${netCurrentPage === totalPages ? 'not-allowed' : 'pointer'};">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+            </div>
+        `;
+    }
+}
+
+window.changeNetPage = function(newPage) {
+    netCurrentPage = newPage;
+    renderNetworkScans();
+};
+
 // Render Lower Dashboard Grid (Recent Alerts & Monitored Domains)
-// ==========================================================================
 function renderLowerGrid() {
     const alertsBody = document.getElementById('recentAlertsBody');
     const domainsList = document.getElementById('monitoredDomainsList');
@@ -1442,9 +1614,8 @@ function openScanModalByGlobalIndex(index) {
     }
 }
 
-// ==========================================================================
 // Inventory (Domains) & CRUD
-// ==========================================================================
+
 const domainModalOverlay = document.getElementById('domainModalOverlay');
 const domainForm = document.getElementById('domainForm');
 const addDomainBtn = document.getElementById('addDomainBtn');
@@ -1820,21 +1991,73 @@ function setupTabs() {
     });
 }
 
-// ==========================================================================
 // Threat Modal
-// ==========================================================================
 function openThreatModal(vuln) {
     document.getElementById('threatModalOverlay').classList.add('active');
 
+    // Mengisi data inti
     document.getElementById('modalTitle').textContent = vuln.title || 'Vulnerability Alert';
     document.getElementById('modalRuleId').textContent = vuln.check_type || 'Unknown Scanner';
     document.getElementById('modalSeverity').textContent = vuln.severity || 'LOW';
     document.getElementById('modalSeverity').className = `meta-value text-${getSeverityClass(vuln.severity)}`;
-
     document.getElementById('modalDesc').textContent = vuln.description || 'No description available.';
     document.getElementById('modalRecommendation').textContent = vuln.recommendation || 'No recommendation provided.';
 
-    // Mock data for evidence logs based on vuln
+    // LOGIKA PENGKATEGORIAN OTOMATIS (ADVANCED)
+    const checkType = (vuln.check_type || '').toLowerCase();
+    const titleLower = (vuln.title || '').toLowerCase();
+    
+    // Gabungkan string untuk pencarian kata kunci yang lebih luas
+    const threatSignature = checkType + " " + titleLower;
+    
+    // 1. Kategori Ancaman (Badge Atas) yang Sangat Mendetail
+    const categoryBadge = document.getElementById('modalThreatCategory');
+    if (categoryBadge) {
+        let badgeText = 'Anomaly Detection';
+        let badgeClass = 'badge badge-orange-outline';
+
+if (threatSignature.includes('sql') || threatSignature.includes('injection') || threatSignature.includes('xss')) {
+            badgeText = 'Critical Web Exploit';
+            badgeClass = 'badge badge-critical'; 
+        } else if (threatSignature.includes('ssl') || threatSignature.includes('tls') || threatSignature.includes('certificate')) {
+            badgeText = 'SSL/TLS Misconfiguration';
+            badgeClass = 'badge badge-info'; 
+        } else if (threatSignature.includes('header') || threatSignature.includes('hsts') || threatSignature.includes('cors') || threatSignature.includes('clickjacking')) {
+            // Kategori baru khusus untuk HTTP Headers yang hilang/salah
+            badgeText = 'Security Header Missing';
+            badgeClass = 'badge badge-low'; // Warna biru muda
+        } else if (threatSignature.includes('wordpress') || threatSignature.includes('cms')) {
+            badgeText = 'CMS Vulnerability';
+            badgeClass = 'badge badge-medium'; 
+        } else if (threatSignature.includes('information') || threatSignature.includes('disclosure') || threatSignature.includes('leak') || threatSignature.includes('directory')) {
+            badgeText = 'Information Disclosure';
+            badgeClass = 'badge badge-low'; 
+        } else if (threatSignature.includes('vulnerabilities found for') || threatSignature.includes('outdated') || threatSignature.includes('version')) {
+            badgeText = 'Vulnerable Component';
+            badgeClass = 'badge badge-medium';
+        } else if (threatSignature.includes('network ') || /\bport\b/.test(threatSignature)) {
+            badgeText = 'Network Vulnerability';
+            badgeClass = 'badge badge-high'; 
+        } else {
+            badgeText = 'Web Vulnerability'; 
+            badgeClass = 'badge badge-orange-outline';
+        }
+
+        categoryBadge.textContent = badgeText;
+        categoryBadge.className = badgeClass;
+    }
+
+    // 2. Threat Type (Format snake_case)
+    let threatTypeStr = checkType.replace(/\s+/g, '_') || 'unknown_threat';
+    const typeBadge = document.getElementById('modalThreatType');
+    if (typeBadge) typeBadge.textContent = threatTypeStr;
+
+    // 3. Program Pemindai
+    const programName = threatSignature.includes('network') ? 'network-scanner' : 'web-scanner';
+    const progBadge = document.getElementById('modalProgramName');
+    if (progBadge) progBadge.textContent = programName;
+
+    // Mock data for evidence logs
     const now = new Date().toISOString();
     document.getElementById('modalFirstSeen').textContent = formatDate(now);
     document.getElementById('modalLastSeen').textContent = formatDate(now);
@@ -1848,9 +2071,7 @@ function closeThreatModal() {
     document.getElementById('threatModalOverlay').classList.remove('active');
 }
 
-// ==========================================================================
 // Scan Modal
-// ==========================================================================
 let currentScanVulns = [];
 let currentScanVulnsFilter = 'All';
 
@@ -1985,9 +2206,7 @@ function closeScanModal() {
     document.getElementById('scanModalOverlay').classList.remove('active');
 }
 
-// ==========================================================================
 // Helpers
-// ==========================================================================
 function escapeHtml(str) {
     if (!str) return '';
     const div = document.createElement('div');
@@ -2028,9 +2247,7 @@ function getMockCVSS(sev) {
     return '0.0';
 }
 
-// ==========================================================================
 // Authentication & Session Management (Admin Restricted Registration)
-// ==========================================================================
 let autoRefreshInterval = null;
 let wsLive = null;
 let currentUser = null;
@@ -2187,9 +2404,7 @@ window.fetch = async function (...args) {
     return response;
 };
 
-// ==========================================================================
 // Admin Panel: User Creation Modal & CRUD Handlers
-// ==========================================================================
 function openCreateUserModal() {
     console.log("[Debug] openCreateUserModal called.");
     const overlay = document.getElementById('createUserModalOverlay');
@@ -2254,9 +2469,7 @@ async function handleCreateUserSubmit(e) {
     }
 }
 
-// ==========================================================================
 // Admin Panel: User Table List & Control Actions
-// ==========================================================================
 async function loadAdminUsers() {
     const tbody = document.getElementById('userTableBody');
     try {
@@ -2424,9 +2637,7 @@ function formatRelativeTime(dateStr) {
     }
 }
 
-// ==========================================================================
 // YouTube-Style Notification Dropdown Logic & Rendering
-// ==========================================================================
 function toggleNotificationDropdown(e) {
     if (e) e.stopPropagation();
     const dropdown = document.getElementById('notificationDropdown');
@@ -2524,9 +2735,7 @@ function markAsRead(notifId) {
     }
 }
 
-// ==========================================================================
 // WebSockets Client
-// ==========================================================================
 function connectLiveWebSocket(sessionId) {
     if (wsLive) {
         wsLive.close();
@@ -2620,9 +2829,7 @@ function showToast(title, message, icon = "🔔") {
     setTimeout(() => {
         toast.remove();
     }, 5000);
-}// ==========================================================================
 // Generate Report Modal
-// ==========================================================================
 function openGenerateReportModal(historyId) {
     document.getElementById('reportHistoryId').value = historyId;
     document.getElementById('generateReportModalOverlay').classList.add('active');
@@ -2870,3 +3077,26 @@ function submitWebScan() {
         `;
     });
 }
+}
+
+window.triggerSingleNetworkScan = async function(domainName) {
+    showToast('Scan Jaringan', `Memulai network scan untuk ${domainName}...`, '🚀');
+    try {
+        const resp = await fetch(`${API_BASE}/api/network-scan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targets: [domainName] })
+        });
+        
+        if (resp.status === 200 || resp.status === 201 || resp.status === 202) {
+            showToast('Scan Diantrekan', `Scan untuk ${domainName} sedang berjalan di server.`, '✅');
+            // Minta tabel diperbarui sesaat lagi
+            setTimeout(() => refreshData(true), 2000); 
+        } else {
+            const data = await resp.json();
+            showToast('Gagal', data.detail || 'Gagal memulai scan jaringan.', '❌');
+        }
+    } catch (err) {
+        showToast('Error Koneksi', 'Tidak dapat terhubung ke server.', '🔌');
+    }
+};
