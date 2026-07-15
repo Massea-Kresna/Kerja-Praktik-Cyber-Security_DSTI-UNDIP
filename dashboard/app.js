@@ -14,8 +14,10 @@ let currentDomainData = null;
 // Network Scanner Logic
 let networkScans = [];
 let filteredNetworkScans = [];
+let liveWebScans = [];
+let liveNetworkScans = [];
 let netCurrentPage = 1;
-let netRowsPerPage = 4;
+let netRowsPerPage = 15;
 
 // Pagination State for Scan History
 let vulnCurrentPage = 1;
@@ -466,8 +468,8 @@ function switchView(viewId) {
         loadAdminUsers();
     }
 
-    // Web Scanner: start/stop polling for active scans
-    if (viewId === 'web-scanner') {
+    // Web Scanner & Network Scanner: start/stop polling for active scans
+    if (viewId === 'web-scanner' || viewId === 'network-scanner') {
         fetchActiveScans();
         if (!activeScansInterval) {
             activeScansInterval = setInterval(fetchActiveScans, 5000);
@@ -1262,39 +1264,39 @@ function renderVulnerabilitiesList() {
     }
 }
 
+// =========================================================
+// LOGIKA NETWORK SCANNER TERBARU
+// =========================================================
+
 function processNetworkScans() {
-    // 1. Filter: Hanya ambil scan yang check_type-nya adalah 'Network Scanner'
     networkScans = allVulns.filter(scan => {
         if (scan.vulnerabilities && scan.vulnerabilities.length > 0) {
             const scanType = scan.vulnerabilities[0].check_type || "";
-            // Mengecek apakah jenis scan mengandung kata "Network"
             return scanType.toLowerCase().includes("network");
         }
         return false;
     }); 
     
-    // 2. Menghitung Top Cards khusus dari data Network Scanner
-    // Hitung jumlah target domain unik yang pernah di-scan jaringannya
-    const uniqueDomains = new Set(networkScans.map(s => s.domains?.domain_name).filter(Boolean)).size;
-    document.getElementById('netActiveScans').textContent = `${uniqueDomains} Networks`;
-    
-    // Hitung jumlah IP Address unik yang ditemukan dari scan jaringan tersebut
-    const uniqueIPs = new Set(networkScans.map(s => s.domains?.ip_address).filter(Boolean)).size;
-    document.getElementById('netDevicesDiscovered').textContent = uniqueIPs.toLocaleString() || "0";
-
-    // 3. Terapkan filter pencarian (jika ada) dan render tabelnya
     applyNetworkFilters();
 }
 
 function applyNetworkFilters() {
     const searchInput = document.getElementById('netSearchInput')?.value.toLowerCase() || '';
     
-    filteredNetworkScans = networkScans.filter(scan => {
+    let dbFiltered = networkScans.filter(scan => {
         const domainName = (scan.domains?.domain_name || '').toLowerCase();
         const ip = (scan.domains?.ip_address || '').toLowerCase();
         if (searchInput && !domainName.includes(searchInput) && !ip.includes(searchInput)) return false;
         return true;
     });
+
+    let liveFiltered = liveNetworkScans.filter(scan => {
+        const domainName = (scan.domain || '').toLowerCase();
+        if (searchInput && !domainName.includes(searchInput)) return false;
+        return true;
+    });
+
+    filteredNetworkScans = [...liveFiltered, ...dbFiltered];
 
     netCurrentPage = 1;
     renderNetworkScans();
@@ -1306,14 +1308,14 @@ function renderNetworkScans() {
     const thCount = document.getElementById('thNetworkScansCount');
     
     if (!filteredNetworkScans || filteredNetworkScans.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No network scans found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="padding: 24px; text-align: center;">No network scans found.</td></tr>`;
         if (paginationContainer) paginationContainer.innerHTML = '';
-        if (thCount) thCount.textContent = 'SCANS (0)';
+        if (thCount) thCount.textContent = 'SCANS';
         return;
     }
 
     const totalItems = filteredNetworkScans.length;
-    if (thCount) thCount.textContent = `SCANS (${totalItems})`;
+    if (thCount) thCount.textContent = `SCANS`;
 
     const totalPages = Math.ceil(totalItems / netRowsPerPage) || 1;
     if (netCurrentPage > totalPages) netCurrentPage = totalPages;
@@ -1322,134 +1324,245 @@ function renderNetworkScans() {
     const endIdx = Math.min(startIdx + netRowsPerPage, totalItems);
     const paginatedScans = filteredNetworkScans.slice(startIdx, endIdx);
 
-    tbody.innerHTML = paginatedScans.map(scan => {
-        const actualIndex = allVulns.indexOf(scan);
-        const domainName = scan.domains?.domain_name || 'Unknown Target';
-        const ipAddress = scan.domains?.ip_address || '-';
-        
-        // Konversi Format Tanggal
-        let dateStr = '-';
-        if (scan.scan_date) {
-            const d = new Date(scan.scan_date);
-            if (!isNaN(d.getTime())) {
-                const month = d.toLocaleString('en-US', { month: 'short' });
-                const day = d.getDate();
-                const year = d.getFullYear();
-                const time = d.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-                dateStr = `${month} ${day}, ${year}<br><span style="color:var(--text-secondary);font-size:11px;">${time}</span>`;
-            }
-        }
+tbody.innerHTML = paginatedScans.map((scan, mapIndex) => {
+        const isLive = scan.live_status !== undefined;
 
-        // Hitung Summary Badge
-        let crit = 0, high = 0, med = 0, low = 0;
-        if (scan.vulnerabilities) {
-            scan.vulnerabilities.forEach(v => {
-                const s = (v.severity || '').toUpperCase();
-                if (s === 'CRITICAL') crit++;
-                else if (s === 'HIGH') high++;
-                else if (s === 'MEDIUM') med++;
-                else if (s === 'LOW' || s === 'INFO') low++;
-            });
-        }
-        
-        const summaryHtml = `
-            <div style="display:flex; gap:6px;">
-                <span style="background:#ef4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${crit}</span>
-                <span style="background:#f97316; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${high}</span>
-                <span style="background:#2563eb; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${med}</span>
-                <span style="background:#10b981; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${low}</span>
-            </div>
-        `;
-
-        // LOGIKA STATUS PROGRESS BAR DINAMIS
-        const statusVal = (scan.status || 'finished').toLowerCase();
-        const progressVal = scan.progress || 0;
+        let domainName = '';
+        let targetSubtitle = '';
+        let dateStr = '-'; 
         let statusHtml = '';
+        let summaryHtml = '';
+        let actionBtn = '';
+        let scanIdLabel = '';
+        let actualIndex = -1;
 
-        if (statusVal === 'running' || statusVal === 'processing' || statusVal === 'pending') {
+        // ID UNIK & CEK MEMORI UNTUK CHECKBOX (Anti-Amnesia)
+        const uniqueScanId = isLive ? `live_${scan.scan_id || mapIndex}` : `db_${scan.id}`;
+        const isChecked = window.selectedNetworkScans && window.selectedNetworkScans.has(uniqueScanId) ? 'checked' : '';
+
+        if (isLive) {
+            domainName = scan.domain || 'Unknown Target';
+            targetSubtitle = scan.target || "Scan in progress...";
+            scanIdLabel = scan.type || `Pentest Tool ${scan.scan_id}`;
+            const progressVal = scan.progress || 0;
+            
+            // Konversi Waktu (EEST ke WIB)
+            if (scan.start_time) {
+                let rawTime = scan.start_time;
+                rawTime = rawTime.replace(' ', 'T');
+                if (!rawTime.includes('+') && !rawTime.includes('Z')) {
+                    rawTime += '+03:00';
+                }
+                const d = new Date(rawTime); 
+                if (!isNaN(d.getTime())) {
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const time = d.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', second:'2-digit' });
+                    dateStr = `${year}-${month}-${day} ${time}`;
+                } else {
+                    dateStr = scan.start_time; 
+                }
+            }
+
+            const radius = 14;
+            const circumference = 2 * Math.PI * radius;
+            const offset = circumference - (progressVal / 100) * circumference;
+
             statusHtml = `
-                <div style="width: 100px;">
-                    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; font-weight:600; color:#3b82f6;">
-                        <span>Running</span>
-                        <span>${progressVal}%</span>
-                    </div>
-                    <div style="width:100%; background:#e2e8f0; border-radius:4px; height:6px; overflow:hidden;">
-                        <div style="width:${progressVal}%; background:#3b82f6; height:100%; border-radius:4px; transition:width 0.5s;"></div>
-                    </div>
+                <div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
+                    <svg width="36" height="36" style="transform: rotate(-90deg);">
+                        <circle cx="18" cy="18" r="14" fill="none" stroke="#e2e8f0" stroke-width="2"></circle>
+                        <circle cx="18" cy="18" r="14" fill="none" stroke="#6366f1" stroke-width="2" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" stroke-linecap="round"></circle>
+                    </svg>
+                    <span style="position: absolute; font-size: 10px; font-weight: 600; color: #334155;">${progressVal}%</span>
                 </div>
             `;
-        } else if (statusVal === 'failed' || statusVal === 'error') {
-            statusHtml = `
-                <div style="color:#ef4444; font-size:12px; font-weight:600; display:flex; align-items:center; gap:4px;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                    Failed
-                </div>
+            summaryHtml = `<span style="color: #64748b; font-size: 13px;">${scan.live_status || 'running'}...</span>`;
+            
+            actionBtn = `<button class="btn btn-secondary" onclick="stopActiveScan(${scan.scan_id})" style="padding: 6px 16px; border: 1px solid #ef4444; color: #ef4444; background: transparent; border-radius: 20px; font-size: 12px; cursor: pointer; white-space: nowrap; transition: all 0.2s;" onmouseover="this.style.background='#ef4444'; this.style.color='#ffffff';" onmouseout="this.style.background='transparent'; this.style.color='#ef4444';">Stop Scan</button>`;
+
+            // STRUKTUR HTML LIVE ROW YANG SUDAH DIRAPIKAN
+            return `
+                <tr style="cursor: default; border-bottom: 1px solid #f1f5f9; background: #fafafa;">
+                    <td style="text-align: center; padding: 16px;" onclick="event.stopPropagation();">
+                        <input type="checkbox" value="${uniqueScanId}" ${isChecked} onchange="window.toggleNetworkCheckbox(event, this.value)" onclick="event.stopPropagation();" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;">
+                    </td>
+                    <td style="padding: 16px; min-width: 140px;">
+                        <div style="display:flex; align-items:center; gap:8px; color: #2563eb; font-weight: 500; font-size: 14px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                            ${scanIdLabel}
+                        </div>
+                    </td>
+                    <td style="padding: 16px;">${statusHtml}</td>
+                    <td style="padding: 16px;">
+                        <div style="font-family: monospace; font-size: 13px; color: #334155; margin-bottom: 4px;">https://${escapeHtml(domainName)}/</div>
+                        <div style="font-size: 13px; color: #94a3b8;">${escapeHtml(targetSubtitle)}</div>
+                    </td>
+                    <td style="padding: 16px; min-width: 120px;">${summaryHtml}</td>
+                    <td style="padding: 16px; font-size: 13px; color: #64748b; white-space: nowrap;">${dateStr}</td>
+                    <td style="padding: 16px; text-align:center;">${actionBtn}</td>
+                </tr>
             `;
+
         } else {
+            actualIndex = allVulns.indexOf(scan);
+            domainName = scan.domains?.domain_name || 'Unknown Target';
+            targetSubtitle = scan.domains?.ip_address || '-';
+            scanIdLabel = 'Pentest Tool 350';
+            
+            if (scan.scan_date) {
+                const d = new Date(scan.scan_date);
+                if (!isNaN(d.getTime())) {
+                    dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${d.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', second:'2-digit' })}`;
+                }
+            }
+
             statusHtml = `
-                <div style="color:#10b981; font-size:12px; font-weight:600; display:flex; align-items:center; gap:4px;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                    Completed
+                <div style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: #ecfdf5; border-radius: 50%; color: #10b981;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                 </div>
+            `;
+
+            let crit = 0, high = 0, med = 0, low = 0;
+            if (scan.vulnerabilities) {
+                scan.vulnerabilities.forEach(v => {
+                    const s = (v.severity || '').toUpperCase();
+                    if (s === 'CRITICAL') crit++;
+                    else if (s === 'HIGH') high++;
+                    else if (s === 'MEDIUM') med++;
+                    else if (s === 'LOW' || s === 'INFO') low++;
+                });
+            }
+            summaryHtml = `
+                <div style="display:flex; gap:6px;">
+                    <span style="background:#ef4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${crit}</span>
+                    <span style="background:#f97316; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${high}</span>
+                    <span style="background:#eab308; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${med}</span>
+                    <span style="background:#3b82f6; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${low}</span>
+                </div>
+            `;
+            
+            actionBtn = `<button class="btn btn-outline btn-sm" onclick="openScanModalIndex(${actualIndex}); event.stopPropagation();" style="padding: 6px 16px; border-radius: 20px; font-size: 12px;">View Report</button>`;
+
+            // STRUKTUR HTML DATABASE ROW YANG SUDAH DIRAPIKAN
+            return `
+                <tr onclick="openScanModalIndex(${actualIndex})" style="cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                    <td style="text-align: center; padding: 16px;" onclick="event.stopPropagation();">
+                        <input type="checkbox" value="${uniqueScanId}" ${isChecked} onchange="window.toggleNetworkCheckbox(event, this.value)" onclick="event.stopPropagation();" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;">
+                    </td>
+                    <td style="padding: 16px; min-width: 140px;">
+                        <div style="display:flex; align-items:center; gap:8px; color: #64748b; font-weight: 500; font-size: 14px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                            ${scanIdLabel}
+                        </div>
+                    </td>
+                    <td style="padding: 16px;">${statusHtml}</td>
+                    <td style="padding: 16px;">
+                        <div style="font-family: monospace; font-size: 13px; color: #334155; margin-bottom: 4px;">https://${escapeHtml(domainName)}/</div>
+                        <div style="font-size: 13px; color: #94a3b8;">${escapeHtml(targetSubtitle)}</div>
+                    </td>
+                    <td style="padding: 16px; min-width: 120px;">${summaryHtml}</td>
+                    <td style="padding: 16px; font-size: 13px; color: #64748b; white-space: nowrap;">${dateStr}</td>
+                    <td style="padding: 16px; text-align:center;" onclick="event.stopPropagation();">
+                        ${actionBtn}
+                    </td>
+                </tr>
             `;
         }
-
-        return `
-            <tr onclick="openScanModalIndex(${actualIndex})" style="cursor: pointer;">
-                <td style="text-align: center;" onclick="event.stopPropagation();"><input type="checkbox" style="cursor: pointer;"></td>
-                <td style="font-weight:500;">
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-                        Network Scanner
-                    </div>
-                </td>
-                <td>
-                    ${statusHtml}
-                </td>
-                <td>
-                    <div style="font-weight:500; color:var(--text-primary);">${escapeHtml(domainName)}</div>
-                    <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">${escapeHtml(ipAddress)}</div>
-                </td>
-                <td>${summaryHtml}</td>
-                <td style="font-size: 13px;">${dateStr}</td>
-                <td style="text-align:center;" onclick="event.stopPropagation();">
-                    <div style="display: flex; gap: 6px; justify-content: center; align-items: center;">
-                        <!-- TOMBOL RUN SCAN KHUSUS BARIS INI -->
-                        <button class="icon-btn-sm" title="Jalankan Network Scan" onclick="triggerSingleNetworkScan('${escapeHtml(domainName)}')" style="color: #2563eb; background: #eff6ff; border: none; border-radius: 6px; padding: 6px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                        </button>
-                        <button class="icon-btn-sm" title="Options" style="border: none; background: transparent; padding: 6px;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
-                        </button>
-                    </div>
-                </td>
-            </tr>
-        `;
     }).join('');
 
-    // Pagination
-    if (paginationContainer) {
+if (paginationContainer) {
+        // Berikan padding agar serasi dengan card tabel
+        paginationContainer.style.padding = '16px 24px'; 
+        
         paginationContainer.innerHTML = `
-            <div style="font-size: 13px; color: var(--text-secondary);">
-                Showing ${startIdx + 1} to ${endIdx} of ${totalItems} results
+            <div class="pagination-left" style="display: flex; align-items: center;">
+                <span style="font-size: 13px; color: #64748b;">Tampilkan per halaman:</span>
+                <select onchange="window.changeNetRows(this.value)" style="margin-left: 8px; padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13px; outline: none; background: white; color: #1e293b; cursor: pointer;">
+                    <option value="10" ${netRowsPerPage === 10 ? 'selected' : ''}>10</option>
+                    <option value="15" ${netRowsPerPage === 15 ? 'selected' : ''}>15</option>
+                    <option value="25" ${netRowsPerPage === 25 ? 'selected' : ''}>25</option>
+                    <option value="50" ${netRowsPerPage === 50 ? 'selected' : ''}>50</option>
+                </select>
             </div>
-            <div class="pagination-right" style="display: flex; align-items: center; gap: 4px;">
-                <button class="btn btn-outline btn-sm" onclick="changeNetPage(${netCurrentPage - 1})" ${netCurrentPage === 1 ? 'disabled' : ''} style="padding: 6px 10px; min-width: auto; border: none; color: ${netCurrentPage === 1 ? '#cbd5e1' : '#64748b'}; cursor: ${netCurrentPage === 1 ? 'not-allowed' : 'pointer'};">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                </button>
-                <span style="padding: 4px 10px; min-width: auto; background: #2563eb; color: white; border: none; border-radius: 4px; font-size: 13px;">${netCurrentPage}</span>
-                <span style="padding: 4px 6px; font-size: 14px; color: #64748b;">/ ${totalPages}</span>
-                <button class="btn btn-outline btn-sm" onclick="changeNetPage(${netCurrentPage + 1})" ${netCurrentPage === totalPages ? 'disabled' : ''} style="padding: 6px 10px; min-width: auto; border: none; color: ${netCurrentPage === totalPages ? '#cbd5e1' : '#64748b'}; cursor: ${netCurrentPage === totalPages ? 'not-allowed' : 'pointer'};">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                </button>
+            
+            <div class="pagination-right" style="display: flex; align-items: center; gap: 12px;">
+                <button class="btn btn-outline btn-sm" onclick="window.changeNetPage(${netCurrentPage - 1})" ${netCurrentPage === 1 ? 'disabled' : ''} style="padding: 6px 12px; min-width: auto; cursor: ${netCurrentPage === 1 ? 'not-allowed' : 'pointer'}; opacity: ${netCurrentPage === 1 ? '0.5' : '1'}; border-color: #cbd5e1; color: #475569;">Sebelumnya</button>
+                
+                <span style="font-size: 13px; font-weight: 500; color: #64748b; display: flex; align-items: center; gap: 4px;">
+                    Halaman 
+                    <input type="number" min="1" max="${totalPages}" value="${netCurrentPage}" onchange="window.changeNetPage(this.value)" onkeydown="if(event.key==='Enter') { this.blur(); window.changeNetPage(this.value); }" style="width: 45px; text-align: center; padding: 4px 6px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13px; outline: none; background: white; color: #1e293b; margin: 0 4px;"> 
+                    dari <span style="margin-left: 2px;">${totalPages}</span>
+                </span>
+                
+                <button class="btn btn-outline btn-sm" onclick="window.changeNetPage(${netCurrentPage + 1})" ${netCurrentPage === totalPages ? 'disabled' : ''} style="padding: 6px 12px; min-width: auto; cursor: ${netCurrentPage === totalPages ? 'not-allowed' : 'pointer'}; opacity: ${netCurrentPage === totalPages ? '0.5' : '1'}; border-color: #cbd5e1; color: #475569;">Selanjutnya</button>
             </div>
         `;
     }
+    window.syncNetworkSelectAll();
 }
 
+// Fungsi untuk mengganti halaman
 window.changeNetPage = function(newPage) {
-    netCurrentPage = newPage;
+    const parsedPage = parseInt(newPage);
+    if (!isNaN(parsedPage) && parsedPage >= 1) {
+        netCurrentPage = parsedPage;
+        renderNetworkScans();
+    }
+};
+
+// Fungsi untuk mengubah jumlah baris
+window.changeNetRows = function(newRows) {
+    netRowsPerPage = parseInt(newRows);
+    netCurrentPage = 1; // Kembalikan ke halaman 1 saat jumlah baris diubah
     renderNetworkScans();
+};
+
+// =========================================================
+// MEMORI KOTAK CENTANG NETWORK SCANS & SELECT ALL
+// =========================================================
+window.selectedNetworkScans = new Set();
+
+// 1. Fungsi saat klik checkbox satu per satu di baris
+window.toggleNetworkCheckbox = function(e, scanId) {
+    e.stopPropagation(); // Mencegah bentrok klik
+    if (e.target.checked) {
+        window.selectedNetworkScans.add(scanId); // Ingat
+    } else {
+        window.selectedNetworkScans.delete(scanId); // Lupakan
+    }
+    window.syncNetworkSelectAll(); // Cek apakah butuh centang "Select All"
+};
+
+// 2. Fungsi saat klik "Select All" di kepala tabel
+window.toggleAllNetworkScans = function(headerCb) {
+    // Ambil semua kotak centang yang sedang tampil di layar
+    const rowCbs = document.querySelectorAll('#networkScansTableBody input[type="checkbox"]');
+    const isChecked = headerCb.checked;
+
+    rowCbs.forEach(cb => {
+        cb.checked = isChecked; // Ubah visualnya
+        if (isChecked) {
+            window.selectedNetworkScans.add(cb.value); // Simpan semua ke memori
+        } else {
+            window.selectedNetworkScans.delete(cb.value); // Hapus semua dari memori
+        }
+    });
+};
+
+// 3. Fungsi untuk menyinkronkan status visual "Select All"
+window.syncNetworkSelectAll = function() {
+    const selectAllCb = document.getElementById('selectAllNetworkScans');
+    const rowCbs = document.querySelectorAll('#networkScansTableBody input[type="checkbox"]');
+    
+    if (selectAllCb && rowCbs.length > 0) {
+        // Jika SEMUA baris tercentang, maka Select All otomatis tercentang
+        const allChecked = Array.from(rowCbs).every(cb => cb.checked);
+        selectAllCb.checked = allChecked;
+    } else if (selectAllCb) {
+        selectAllCb.checked = false;
+    }
 };
 
 // Render Lower Dashboard Grid (Recent Alerts & Monitored Domains)
@@ -2962,7 +3075,18 @@ function fetchActiveScans() {
         .then(res => res.json())
         .then(data => {
             if (data.status === 'success') {
-                renderWebScannerTable(data.data);
+                const allLive = data.data || [];
+                
+                // Filter cerdas: ID 350 atau 385 adalah Network Scanner. Sisanya lempar ke Web Scanner.
+                liveNetworkScans = allLive.filter(s => s.type.includes('350') || s.type.includes('385') || s.type.toLowerCase().includes('network'));
+                liveWebScans = allLive.filter(s => !liveNetworkScans.includes(s));
+
+                // Perbarui tabel Web Scans
+                renderWebScannerTable(liveWebScans);
+                
+                // Panggil render Network Scans agar memunculkan progress Live
+                if (typeof applyNetworkFilters === 'function') applyNetworkFilters();
+
             } else {
                 const tbody = document.querySelector('#webScannerTable tbody');
                 if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444;">Error: ${data.detail || 'Failed to fetch active scans.'}</td></tr>`;
@@ -2970,8 +3094,6 @@ function fetchActiveScans() {
         })
         .catch(err => {
             console.error('Error fetching active scans:', err);
-            const tbody = document.querySelector('#webScannerTable tbody');
-            if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444;">Failed to connect to backend API.</td></tr>`;
         });
 }
 
@@ -3116,6 +3238,84 @@ function submitWebScan() {
     .catch(err => {
         console.error('Error starting web scan:', err);
         showToast('Error', 'An error occurred while starting the web scan.', '❌');
+    })
+    .finally(() => {
+        btnSubmit.disabled = false;
+        btnSubmit.style.opacity = '1';
+        btnSubmit.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            Launch Scan
+        `;
+    });
+}
+
+// Network Scanner
+
+function openNetworkScanModal() {
+    document.getElementById('networkScanModalOverlay').classList.add('active');
+    const select = document.getElementById('networkScanTargetSelect');
+    
+    if (!allDomains || allDomains.length === 0) {
+        select.innerHTML = '<option value="">No domains available</option>';
+        return;
+    }
+    
+    select.innerHTML = '<option value="">-- Select a target --</option>' + 
+        allDomains.filter(d => d.is_active).map(d => `<option value="${d.domain_name}">${d.domain_name}</option>`).join('');
+
+    // Setup interaktivitas klik pada kotak radio button (Deep vs Light)
+    const radios = document.querySelectorAll('input[name="networkScanType"]');
+    radios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            radios.forEach(r => {
+                const card = r.closest('label');
+                if (r.checked) {
+                    card.style.borderColor = 'var(--color-accent)';
+                    card.style.background = 'rgba(0, 88, 189, 0.04)';
+                } else {
+                    card.style.borderColor = 'var(--color-border)';
+                    card.style.background = '#fff';
+                }
+            });
+        });
+    });
+}
+
+function submitNetworkScan() {
+    const select = document.getElementById('networkScanTargetSelect');
+    const domain = select.value;
+    
+    if (!domain) {
+        showToast('Error', 'Please select a target to scan.', '❌');
+        return;
+    }
+    
+    const btnSubmit = document.getElementById('btnSubmitNetworkScan');
+    btnSubmit.disabled = true;
+    btnSubmit.style.opacity = '0.5';
+    btnSubmit.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation: spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="8"></circle></svg>
+        Launching...
+    `;
+    
+    fetch('/api/network-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targets: [domain] })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showToast('Success', data.message, '✅');
+            document.getElementById('networkScanModalOverlay').classList.remove('active');
+            refreshData(true); // Segarkan tabel di belakang layar
+        } else {
+            showToast('Error', data.detail || data.message, '❌');
+        }
+    })
+    .catch(err => {
+        console.error('Error starting network scan:', err);
+        showToast('Error', 'An error occurred while starting the network scan.', '❌');
     })
     .finally(() => {
         btnSubmit.disabled = false;
