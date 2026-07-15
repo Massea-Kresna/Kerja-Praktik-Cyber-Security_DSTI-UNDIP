@@ -2920,21 +2920,27 @@ document.getElementById('generateReportForm')?.addEventListener('submit', async 
             throw new Error(errData.detail || 'Gagal generate report');
         }
         
-        const data = await resp.json();
+        const blob = await resp.blob(); 
         
-        // Hide modal
+        // Sembunyikan modal dan berikan notifikasi
         document.getElementById('generateReportModalOverlay').classList.remove('active');
         showToast('Success', 'Report successfully generated!', '✅');
         
-        // Trigger file download using anchor tag to bypass popup blockers
-        if (data.file_url) {
-            const a = document.createElement('a');
-            a.href = data.file_url;
-            a.download = data.file_url.split('/').pop() || 'report.pdf';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        }
+        // Buat URL lokal di dalam browser (tidak ada file fisik di server)
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // Beri nama file berdasarkan format yang dipilih pengguna
+        const format = form.report_format.value.toLowerCase(); 
+        a.download = `security_report_${historyId}.${format}`;
+        
+        document.body.appendChild(a);
+        a.click(); // Paksa browser mengunduh
+        document.body.removeChild(a);
+        
+        // Bersihkan memori RAM browser agar tidak bocor (Memory Leak)
+        window.URL.revokeObjectURL(url);
         
     } catch (err) {
         console.error(err);

@@ -1265,16 +1265,15 @@ async def generate_report(req: GenerateReportRequest, current_user = Depends(get
                 if dl_resp.status == 200:
                     pdf_data = await dl_resp.read()
                     
-                    # Simpan ke folder dashboard/reports agar ada cache / archive (opsional)
-                    reports_dir = os.path.join(config.DASHBOARD_DIR, "reports")
-                    os.makedirs(reports_dir, exist_ok=True)
+                    # Mengirim data biner langsung ke memori browser pengguna tanpa menyimpan di server
+                    format_file = req.report_format.lower()
+                    filename = f"security_report_{req.history_id}.{format_file}"
                     
-                    filename = f"on_demand_report_{req.history_id}_{report_id}.{req.report_format.lower()}"
-                    file_path = os.path.join(reports_dir, filename)
-                    with open(file_path, "wb") as f:
-                        f.write(pdf_data)
-                        
-                    return {"status": "success", "file_url": f"/dashboard/reports/{filename}"}
+                    return Response(
+                        content=pdf_data, 
+                        media_type="application/octet-stream", # Format universal untuk unduhan
+                        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+                    )
                     
                 elif dl_resp.status == 202:
                     await asyncio.sleep(5)
