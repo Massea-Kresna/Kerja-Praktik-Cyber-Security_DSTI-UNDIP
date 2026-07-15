@@ -1197,6 +1197,7 @@ async def trigger_network_scan(payload: NetworkScanRequest, background_tasks: Ba
     
     return {"status": "success", "message": f"Network Scan via Pentest-Tools diluncurkan untuk {len(payload.targets)} aset."}
 
+<<<<<<< HEAD
 @app.post("/api/web-scan")
 async def trigger_web_scan(payload: WebScanRequest, background_tasks: BackgroundTasks):
     """Memicu proses Web Scan."""
@@ -1284,6 +1285,155 @@ async def stop_active_scan(req: StopScanRequest, current_user = Depends(get_curr
         if isinstance(e, HTTPException): raise
         raise HTTPException(status_code=500, detail=str(e))
 
+=======
+@app.get("/dashboard/reports/{filename}")
+async def get_pdf_report(filename: str, current_user = Depends(get_current_user)):
+    """Melayani file PDF report, atau membuatnya secara dinamis jika belum ada."""
+    reports_dir = os.path.join(DASHBOARD_PATH, "reports")
+    os.makedirs(reports_dir, exist_ok=True)
+    pdf_path = os.path.join(reports_dir, filename)
+    
+    if os.path.exists(pdf_path):
+        return FileResponse(pdf_path, media_type="application/pdf", filename=filename)
+        
+    # Jika file tidak ada, coba buatkan PDF secara dinamis!
+    # Nama file berformat: pentest_tools_domain_name.pdf
+    # Misal: pentest_tools_undip_ac_id.pdf -> target domain: undip.ac.id
+    if filename.startswith("pentest_tools_") and filename.endswith(".pdf"):
+        domain_part = filename[len("pentest_tools_"):-4]
+        # Cari domain name yang cocok (ubah underscore kembali ke titik)
+        supabase = _get_supabase_or_none()
+        target_domain = None
+        if supabase:
+            try:
+                resp = supabase.table("domains").select("domain_name").execute()
+                for d in resp.data:
+                    dname = d.get("domain_name", "")
+                    if dname.replace(".", "_") == domain_part:
+                        target_domain = dname
+                        break
+            except Exception:
+                pass
+        
+        if not target_domain:
+            target_domain = domain_part.replace("_", ".")
+            
+        # Coba ambil report langsung dari Pentest-Tools API jika API Key terkonfigurasi
+        api_key = config.PENTEST_TOOLS_API_KEY
+        if api_key and api_key != "YOUR_API_KEY_HERE":
+            print(f"[*] Mencoba mendownload PDF Report asli dari Pentest-Tools API untuk {target_domain}")
+            try:
+                headers = {"Authorization": f"Bearer {api_key}"}
+                async with aiohttp.ClientSession() as session:
+                    # 1. Cari target_id untuk domain ini
+                    async with session.get("https://app.pentest-tools.com/api/v2/targets", headers=headers) as t_resp:
+                        if t_resp.status == 200:
+                            targets_data = await t_resp.json()
+                            target_id = None
+                            for t in targets_data.get("data", []):
+                                t_name = t.get("name", "").replace("https://", "").replace("http://", "").split(":")[0].strip("/")
+                                if t_name == target_domain or t.get("name") == target_domain:
+                                    target_id = t["id"]
+                                    break
+                            
+                            if target_id:
+                                # 2. Cari scan_id terakhir yang sudah finished
+                                async with session.get("https://app.pentest-tools.com/api/v2/scans", headers=headers) as s_resp:
+                                    if s_resp.status == 200:
+                                        scans_data = await s_resp.json()
+                                        scans = [s for s in scans_data.get("data", []) if s.get("target_id") == target_id and s.get("status_name") in ["finished", "completed"]]
+                                        scans.sort(key=lambda x: x.get("id", 0), reverse=True)
+                                        if scans:
+                                            scan_id = scans[0]["id"]
+                                            # 3. Minta pembuatan PDF Report
+                                            payload = {
+                                                "source": "scans",
+                                                "resources": [scan_id],
+                                                "format": "pdf",
+                                                "group_by": "target"
+                                            }
+                                            async with session.post("https://app.pentest-tools.com/api/v2/reports", headers=headers, json=payload) as r_resp:
+                                                if r_resp.status in (200, 201, 202):
+                                                    report_json = await r_resp.json()
+                                                    report_id = report_json["data"]["report_id"]
+                                                    
+                                                    # 4. Polling untuk download
+                                                    dl_url = f"https://app.pentest-tools.com/api/v2/reports/{report_id}/download"
+                                                    for _ in range(15):
+                                                        async with session.get(dl_url, headers=headers) as dl_resp:
+                                                            if dl_resp.status == 200:
+                                                                pdf_data = await dl_resp.read()
+                                                                with open(pdf_path, "wb") as f:
+                                                                    f.write(pdf_data)
+                                                                print(f"[+] Berhasil mengunduh PDF asli Pentest-Tools untuk {target_domain}")
+                                                                return FileResponse(pdf_path, media_type="application/pdf", filename=filename)
+                                                            elif dl_resp.status == 202:
+                                                                await asyncio.sleep(2)
+                                                            else:
+                                                                break
+            except Exception as e:
+                print(f"[-] Gagal mengambil PDF dari Pentest-Tools API: {e}")
+            
+        # Fallback: Dapatkan data kerentanan terbaru untuk domain ini
+        open_ports = []
+        technologies = {}
+        vulnerabilities = []
+        risk_level = "LOW"
+        risk_score = 3.0
+        ip_address = ""
+        scan_date = datetime.now(timezone(timedelta(hours=7))).strftime("%Y-%m-%d %H:%M:%S")
+        
+        if supabase:
+            try:
+                domain_resp = supabase.table("domains").select("id, domain_name, ip_address").eq("domain_name", target_domain).limit(1).execute()
+                if domain_resp.data:
+                    dom = domain_resp.data[0]
+                    ip_address = dom.get("ip_address", "")
+                    history_resp = supabase.table("scan_history").select("id, risk_score, risk_level, scan_date, raw_json").eq("domain_id", dom["id"]).order("scan_date", desc=True).limit(1).execute()
+                    if history_resp.data:
+                        scan = history_resp.data[0]
+                        risk_score = scan.get("risk_score", 3.0)
+                        risk_level = scan.get("risk_level", "LOW")
+                        scan_date = scan.get("scan_date")
+                        
+                        ports_resp = supabase.table("open_ports").select("port_number, service_name").eq("history_id", scan["id"]).execute()
+                        open_ports = ports_resp.data or []
+                        
+                        tech_resp = supabase.table("technologies").select("web_server, cms").eq("history_id", scan["id"]).execute()
+                        technologies = tech_resp.data[0] if tech_resp.data else {}
+                        
+                        vulns_resp = supabase.table("scan_result").select("severity, check_type, title, description, recommendation").eq("history_id", scan["id"]).execute()
+                        low_info_vulns = scan.get("raw_json", [])
+                        if not isinstance(low_info_vulns, list):
+                            low_info_vulns = []
+                        vulnerabilities = (vulns_resp.data or []) + low_info_vulns
+            except Exception as e:
+                print(f"[-] Gagal mengambil detail domain untuk PDF: {e}")
+                
+        # Jika sama sekali tidak ada scan history di DB, kita masih buat PDF kosong/informasional
+        # agar user mendapat report bahwa domain belum discan
+        if not vulnerabilities:
+            vulnerabilities = [
+                {
+                    "severity": "info",
+                    "check_type": "Web Scanner",
+                    "title": "No Scan History Found",
+                    "description": "Tidak ada data kerentanan yang ditemukan untuk target ini karena belum pernah dilakukan scan atau data tidak lengkap.",
+                    "recommendation": "Silakan lakukan pemindaian (Web Scan atau Network Scan) pada dashboard terlebih dahulu."
+                }
+            ]
+            
+        try:
+            from scanner.pdf_generator import generate_pdf_report
+            generate_pdf_report(target_domain, ip_address, scan_date, risk_level, risk_score, open_ports, technologies, vulnerabilities, pdf_path)
+            if os.path.exists(pdf_path):
+                return FileResponse(pdf_path, media_type="application/pdf", filename=filename)
+        except Exception as e:
+            print(f"[-] Gagal generate PDF report: {e}")
+            raise HTTPException(status_code=500, detail=f"Gagal memproduksi PDF report secara dinamis: {e}")
+            
+    raise HTTPException(status_code=404, detail="File PDF report tidak ditemukan.")
+>>>>>>> 585a3bd (feat: Integrate authentic Pentest-Tools PDF report download with dynamic fallback)
 
 # ===================================================================
 # Mount Static Files — HARUS di bawah semua route API
