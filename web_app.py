@@ -18,10 +18,12 @@ import db_manager
 import config
 import asyncio
 import aiohttp
-import json
-import os
+import httpx
 import uuid
-from typing import Optional
+import os
+import json
+from typing import List, Optional
+import active_scan_manager
 from datetime import datetime, timedelta, timezone
 from scanner.pentest_tools_scheduler import process_domain_scan
 from scanner.pentest_tools_scheduler import process_network_scan
@@ -1042,10 +1044,32 @@ class NetworkScanRequest(BaseModel):
 
 async def run_network_scan_background(targets: List[str]):
     """Fungsi latar belakang untuk menjalankan Network Scan pada beberapa target."""
-    semaphore = asyncio.Semaphore(5) # Membatasi konkurensi agar tidak melanggar batas API
+    semaphore = asyncio.Semaphore(5)
     async with aiohttp.ClientSession() as session:
         tasks = [process_network_scan(session, target, semaphore) for target in targets]
-        await asyncio.gather(*tasks)
+        if tasks:
+            await asyncio.gather(*tasks)
+
+async def run_web_scan_background(targets: List[str]):
+    """Fungsi latar belakang untuk menjalankan Web Scan pada beberapa target."""
+    semaphore = asyncio.Semaphore(5)
+    async with aiohttp.ClientSession() as session:
+        tasks = [process_domain_scan(session, target, semaphore) for target in targets]
+        if tasks:
+            await asyncio.gather(*tasks)
+
+class WebScanRequest(BaseModel):
+    targets: List[str]
+
+@app.post("/api/web-scan")
+async def trigger_web_scan(payload: WebScanRequest, background_tasks: BackgroundTasks):
+    """Memicu proses Web Scan."""
+    if not payload.targets:
+        raise HTTPException(status_code=400, detail="Tidak ada target yang diberikan.")
+        
+    background_tasks.add_task(run_web_scan_background, payload.targets)
+    
+    return {"status": "success", "message": f"Web Scan via Pentest-Tools diluncurkan untuk {len(payload.targets)} aset."}
 
 @app.post("/api/network-scan")
 async def trigger_network_scan(payload: NetworkScanRequest, background_tasks: BackgroundTasks):
@@ -1057,6 +1081,84 @@ async def trigger_network_scan(payload: NetworkScanRequest, background_tasks: Ba
     
     return {"status": "success", "message": f"Network Scan via Pentest-Tools diluncurkan untuk {len(payload.targets)} aset."}
 
+@app.get("/api/scans/active")
+async def get_active_scans(current_user = Depends(get_current_user)):
+    """Mendapatkan daftar scan yang sedang berjalan langsung dari API Pentest-Tools."""
+    headers = {
+        "Authorization": f"Bearer {config.PENTEST_TOOLS_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    result = []
+    try:
+        async with aiohttp.ClientSession() as session:
+            # Fetch all scans
+            scans_url = f"{config.PENTEST_TOOLS_BASE_URL}/scans"
+            async with session.get(scans_url, headers=headers, timeout=10) as resp:
+                if resp.status != 200:
+                    return {"status": "error", "data": [], "message": f"Gagal mengambil scan: {resp.status}"}
+                scans_data = await resp.json()
+                all_scans = scans_data.get("data", [])
+            
+            # Fetch all targets to map target_id to domain name
+            targets_url = f"{config.PENTEST_TOOLS_BASE_URL}/targets"
+            targets_map = {}
+            async with session.get(targets_url, headers=headers, timeout=10) as resp:
+                if resp.status == 200:
+                    targets_data = await resp.json()
+                    for t in targets_data.get("data", []):
+                        targets_map[t["id"]] = t.get("name", "Unknown")
+
+            # Filter only active scans
+            active_statuses = ["waiting", "running", "queued"]
+            for scan in all_scans:
+                if scan.get("status_name") in active_statuses:
+                    # Mapping data to frontend expected format
+                    target_id = scan.get("target_id")
+                    domain = targets_map.get(target_id, f"Target ID: {target_id}")
+                    
+                    # Convert HTTP URL to domain if needed, but it's fine to display raw target
+                    result.append({
+                        "scan_id": scan.get("id"),
+                        "type": f"Pentest Tool {scan.get('tool_id')}",
+                        "domain": domain,
+                        "start_time": scan.get("start_time", "N/A"),
+                        "live_status": scan.get("status_name"),
+                        "progress": scan.get("progress", 0)
+                    })
+    except Exception as e:
+        print(f"Error fetching live scans: {e}")
+        return {"status": "error", "data": [], "message": str(e)}
+
+    return {"status": "success", "data": result}
+
+class StopScanRequest(BaseModel):
+    scan_id: int
+
+@app.post("/api/scans/stop")
+async def stop_active_scan(req: StopScanRequest, current_user = Depends(get_current_user)):
+    """Menghentikan scan yang sedang berjalan di Pentest-Tools."""
+    scan_id = req.scan_id
+    url = f"{config.PENTEST_TOOLS_BASE_URL}/scans/{scan_id}/stop"
+    headers = {
+        "Authorization": f"Bearer {config.PENTEST_TOOLS_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, timeout=15) as resp:
+                if resp.status in (200, 201, 202, 204):
+                    active_scan_manager.remove_active_scan(scan_id)
+                    return {"status": "success", "message": f"Scan {scan_id} berhasil dihentikan."}
+                else:
+                    err = await resp.text()
+                    raise HTTPException(status_code=resp.status, detail=f"Gagal menghentikan scan: {err}")
+    except Exception as e:
+        if isinstance(e, HTTPException): raise
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ===================================================================
 # Mount Static Files — HARUS di bawah semua route API
 # ===================================================================
@@ -1066,6 +1168,115 @@ app.mount("/dashboard", StaticFiles(directory=DASHBOARD_PATH, html=True), name="
 # ===================================================================
 # Main
 # ===================================================================
+class GenerateReportRequest(BaseModel):
+    history_id: int
+    report_type: str = "pentest_report"
+    report_format: str = "pdf"
+    group_findings_by: str = "target"
+    include_reproduce: bool = False
+    include_informational: bool = True
+    include_false_positives: bool = False
+    include_ignored: bool = False
+    include_not_verified: bool = True
+    include_accepted: bool = True
+    include_fixed: bool = True
+
+@app.post("/api/reports/generate")
+async def generate_report(req: GenerateReportRequest, current_user = Depends(get_current_user)):
+    """Generate on-demand Pentest-Tools report based on UI modal filters."""
+    supabase = _get_supabase_or_none()
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    # 1. Look up the history_id to get the pt_scan_id
+    try:
+        resp = supabase.table("scan_history").select("raw_json").eq("id", req.history_id).limit(1).execute()
+        if not resp.data:
+            raise HTTPException(status_code=404, detail="Scan history not found")
+        raw_json = resp.data[0].get("raw_json")
+        pt_scan_id = None
+        
+        # Determine pt_scan_id based on raw_json structure
+        if isinstance(raw_json, dict) and "pt_scan_id" in raw_json:
+            pt_scan_id = raw_json["pt_scan_id"]
+        elif isinstance(raw_json, list):
+            # Fallback if somehow it's old structure, we can't generate it easily unless we parse it.
+            pass
+            
+        if not pt_scan_id:
+            raise HTTPException(status_code=400, detail="Cannot generate report for this history because it does not contain a valid Pentest-Tools scan ID (pt_scan_id).")
+    except Exception as e:
+        if isinstance(e, HTTPException): raise
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        
+    # 2. Call Pentest-Tools API to Generate Report
+    url = f"{config.PENTEST_TOOLS_BASE_URL}/reports"
+    headers = {
+        "Authorization": f"Bearer {config.PENTEST_TOOLS_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    # Map filters
+    severities = ["critical", "high", "medium", "low"]
+    if req.include_informational:
+        severities.append("info")
+        
+    status_filters = []
+    if req.include_false_positives: status_filters.append("false positive")
+    if req.include_ignored: status_filters.append("ignored")
+    if req.include_not_verified: status_filters.append("not verified")
+    if req.include_accepted: status_filters.append("accepted risk")
+    if req.include_fixed: status_filters.append("fixed")
+    
+    payload = {
+        "source": "scans",
+        "resources": [pt_scan_id],
+        "format": req.report_format.lower(),
+        "type": req.report_type,
+        "group_by": req.group_findings_by,
+        "filters": {
+            "include_how_to_reproduce": req.include_reproduce,
+            "severity": severities,
+            "status": status_filters
+        }
+    }
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=headers, json=payload, timeout=30) as resp:
+            if resp.status not in (200, 201, 202):
+                err = await resp.text()
+                raise HTTPException(status_code=resp.status, detail=f"Gagal membuat report: {err}")
+                
+            resp_json = await resp.json()
+            report_id = resp_json["data"]["report_id"]
+            
+        # 3. Poll for completion
+        download_url = f"{config.PENTEST_TOOLS_BASE_URL}/reports/{report_id}/download"
+        
+        for _ in range(40): # Wait up to 200 seconds
+            async with session.get(download_url, headers={"Authorization": f"Bearer {config.PENTEST_TOOLS_API_KEY}"}) as dl_resp:
+                if dl_resp.status == 200:
+                    pdf_data = await dl_resp.read()
+                    
+                    # Simpan ke folder dashboard/reports agar ada cache / archive (opsional)
+                    reports_dir = os.path.join(config.DASHBOARD_DIR, "reports")
+                    os.makedirs(reports_dir, exist_ok=True)
+                    
+                    filename = f"on_demand_report_{req.history_id}_{report_id}.{req.report_format.lower()}"
+                    file_path = os.path.join(reports_dir, filename)
+                    with open(file_path, "wb") as f:
+                        f.write(pdf_data)
+                        
+                    return {"status": "success", "file_url": f"/dashboard/reports/{filename}"}
+                    
+                elif dl_resp.status == 202:
+                    await asyncio.sleep(5)
+                else:
+                    err = await dl_resp.text()
+                    raise HTTPException(status_code=dl_resp.status, detail=f"Gagal mengunduh report: {err}")
+                    
+        raise HTTPException(status_code=408, detail="Timeout saat menunggu pembuatan report selesai.")
+
 if __name__ == "__main__":
     import uvicorn
     print("=" * 60)
