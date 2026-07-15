@@ -2003,44 +2003,77 @@ function openThreatModal(vuln) {
     document.getElementById('modalDesc').textContent = vuln.description || 'No description available.';
     document.getElementById('modalRecommendation').textContent = vuln.recommendation || 'No recommendation provided.';
 
-    // LOGIKA PENGKATEGORIAN OTOMATIS (ADVANCED)
+// ==========================================
+    // LOGIKA PENGKATEGORIAN OTOMATIS (ULTIMATE VERSION)
+    // ==========================================
     const checkType = (vuln.check_type || '').toLowerCase();
     const titleLower = (vuln.title || '').toLowerCase();
-    
-    // Gabungkan string untuk pencarian kata kunci yang lebih luas
     const threatSignature = checkType + " " + titleLower;
     
-    // 1. Kategori Ancaman (Badge Atas) yang Sangat Mendetail
     const categoryBadge = document.getElementById('modalThreatCategory');
     if (categoryBadge) {
         let badgeText = 'Anomaly Detection';
-        let badgeClass = 'badge badge-orange-outline';
+        let badgeClass = 'badge badge-medium';
 
-if (threatSignature.includes('sql') || threatSignature.includes('injection') || threatSignature.includes('xss')) {
+        // 1. CRITICAL EXPLOITS & INJECTIONS (Paling mematikan)
+        if (threatSignature.includes('sql') || threatSignature.includes('injection') || threatSignature.includes('xss') || threatSignature.includes('cross-site scripting') || threatSignature.includes('rce') || threatSignature.includes('ssrf') || threatSignature.includes('xxe') || threatSignature.includes('command execution')) {
             badgeText = 'Critical Web Exploit';
-            badgeClass = 'badge badge-critical'; 
-        } else if (threatSignature.includes('ssl') || threatSignature.includes('tls') || threatSignature.includes('certificate')) {
-            badgeText = 'SSL/TLS Misconfiguration';
-            badgeClass = 'badge badge-info'; 
-        } else if (threatSignature.includes('header') || threatSignature.includes('hsts') || threatSignature.includes('cors') || threatSignature.includes('clickjacking')) {
-            // Kategori baru khusus untuk HTTP Headers yang hilang/salah
-            badgeText = 'Security Header Missing';
-            badgeClass = 'badge badge-low'; // Warna biru muda
-        } else if (threatSignature.includes('wordpress') || threatSignature.includes('cms')) {
+            badgeClass = 'badge badge-critical'; // Merah gelap
+            
+        // 2. BROKEN ACCESS CONTROL & AUTHENTICATION
+        } else if (threatSignature.includes('auth') || threatSignature.includes('credential') || threatSignature.includes('bypass') || threatSignature.includes('brute force') || threatSignature.includes('traversal') || threatSignature.includes('idor') || threatSignature.includes('default password')) {
+            badgeText = 'Access Control Flaw';
+            badgeClass = 'badge badge-high'; // Merah
+            
+        // 3. CROSS-SITE REQUEST FORGERY
+        } else if (threatSignature.includes('csrf') || threatSignature.includes('cross-site request forgery')) {
+            badgeText = 'CSRF Vulnerability';
+            badgeClass = 'badge badge-high'; 
+
+        // 4. VULNERABLE & OUTDATED COMPONENTS (CVEs)
+        } else if (threatSignature.includes('cve-') || threatSignature.includes('outdated') || threatSignature.includes('vulnerabilities found for') || threatSignature.includes('deprecated') || threatSignature.includes('end-of-life') || threatSignature.includes('version')) {
+            badgeText = 'Vulnerable Component';
+            badgeClass = 'badge badge-high'; 
+
+        // 5. SSL / TLS / CRYPTOGRAPHY FAILURES
+        } else if (threatSignature.includes('ssl') || threatSignature.includes('tls') || threatSignature.includes('certificate') || threatSignature.includes('cipher') || threatSignature.includes('poodle') || threatSignature.includes('heartbleed') || threatSignature.includes('weak encryption')) {
+            badgeText = 'Crypto & SSL Flaw';
+            badgeClass = 'badge badge-medium'; // Oranye
+            
+        // 6. CMS SPECIFIC (WordPress, Joomla, Plugins)
+        } else if (threatSignature.includes('wordpress') || threatSignature.includes('joomla') || threatSignature.includes('drupal') || threatSignature.includes('plugin') || threatSignature.includes('theme')) {
             badgeText = 'CMS Vulnerability';
             badgeClass = 'badge badge-medium'; 
-        } else if (threatSignature.includes('information') || threatSignature.includes('disclosure') || threatSignature.includes('leak') || threatSignature.includes('directory')) {
+            
+        // 7. COOKIE & SESSION MANAGEMENT
+        } else if (threatSignature.includes('cookie') || threatSignature.includes('httponly') || threatSignature.includes('secure flag') || threatSignature.includes('samesite') || threatSignature.includes('session')) {
+            badgeText = 'Insecure Session/Cookie';
+            badgeClass = 'badge badge-medium';
+
+        // 8. SECURITY MISCONFIGURATION (Headers)
+        } else if (threatSignature.includes('header') || threatSignature.includes('hsts') || threatSignature.includes('csp') || threatSignature.includes('clickjacking') || threatSignature.includes('cors') || threatSignature.includes('mime-sniffing')) {
+            badgeText = 'Security Header Missing';
+            badgeClass = 'badge badge-low'; // Biru muda
+            
+        // 9. INFORMATION DISCLOSURE
+        } else if (threatSignature.includes('information') || threatSignature.includes('disclosure') || threatSignature.includes('leak') || threatSignature.includes('directory') || threatSignature.includes('error message') || threatSignature.includes('stack trace') || threatSignature.includes('phpinfo')) {
             badgeText = 'Information Disclosure';
             badgeClass = 'badge badge-low'; 
-        } else if (threatSignature.includes('vulnerabilities found for') || threatSignature.includes('outdated') || threatSignature.includes('version')) {
-            badgeText = 'Vulnerable Component';
-            badgeClass = 'badge badge-medium';
-        } else if (threatSignature.includes('network ') || /\bport\b/.test(threatSignature)) {
+            
+        // 10. DNS, MAIL, & INFRASTRUCTURE
+        } else if (threatSignature.includes('dns') || threatSignature.includes('spf') || threatSignature.includes('dkim') || threatSignature.includes('dmarc') || threatSignature.includes('zone transfer') || threatSignature.includes('smtp') || threatSignature.includes('relay')) {
+            badgeText = 'DNS/Mail Misconfig';
+            badgeClass = 'badge badge-info'; // Hijau/Biru Info
+            
+        // 11. NETWORK VULNERABILITY (Pastikan di bawah, menggunakan \b agar akurat)
+        } else if (threatSignature.includes('network ') || /\bport\b/.test(threatSignature) || threatSignature.includes('tcp') || threatSignature.includes('udp') || threatSignature.includes('ftp') || threatSignature.includes('ssh')) {
             badgeText = 'Network Vulnerability';
             badgeClass = 'badge badge-high'; 
+
+        // 12. DEFAULT FALLBACK
         } else {
             badgeText = 'Web Vulnerability'; 
-            badgeClass = 'badge badge-orange-outline';
+            badgeClass = 'badge badge-medium'; 
         }
 
         categoryBadge.textContent = badgeText;
@@ -2053,7 +2086,8 @@ if (threatSignature.includes('sql') || threatSignature.includes('injection') || 
     if (typeBadge) typeBadge.textContent = threatTypeStr;
 
     // 3. Program Pemindai
-    const programName = threatSignature.includes('network') ? 'network-scanner' : 'web-scanner';
+    // Kita gunakan regex agar 'network' deteksinya lebih aman
+    const programName = (threatSignature.includes('network ') || /\bport\b/.test(threatSignature)) ? 'network-scanner' : 'web-scanner';
     const progBadge = document.getElementById('modalProgramName');
     if (progBadge) progBadge.textContent = programName;
 
