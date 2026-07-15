@@ -82,6 +82,7 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     username: str
     password: str
+    remember_me: Optional[bool] = False
 
 # ===================================================================
 # Auth Dependencies
@@ -215,12 +216,13 @@ async def login_user(user_data: UserLogin, response: Response):
     session_id = str(uuid.uuid4())
     db_manager.update_user_session(user["username"], session_id, True)
     
-    # Simpan di cookie (maksimal aktif 24 jam)
+    # Simpan di cookie (maksimal aktif 30 hari jika remember me)
+    cookie_max_age = 2592000 if user_data.remember_me else 86400
     response.set_cookie(
         key="session_id", 
         value=session_id, 
         httponly=True, 
-        max_age=86400, 
+        max_age=cookie_max_age, 
         samesite="lax",
         path="/"
     )
