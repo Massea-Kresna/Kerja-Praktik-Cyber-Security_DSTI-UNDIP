@@ -1050,7 +1050,7 @@ function updateSortIcons() {
     }
 }
 
-async function loadVulnerabilities() {
+async function loadVulnerabilities(preservePage = false) {
     try {
         const resp = await fetch(`${API_BASE}/api/scan-history?limit=1000`);
         const data = await resp.json();
@@ -1383,12 +1383,14 @@ function openScanModalByGlobalIndex(index) {
 // ==========================================================================
 // Inventory (Domains)
 // ==========================================================================
-async function loadDomains() {
+async function loadDomains(preservePage = false) {
     try {
         const resp = await fetch(`${API_BASE}/api/domains`);
         const data = await resp.json();
         allDomains = data.data || [];
-        domainCurrentPage = 1;
+        if (!preservePage) {
+            domainCurrentPage = 1;
+        }
         renderInventoryList();
 
         const manageLink = document.getElementById('manageDomainsLink');
