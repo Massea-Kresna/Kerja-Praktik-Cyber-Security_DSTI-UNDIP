@@ -535,6 +535,12 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
                 
                 vuln_count = len(scan.get("scan_result") or [])
                 raw_json = scan.get("raw_json")
+                if isinstance(raw_json, str):
+                    import json
+                    try:
+                        raw_json = json.loads(raw_json)
+                    except:
+                        raw_json = []
                 if isinstance(raw_json, list):
                     vuln_count += len(raw_json)
                 domains_data[domain_name][bucket_index] = vuln_count
@@ -671,6 +677,12 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
                         
                 # Hitung dari raw_json (Low/Info)
                 raw_json = scan.get("raw_json")
+                if isinstance(raw_json, str):
+                    import json
+                    try:
+                        raw_json = json.loads(raw_json)
+                    except:
+                        raw_json = []
                 if isinstance(raw_json, list):
                     for v in raw_json:
                         sev = (v.get("severity") or "").upper()
@@ -717,6 +729,90 @@ def get_domains(search: Optional[str] = Query(None, description="Filter domain b
         return {"source": "supabase", "data": resp.data, "total": len(resp.data)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class DomainCreate(BaseModel):
+    domain_name: str
+    ip_address: Optional[str] = ""
+    is_active: Optional[bool] = True
+
+class DomainUpdate(BaseModel):
+    domain_name: Optional[str] = None
+    ip_address: Optional[str] = None
+    is_active: Optional[bool] = None
+
+@app.post("/api/domains")
+def create_domain(payload: DomainCreate, current_user = Depends(get_current_user)):
+    """Menambahkan domain baru"""
+    supabase = _get_supabase_or_none()
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not configured")
+        
+    try:
+        existing = supabase.table("domains").select("id").eq("domain_name", payload.domain_name).execute()
+        if existing.data:
+            raise HTTPException(status_code=400, detail="Domain sudah terdaftar")
+            
+        data = {
+            "domain_name": payload.domain_name,
+            "ip_address": payload.ip_address,
+            "is_active": payload.is_active
+        }
+        resp = supabase.table("domains").insert(data).execute()
+        return {"status": "ok", "message": "Domain berhasil ditambahkan", "data": resp.data[0] if resp.data else None}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/domains/{domain_id}")
+def update_domain(domain_id: int, payload: DomainUpdate, current_user = Depends(get_current_user)):
+    """Memperbarui data domain"""
+    supabase = _get_supabase_or_none()
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not configured")
+        
+    try:
+        data = {}
+        if payload.domain_name is not None:
+            existing = supabase.table("domains").select("id").eq("domain_name", payload.domain_name).execute()
+            if existing.data and str(existing.data[0]["id"]) != str(domain_id):
+                raise HTTPException(status_code=400, detail="Nama domain sudah digunakan")
+            data["domain_name"] = payload.domain_name
+        if payload.ip_address is not None:
+            data["ip_address"] = payload.ip_address
+        if payload.is_active is not None:
+            data["is_active"] = payload.is_active
+            
+        if not data:
+            return {"status": "ok", "message": "Tidak ada perubahan"}
+            
+        resp = supabase.table("domains").update(data).eq("id", domain_id).execute()
+        if not resp.data:
+            raise HTTPException(status_code=404, detail="Domain tidak ditemukan")
+        return {"status": "ok", "message": "Domain berhasil diperbarui", "data": resp.data[0]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/domains/{domain_id}")
+def delete_domain(domain_id: int, current_user = Depends(get_current_user)):
+    """Menghapus domain"""
+    supabase = _get_supabase_or_none()
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not configured")
+        
+    try:
+        resp = supabase.table("domains").delete().eq("id", domain_id).execute()
+        if not resp.data:
+            raise HTTPException(status_code=404, detail="Domain tidak ditemukan")
+        return {"status": "ok", "message": "Domain berhasil dihapus"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # ===================================================================

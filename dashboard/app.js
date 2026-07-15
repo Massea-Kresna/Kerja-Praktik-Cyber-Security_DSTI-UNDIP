@@ -332,24 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    const exportBtn = document.getElementById('exportDomainsBtn');
-    if (exportBtn) {
-        exportBtn.addEventListener('click', () => {
-            const domainsToExport = allDomains.map(d => d.domain_name);
-            if (domainsToExport.length === 0) {
-                showToast('Info', 'Tidak ada domain untuk diekspor', 'ℹ️');
-                return;
-            }
-            const blob = new Blob([domainsToExport.join('\n')], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'domains_export.txt';
-            a.click();
-            URL.revokeObjectURL(url);
-            showToast('Sukses', 'Berhasil mengekspor domain', '✅');
-        });
-    }
+    // Removed old exportDomainsBtn listener since it's now handled by global exportDomains function.
 
     const importBtn = document.getElementById('importDomainsBtn');
     const importInput = document.getElementById('importDomainsInput');
@@ -365,45 +348,52 @@ document.addEventListener('DOMContentLoaded', () => {
             const reader = new FileReader();
             reader.onload = async (e) => {
                 const content = e.target.result;
-                let importedDomains = [];
+                let importedData = [];
                 
                 if (file.name.endsWith('.json')) {
                     try {
                         const data = JSON.parse(content);
                         if (Array.isArray(data)) {
-                            importedDomains = data.map(d => d.domain_name || d).filter(d => typeof d === 'string');
+                            importedData = data.map(d => {
+                                if (typeof d === 'string') return { domain_name: d, ip_address: '' };
+                                return { domain_name: d.domain_name, ip_address: d.ip_address || '' };
+                            }).filter(d => d.domain_name);
                         }
                     } catch (err) {
                         showToast('Error', 'Format JSON tidak valid', '❌');
                         return;
                     }
                 } else {
-                    importedDomains = content.split('\n').map(d => d.trim()).filter(d => d.length > 0);
+                    const lines = content.split('\n').map(d => d.trim()).filter(d => d.length > 0);
+                    importedData = lines.map(line => {
+                        const parts = line.split(',');
+                        return {
+                            domain_name: parts[0].trim(),
+                            ip_address: parts.length > 1 ? parts[1].trim() : ''
+                        };
+                    }).filter(d => d.domain_name);
                 }
                 
-                if (importedDomains.length > 0) {
-                    const existingDomains = allDomains.map(d => d.domain_name);
-                    let selectedCount = 0;
-                    importedDomains.forEach(d => {
-                        if (existingDomains.includes(d)) {
-                            selectedDomains.add(d);
-                            selectedCount++;
+                if (importedData.length > 0) {
+                    showToast('Info', `Mengimpor ${importedData.length} domain...`, 'ℹ️');
+                    let addedCount = 0;
+                    for (const item of importedData) {
+                        try {
+                            const resp = await fetch(`${API_BASE}/api/domains`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(item)
+                            });
+                            if (resp.ok) addedCount++;
+                        } catch (err) {
+                            console.error('Error importing', item.domain_name, err);
                         }
-                    });
-                    
-                    localStorage.setItem('dsti_saved_targets', JSON.stringify([...selectedDomains]));
-                    refreshCheckboxUI();
-                    
-                    if (selectedCount > 0) {
-                        showToast('Import', `Berhasil mengimpor dan memilih ${selectedCount} domain.`, '✅');
-                        // switch view to show the selected ones
-                        switchView('inventory');
-                    } else {
-                        showToast('Import', `Tidak ada domain yang cocok dengan database dari ${importedDomains.length} yang diimpor.`, '⚠️');
                     }
+                    
+                    showToast('Import Selesai', `Berhasil menambahkan ${addedCount} dari ${importedData.length} domain.`, '✅');
+                    loadDomains();
                 }
                 
-                // reset input
                 importInput.value = '';
             };
             reader.readAsText(file);
@@ -990,6 +980,9 @@ window.renderSevTrendChart = function () {
                         bodyFont: { size: 12 },
                         mode: 'index',
                         intersect: false,
+                        filter: function (tooltipItem) {
+                            return tooltipItem.parsed.y !== 0;
+                        },
                         callbacks: {
                             label: function (context) {
                                 let label = context.dataset.label || '';
@@ -1381,8 +1374,134 @@ function openScanModalByGlobalIndex(index) {
 }
 
 // ==========================================================================
-// Inventory (Domains)
+// Inventory (Domains) & CRUD
 // ==========================================================================
+
+const domainModalOverlay = document.getElementById('domainModalOverlay');
+const domainForm = document.getElementById('domainForm');
+const addDomainBtn = document.getElementById('addDomainBtn');
+const closeDomainModalBtn = document.getElementById('closeDomainModalBtn');
+const domainIdInput = document.getElementById('domainIdInput');
+const domainNameInput = document.getElementById('domainNameInput');
+const domainIpInput = document.getElementById('domainIpInput');
+const domainErrorMsg = document.getElementById('domainErrorMsg');
+const domainModalTitle = document.getElementById('domainModalTitle');
+
+if (addDomainBtn) {
+    addDomainBtn.addEventListener('click', () => {
+        domainIdInput.value = '';
+        domainNameInput.value = '';
+        domainIpInput.value = '';
+        domainErrorMsg.style.display = 'none';
+        domainModalTitle.textContent = 'Tambah Domain';
+        domainModalOverlay.classList.add('active');
+    });
+}
+
+if (closeDomainModalBtn) {
+    closeDomainModalBtn.addEventListener('click', () => {
+        domainModalOverlay.classList.remove('active');
+    });
+}
+
+function openEditDomainModal(domain) {
+    domainIdInput.value = domain.id;
+    domainNameInput.value = domain.domain_name;
+    domainIpInput.value = domain.ip_address || '';
+    domainErrorMsg.style.display = 'none';
+    domainModalTitle.textContent = 'Edit Domain';
+    domainModalOverlay.classList.add('active');
+}
+
+if (domainForm) {
+    domainForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = domainIdInput.value;
+        const payload = {
+            domain_name: domainNameInput.value,
+            ip_address: domainIpInput.value
+        };
+        
+        try {
+            const url = id ? `${API_BASE}/api/domains/${id}` : `${API_BASE}/api/domains`;
+            const method = id ? 'PUT' : 'POST';
+            const resp = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            
+            if (resp.ok) {
+                showToast('Sukses', data.message || 'Domain berhasil disimpan', '✅');
+                domainModalOverlay.classList.remove('active');
+                loadDomains();
+            } else {
+                domainErrorMsg.textContent = data.detail || 'Terjadi kesalahan';
+                domainErrorMsg.style.display = 'block';
+            }
+        } catch (err) {
+            domainErrorMsg.textContent = 'Koneksi error';
+            domainErrorMsg.style.display = 'block';
+        }
+    });
+}
+
+async function deleteDomain(id) {
+    if (!confirm('Yakin ingin menghapus domain ini?')) return;
+    
+    try {
+        const resp = await fetch(`${API_BASE}/api/domains/${id}`, { method: 'DELETE' });
+        const data = await resp.json();
+        if (resp.ok) {
+            showToast('Sukses', 'Domain berhasil dihapus', '✅');
+            loadDomains();
+        } else {
+            showToast('Error', data.detail || 'Gagal menghapus domain', '❌');
+        }
+    } catch (err) {
+        showToast('Error', 'Koneksi error', '❌');
+    }
+}
+
+window.exportDomains = function(format) {
+    if (!allDomains || allDomains.length === 0) {
+        showToast('Info', 'Tidak ada domain untuk diekspor', 'ℹ️');
+        return;
+    }
+    
+    let content = '';
+    let mimeType = '';
+    let filename = '';
+    
+    if (format === 'txt') {
+        const lines = allDomains.map(d => {
+            if (d.ip_address) return `${d.domain_name},${d.ip_address}`;
+            return d.domain_name;
+        });
+        content = lines.join('\n');
+        mimeType = 'text/plain';
+        filename = 'domains_export.txt';
+    } else if (format === 'json') {
+        const exportData = allDomains.map(d => ({
+            domain_name: d.domain_name,
+            ip_address: d.ip_address || '',
+            is_active: d.is_active
+        }));
+        content = JSON.stringify(exportData, null, 2);
+        mimeType = 'application/json';
+        filename = 'domains_export.json';
+    }
+    
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Sukses', `Berhasil mengekspor domain dalam format .${format.toUpperCase()}`, '✅');
+};
 async function loadDomains(preservePage = false) {
     try {
         const resp = await fetch(`${API_BASE}/api/domains`);
@@ -1411,7 +1530,7 @@ function renderInventoryList() {
 
     // Perbaikan Bug: Render UI Kosong dengan benar jika tidak ada data dari backend
     if (!allDomains || allDomains.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="empty-state">No domains found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No domains found.</td></tr>`;
         if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
@@ -1424,7 +1543,7 @@ function renderInventoryList() {
     );
 
     if (filteredDomains.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="empty-state">No domains match your search.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No domains match your search.</td></tr>`;
         if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
@@ -1454,6 +1573,14 @@ function renderInventoryList() {
             </td>
             <td style="font-family:var(--font-mono); color:var(--text-secondary)">${escapeHtml(d.ip_address || '-')}</td>
             <td><span class="badge ${d.is_active ? 'badge-active' : 'badge-inactive'}">${d.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+            <td style="text-align: center;">
+                <button class="icon-btn-sm" onclick='openEditDomainModal(${JSON.stringify(d).replace(/'/g, "&#39;")})' title="Edit">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                </button>
+                <button class="icon-btn-sm" onclick="deleteDomain(${d.id})" title="Hapus" style="color: var(--color-error); margin-left: 4px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+            </td>
         </tr>
         `;
     }).join('');
