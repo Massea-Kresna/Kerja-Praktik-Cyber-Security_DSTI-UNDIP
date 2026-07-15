@@ -1050,7 +1050,7 @@ function updateSortIcons() {
     }
 }
 
-async function loadVulnerabilities() {
+async function loadVulnerabilities(preservePage = false) {
     try {
         const resp = await fetch(`${API_BASE}/api/scan-history?limit=1000`);
         const data = await resp.json();
@@ -1383,12 +1383,14 @@ function openScanModalByGlobalIndex(index) {
 // ==========================================================================
 // Inventory (Domains)
 // ==========================================================================
-async function loadDomains() {
+async function loadDomains(preservePage = false) {
     try {
         const resp = await fetch(`${API_BASE}/api/domains`);
         const data = await resp.json();
         allDomains = data.data || [];
-        domainCurrentPage = 1;
+        if (!preservePage) {
+            domainCurrentPage = 1;
+        }
         renderInventoryList();
 
         const manageLink = document.getElementById('manageDomainsLink');
@@ -1882,6 +1884,15 @@ function handleSuccessfulLogin(user) {
     document.getElementById('sidebar-user-container').style.display = 'flex';
     document.getElementById('sidebar-username').textContent = user.username;
 
+    // Setup Topbar User Profile
+    const topbarProfile = document.getElementById('topbar-user-profile');
+    if (topbarProfile) {
+        if (user.role === 'admin') {
+            topbarProfile.textContent = 'Admin DSTI';
+        } else {
+            topbarProfile.textContent = user.username;
+        }
+    }
     const roleEl = document.getElementById('sidebar-user-role');
     if (user.role === 'admin') {
         roleEl.innerHTML = `<span class="badge-admin-role">Admin</span>`;
@@ -1922,9 +1933,15 @@ async function handleAuthSubmit(e) {
     const username = document.getElementById('authUsername').value.trim();
     const password = document.getElementById('authPassword').value;
     const errMsg = document.getElementById('authErrorMsg');
+    const submitBtn = document.getElementById('authSubmitBtn');
 
     errMsg.style.display = 'none';
 
+    // UI Feedback segera saat diklik
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Memverifikasi...';
+    submitBtn.style.opacity = '0.7';
+    submitBtn.disabled = true;
     try {
         const resp = await fetch(`${API_BASE}/api/auth/login`, {
             method: 'POST',
@@ -1956,8 +1973,16 @@ async function handleLogout() {
 }
 
 // Interceptor global untuk response 401
-const originalFetch = window.fetch;
+let isSessionExpiredToastShown = false;
+const originalFetch = window.fetch.bind(window);
 window.fetch = async function (...args) {
+    // Pastikan kredensial (cookie) selalu dikirim
+    if (args.length === 1 && (typeof args[0] === 'string' || args[0] instanceof URL)) {
+        args.push({ credentials: 'include' });
+    } else if (args.length === 2) {
+        if (!args[1]) args[1] = {};
+        if (!args[1].credentials) args[1].credentials = 'include';
+    }
     const response = await originalFetch(...args);
     if (response.status === 401 && !args[0].includes('/api/auth/me') && !args[0].includes('/api/auth/login')) {
         showLoginOverlay();
