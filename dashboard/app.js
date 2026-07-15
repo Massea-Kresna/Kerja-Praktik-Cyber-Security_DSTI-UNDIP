@@ -2003,7 +2003,7 @@ function openThreatModal(vuln) {
     document.getElementById('modalDesc').textContent = vuln.description || 'No description available.';
     document.getElementById('modalRecommendation').textContent = vuln.recommendation || 'No recommendation provided.';
 
-// ==========================================
+    // ==========================================
     // LOGIKA PENGKATEGORIAN OTOMATIS (ULTIMATE VERSION)
     // ==========================================
     const checkType = (vuln.check_type || '').toLowerCase();
