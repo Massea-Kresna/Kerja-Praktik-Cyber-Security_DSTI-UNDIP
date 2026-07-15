@@ -2829,6 +2829,8 @@ function showToast(title, message, icon = "🔔") {
     setTimeout(() => {
         toast.remove();
     }, 5000);
+}
+
 // Generate Report Modal
 function openGenerateReportModal(historyId) {
     document.getElementById('reportHistoryId').value = historyId;
@@ -3077,7 +3079,7 @@ function submitWebScan() {
         `;
     });
 }
-}
+
 
 window.triggerSingleNetworkScan = async function(domainName) {
     showToast('Scan Jaringan', `Memulai network scan untuk ${domainName}...`, '🚀');
