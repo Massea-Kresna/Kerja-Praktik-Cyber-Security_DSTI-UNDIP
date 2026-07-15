@@ -1850,7 +1850,24 @@ function openScanModal(scan) {
 
     const btnDownload = document.getElementById('btnDownloadReport');
     if (btnDownload && domainName) {
-        const pdfFileName = 'pentest_tools_' + domainName.replace(/\./g, '_') + '.pdf';
+        let prefix = "webscan";
+        if (scanType === "Network Scanner") {
+            prefix = "netscan";
+        }
+        
+        let timeStr = "";
+        if (scan.scan_date) {
+            const dateObj = new Date(scan.scan_date);
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const month = monthNames[dateObj.getMonth()];
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            const year = dateObj.getFullYear();
+            const hours = String(dateObj.getHours()).padStart(2, '0');
+            const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+            timeStr = `${month}${day}_${year}_${hours}.${minutes}_`;
+        }
+        
+        const pdfFileName = timeStr + prefix + '_' + domainName.replace(/\./g, '_') + '.pdf';
         btnDownload.href = '/dashboard/reports/' + pdfFileName;
         btnDownload.style.display = 'inline-block';
     } else if (btnDownload) {
