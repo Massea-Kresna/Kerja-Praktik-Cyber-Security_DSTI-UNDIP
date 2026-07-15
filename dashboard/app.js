@@ -208,11 +208,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Bind date filter buttons
-    const filterBtn = document.getElementById('vulnFilterBtn');
-    if (filterBtn) {
-        filterBtn.addEventListener('click', applyVulnFilters);
+    // Bind auto-filter events for Scan History
+    const vulnStartDate = document.getElementById('vulnStartDate');
+    const vulnEndDate = document.getElementById('vulnEndDate');
+    const vulnDomainSearch = document.getElementById('vulnDomainSearch');
+    const vulnTypeFilter = document.getElementById('vulnTypeFilter');
+
+    if (vulnStartDate) vulnStartDate.addEventListener('change', () => applyVulnFilters());
+    if (vulnEndDate) vulnEndDate.addEventListener('change', () => applyVulnFilters());
+    if (vulnTypeFilter) vulnTypeFilter.addEventListener('change', () => applyVulnFilters());
+    if (vulnDomainSearch) {
+        // Use a small debounce for text input to prevent lag while typing
+        let timeout = null;
+        vulnDomainSearch.addEventListener('input', () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => applyVulnFilters(), 300);
+        });
     }
+
     const resetFilterBtn = document.getElementById('vulnResetFilterBtn');
     if (resetFilterBtn) {
         resetFilterBtn.addEventListener('click', resetVulnFilters);
@@ -447,6 +460,19 @@ function switchView(viewId) {
     // Load admin data if switching to admin page
     if (viewId === 'admin') {
         loadAdminUsers();
+    }
+
+    // Web Scanner: start/stop polling for active scans
+    if (viewId === 'web-scanner') {
+        fetchActiveScans();
+        if (!activeScansInterval) {
+            activeScansInterval = setInterval(fetchActiveScans, 5000);
+        }
+    } else {
+        if (activeScansInterval) {
+            clearInterval(activeScansInterval);
+            activeScansInterval = null;
+        }
     }
 }
 
@@ -1076,6 +1102,8 @@ function applyVulnFilters(preservePage = false) {
     const endInput = document.getElementById('vulnEndDate')?.value;
     // Ambil kata kunci dari input pencarian
     const domainSearchInput = document.getElementById('vulnDomainSearch')?.value.toLowerCase();
+    // Ambil nilai filter tipe scan
+    const typeFilter = document.getElementById('vulnTypeFilter')?.value;
 
     let startDate = null;
     let endDate = null;
@@ -1102,6 +1130,15 @@ function applyVulnFilters(preservePage = false) {
         if (domainSearchInput) {
             const domainName = (scan.domains?.domain_name || '').toLowerCase();
             if (!domainName.includes(domainSearchInput)) return false;
+        }
+
+        // Filter berdasarkan tipe scan
+        if (typeFilter && typeFilter !== 'ALL') {
+            let scanType = '';
+            if (scan.vulnerabilities && scan.vulnerabilities.length > 0) {
+                scanType = scan.vulnerabilities[0].check_type || '';
+            }
+            if (scanType.toLowerCase() !== typeFilter.toLowerCase()) return false;
         }
 
         return true;
@@ -1135,22 +1172,24 @@ function applyVulnFilters(preservePage = false) {
 
     updateSortIcons();
 
-    vulnCurrentPage = 1;
+    if (!preservePage) {
+        vulnCurrentPage = 1;
+    }
     renderVulnerabilitiesList();
 }
 
 function resetVulnFilters() {
     const startInput = document.getElementById('vulnStartDate');
     const endInput = document.getElementById('vulnEndDate');
-    const domainSearchInput = document.getElementById('vulnDomainSearch'); // Tambahkan ini
-    
+    const domainSearchInput = document.getElementById('vulnDomainSearch');
+    const typeFilter = document.getElementById('vulnTypeFilter');
+
     if (startInput) startInput.value = '';
     if (endInput) endInput.value = '';
-    if (domainSearchInput) domainSearchInput.value = ''; // Tambahkan ini agar kotak pencarian ikut bersih
+    if (domainSearchInput) domainSearchInput.value = '';
+    if (typeFilter) typeFilter.value = 'ALL';
 
-    filteredVulns = [...allVulns];
-    vulnCurrentPage = 1;
-    renderVulnerabilitiesList();
+    applyVulnFilters();
 }
 
 function renderVulnerabilitiesList() {
@@ -1503,21 +1542,17 @@ window.exportDomains = function(format) {
     let mimeType = '';
     let filename = '';
     
+    const exportData = allDomains.map(d => ({
+        domain_name: d.domain_name,
+        ip_address: d.ip_address || ''
+    }));
+    
+    content = JSON.stringify(exportData, null, 2);
+    
     if (format === 'txt') {
-        const lines = allDomains.map(d => {
-            if (d.ip_address) return `${d.domain_name},${d.ip_address}`;
-            return d.domain_name;
-        });
-        content = lines.join('\n');
         mimeType = 'text/plain';
         filename = 'domains_export.txt';
     } else if (format === 'json') {
-        const exportData = allDomains.map(d => ({
-            domain_name: d.domain_name,
-            ip_address: d.ip_address || '',
-            is_active: d.is_active
-        }));
-        content = JSON.stringify(exportData, null, 2);
         mimeType = 'application/json';
         filename = 'domains_export.json';
     }
@@ -1849,9 +1884,14 @@ function openScanModal(scan) {
 
     const btnDownload = document.getElementById('btnDownloadReport');
     if (btnDownload && domainName) {
-        const pdfFileName = 'pentest_tools_' + domainName.replace(/\./g, '_') + '.pdf';
-        btnDownload.href = '/dashboard/reports/' + pdfFileName;
-        btnDownload.style.display = 'inline-block';
+        // Open Generate Report Modal instead of directly downloading
+        btnDownload.removeAttribute('href');
+        btnDownload.removeAttribute('target');
+        btnDownload.onclick = (e) => {
+            e.preventDefault();
+            openGenerateReportModal(scan.history_id);
+        };
+        btnDownload.style.display = 'inline-flex';
     } else if (btnDownload) {
         btnDownload.style.display = 'none';
     }
@@ -2580,4 +2620,253 @@ function showToast(title, message, icon = "🔔") {
     setTimeout(() => {
         toast.remove();
     }, 5000);
+}// ==========================================================================
+// Generate Report Modal
+// ==========================================================================
+function openGenerateReportModal(historyId) {
+    document.getElementById('reportHistoryId').value = historyId;
+    document.getElementById('generateReportModalOverlay').classList.add('active');
+}
+
+document.getElementById('closeGenerateReportModalBtn')?.addEventListener('click', () => {
+    document.getElementById('generateReportModalOverlay').classList.remove('active');
+});
+
+document.getElementById('btnCancelReport')?.addEventListener('click', () => {
+    document.getElementById('generateReportModalOverlay').classList.remove('active');
+});
+
+document.getElementById('generateReportForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const historyId = document.getElementById('reportHistoryId').value;
+    if (!historyId) return;
+    
+    const form = e.target;
+    const btnSubmit = document.getElementById('btnSubmitReport');
+    const originalText = btnSubmit.innerHTML;
+    
+    btnSubmit.innerHTML = 'Generating... <span style="font-size:12px; margin-left:4px;">Please wait</span>';
+    btnSubmit.disabled = true;
+    btnSubmit.style.opacity = '0.7';
+    
+    try {
+        const payload = {
+            history_id: parseInt(historyId),
+            report_type: form.report_type.value,
+            report_format: form.report_format.value,
+            group_findings_by: form.group_by.value,
+            include_reproduce: form.filter_reproduce.checked,
+            include_informational: form.filter_informational.checked,
+            include_false_positives: form.filter_false_positives.checked,
+            include_ignored: form.filter_ignored.checked,
+            include_not_verified: form.filter_not_verified.checked,
+            include_accepted: form.filter_accepted.checked,
+            include_fixed: form.filter_fixed.checked
+        };
+        
+        const resp = await fetch(`${API_BASE}/api/reports/generate`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!resp.ok) {
+            const errData = await resp.json();
+            throw new Error(errData.detail || 'Gagal generate report');
+        }
+        
+        const data = await resp.json();
+        
+        // Hide modal
+        document.getElementById('generateReportModalOverlay').classList.remove('active');
+        showToast('Success', 'Report successfully generated!', '✅');
+        
+        // Trigger file download
+        if (data.file_url) {
+            window.open(data.file_url, '_blank');
+        }
+        
+    } catch (err) {
+        console.error(err);
+        showToast('Error', err.message, '❌');
+    } finally {
+        btnSubmit.innerHTML = originalText;
+        btnSubmit.disabled = false;
+        btnSubmit.style.opacity = '1';
+    }
+});
+
+// --- Web Scanner Logic ---
+let activeScansInterval = null;
+
+function fetchActiveScans() {
+    fetch('/api/scans/active')
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                renderWebScannerTable(data.data);
+            } else {
+                const tbody = document.querySelector('#webScannerTable tbody');
+                if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444;">Error: ${data.detail || 'Failed to fetch active scans.'}</td></tr>`;
+            }
+        })
+        .catch(err => {
+            console.error('Error fetching active scans:', err);
+            const tbody = document.querySelector('#webScannerTable tbody');
+            if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444;">Failed to connect to backend API.</td></tr>`;
+        });
+}
+
+function renderWebScannerTable(scans) {
+    const tbody = document.querySelector('#webScannerTable tbody');
+    if (!tbody) return;
+    
+    if (scans.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No active scans found.</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = '';
+    scans.forEach(scan => {
+        const tr = document.createElement('tr');
+        
+        const progressText = scan.progress > 0 ? `${scan.progress}%` : '...';
+        const displayStatus = scan.live_status === 'running' ? 'Scan in progress...' : scan.live_status;
+        
+        tr.innerHTML = `
+            <td><input type="checkbox"></td>
+            <td>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                    <span style="color: #2563eb; font-weight: 500;">${scan.type || 'Website Scanner'}</span>
+                </div>
+            </td>
+            <td>
+                <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid #94a3b8; border-radius: 50%; color: #64748b; font-weight: bold; font-size: 11px;">
+                    ${progressText}
+                </div>
+            </td>
+            <td>
+                <div style="font-weight: 500; font-family: monospace;">${scan.domain}</div>
+                <div style="font-size: 12px; color: #64748b;">${displayStatus}</div>
+            </td>
+            <td>
+                <span style="color: #64748b; font-size: 13px;">${displayStatus}</span>
+            </td>
+            <td>
+                <div style="color: #475569; font-size: 13px;">${scan.start_time}</div>
+            </td>
+            <td>
+                <button class="btn btn-secondary" onclick="stopActiveScan(${scan.scan_id})" style="color: #ef4444; border-color: #ef4444; padding: 4px 8px; font-size: 12px;">
+                    Stop Scan
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function stopActiveScan(scanId) {
+    if(!confirm('Are you sure you want to stop this scan?')) return;
+    
+    fetch('/api/scans/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scan_id: scanId })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showToast('Success', data.message, '✅');
+            fetchActiveScans();
+        } else {
+            showToast('Error', data.detail || data.message, '❌');
+        }
+    })
+    .catch(err => {
+        console.error('Error stopping scan:', err);
+        showToast('Error', 'An error occurred while stopping the scan.', '❌');
+    });
+}
+
+// (Web Scanner polling is handled inside switchView directly)
+
+function openWebScanModal() {
+    document.getElementById('webScanModalOverlay').classList.add('active');
+    const select = document.getElementById('webScanTargetSelect');
+    
+    if (!allDomains || allDomains.length === 0) {
+        select.innerHTML = '<option value="">No domains available</option>';
+        return;
+    }
+    
+    select.innerHTML = '<option value="">-- Select a domain --</option>' + 
+        allDomains.filter(d => d.is_active).map(d => `<option value="${d.domain_name}">${d.domain_name}</option>`).join('');
+
+    // Setup scan type radio card interactivity
+    const radios = document.querySelectorAll('input[name="webScanType"]');
+    radios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            radios.forEach(r => {
+                const card = r.closest('label');
+                if (r.checked) {
+                    card.style.borderColor = 'var(--color-accent)';
+                    card.style.background = 'rgba(0, 88, 189, 0.04)';
+                } else {
+                    card.style.borderColor = 'var(--color-border)';
+                    card.style.background = '#fff';
+                }
+            });
+        });
+    });
+}
+
+function submitWebScan() {
+    const select = document.getElementById('webScanTargetSelect');
+    const domain = select.value;
+    
+    if (!domain) {
+        showToast('Error', 'Please select a domain to scan.', '❌');
+        return;
+    }
+    
+    const btnSubmit = document.getElementById('btnSubmitWebScan');
+    btnSubmit.disabled = true;
+    btnSubmit.style.opacity = '0.5';
+    btnSubmit.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation: spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="8"></circle></svg>
+        Launching...
+    `;
+    
+    fetch('/api/web-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targets: [domain] })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showToast('Success', data.message, '✅');
+            document.getElementById('webScanModalOverlay').classList.remove('active');
+            fetchActiveScans();
+        } else {
+            showToast('Error', data.detail || data.message, '❌');
+        }
+    })
+    .catch(err => {
+        console.error('Error starting web scan:', err);
+        showToast('Error', 'An error occurred while starting the web scan.', '❌');
+    })
+    .finally(() => {
+        btnSubmit.disabled = false;
+        btnSubmit.style.opacity = '1';
+        btnSubmit.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            Launch Scan
+        `;
+    });
 }
