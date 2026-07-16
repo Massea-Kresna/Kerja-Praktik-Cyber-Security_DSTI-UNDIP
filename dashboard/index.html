@@ -15,8 +15,9 @@
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <!-- Chart.js -->
-
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Cloudflare Turnstile -->
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
 </head>
 
 <body>
@@ -113,7 +114,9 @@
                             <span>Remember me</span>
                         </label>
                     </div>
-
+                    <div style="width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 0; background-color: #ffffff; display: flex; justify-content: center; align-items: center; box-sizing: border-box; margin-top: 16px; margin-bottom: 24px;">
+                        <div class="g-recaptcha" data-sitekey="6Lf5FVYtAAAAACwQ-eO68vjOvm01TCKtL2osP3nP" style="transform: scale(0.98); transform-origin: center;"></div>
+                    </div>
                     <button type="submit" class="auth-btn" id="authSubmitBtn">Login</button>
 
                 </form>
