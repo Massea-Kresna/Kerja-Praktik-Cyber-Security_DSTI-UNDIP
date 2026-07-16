@@ -156,7 +156,7 @@
                 <a href="#" class="nav-item" onclick="switchView('web-scanner')">
                     <svg class="icon">
                         <use href="#icon-globe" />
-                    </svg> Web Scanner
+                    </svg> Website Scanner
                 </a>
                 <a href="#" class="nav-item" onclick="switchView('network-scanner')">
                     <svg class="icon">
@@ -250,7 +250,16 @@
                                 <div>
                                     <h3>Vulnerability Trend</h3>
                                 </div>
-                                <div class="multi-select-dropdown" id="vulnTrendDropdown">
+                                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                                    <div style="display: flex; align-items: center; gap: 8px; background: white; padding: 0 12px; height: 36px; border-radius: 20px; border: 1px solid var(--color-border); box-sizing: border-box;">
+                                        <input type="date" id="vulnTrendStartDate" title="Mulai Tanggal" style="border: none; outline: none; background: transparent; padding: 0; font-size: 13px; color: var(--color-ink-soft); cursor: pointer; font-family: inherit; font-weight: 500;">
+                                        <span style="color: #cbd5e1; font-size: 13px;">-</span>
+                                        <input type="date" id="vulnTrendEndDate" title="Sampai Tanggal" style="border: none; outline: none; background: transparent; padding: 0; font-size: 13px; color: var(--color-ink-soft); cursor: pointer; font-family: inherit; font-weight: 500;">
+                                    </div>
+                                    <button id="vulnTrendResetBtn" title="Reset" style="height: 36px; width: 36px; border-radius: 50%; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-ink-soft); cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 0;" onmouseover="this.style.background='#f1f5f9'; this.style.color='var(--color-ink)'" onmouseout="this.style.background='var(--color-surface)'; this.style.color='var(--color-ink-soft)'">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>
+                                    </button>
+                                    <div class="multi-select-dropdown" id="vulnTrendDropdown">
                                     <button class="multi-select-btn" onclick="toggleDropdown('vulnTrendDropdown')">
                                         <span class="multi-select-label">All Domains</span>
                                         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -267,6 +276,7 @@
                                             <!-- Diisi oleh app.js -->
                                         </div>
                                     </div>
+                                    </div>
                                 </div>
                             </div>
                             <div style="position: relative; height: 300px; width: 100%; margin-top: 16px;">
@@ -280,7 +290,16 @@
                                 <div>
                                     <h3>Severity Trend</h3>
                                 </div>
-                                <div class="multi-select-dropdown" id="sevTrendDropdown">
+                                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                                    <div style="display: flex; align-items: center; gap: 8px; background: white; padding: 0 12px; height: 36px; border-radius: 20px; border: 1px solid var(--color-border); box-sizing: border-box;">
+                                        <input type="date" id="sevTrendStartDate" title="Mulai Tanggal" style="border: none; outline: none; background: transparent; padding: 0; font-size: 13px; color: var(--color-ink-soft); cursor: pointer; font-family: inherit; font-weight: 500;">
+                                        <span style="color: #cbd5e1; font-size: 13px;">-</span>
+                                        <input type="date" id="sevTrendEndDate" title="Sampai Tanggal" style="border: none; outline: none; background: transparent; padding: 0; font-size: 13px; color: var(--color-ink-soft); cursor: pointer; font-family: inherit; font-weight: 500;">
+                                    </div>
+                                    <button id="sevTrendResetBtn" title="Reset" style="height: 36px; width: 36px; border-radius: 50%; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-ink-soft); cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 0;" onmouseover="this.style.background='#f1f5f9'; this.style.color='var(--color-ink)'" onmouseout="this.style.background='var(--color-surface)'; this.style.color='var(--color-ink-soft)'">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>
+                                    </button>
+                                    <div class="multi-select-dropdown" id="sevTrendDropdown">
                                     <button class="multi-select-btn" onclick="toggleDropdown('sevTrendDropdown')">
                                         <span class="multi-select-label">All Severities</span>
                                         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -308,6 +327,7 @@
                                                     onchange="onSevFilterChange(this)"><span class="sev-dot"
                                                     style="background:#22c55e"></span>Info</label>
                                         </div>
+                                    </div>
                                     </div>
                                 </div>
                             </div>
@@ -540,7 +560,7 @@
                                     Simpan Target
                                 </button>
                                 
-                                <button id="addDomainBtn" class="auth-btn" style="margin: 0; border: 1px solid transparent; width: auto; padding: 8px 16px; display: flex; align-items: center; gap: 6px; font-size: 13px;">
+                                <button id="addDomainBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white; cursor: pointer;">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                     Add Domain
                                 </button>
@@ -622,17 +642,17 @@
                 </div>
 
 
-                <!-- VIEW: Web Scanner -->
+                <!-- VIEW: Website Scanner -->
                 <div id="view-web-scanner" class="view-container hidden">
                     <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                         <div>
-                            <h1 style="margin-bottom: 4px;">Web Scans</h1>
+                            <h1 style="margin-bottom: 4px;">Website Scans</h1>
                             <p style="color: #64748b;">Showing all automated web vulnerability scans for active domains.</p>
                         </div>
                         <button class="btn btn-primary" onclick="openWebScanModal()">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                            </svg> New Web Scan
+                            </svg> New Website Scan
                         </button>
                     </div>
                     
@@ -646,26 +666,21 @@
                                 </svg>
                                 <input type="text" id="webScannerSearch" oninput="applyWebFilters()" placeholder="Search target or scan ID..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 13px; color: #1e293b; margin-left: 8px; font-family: inherit;">
                             </div>
-                            <button class="btn btn-secondary">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-                                </svg> Filters off
-                            </button>
                         </div>
                         
                         <div class="table-container">
-                            <table class="modern-table" style="margin: 0; width: 100%;">
+                            <table class="modern-table" style="margin: 0; width: 100%; table-layout: fixed;">
                                 <thead>
                                     <tr>
                                         <th style="width: 48px; text-align: center; padding: 12px 16px;">
                                             <input type="checkbox" id="selectAllWebScans" onchange="window.toggleAllWebScans(this)" style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--primary);">
                                         </th>
-                                        <th id="thWebScansCount" style="text-align: left; padding: 12px 16px; font-size: 12px;">SCANS</th>
-                                        <th style="text-align: left; padding: 12px 16px; font-size: 12px;">STATUS</th>
-                                        <th style="text-align: left; padding: 12px 16px; font-size: 12px;">TARGET</th>
-                                        <th style="text-align: left; padding: 12px 16px; font-size: 12px;">SUMMARY</th>
-                                        <th style="text-align: left; padding: 12px 16px; font-size: 12px;">DATE</th>
-                                        <th style="text-align: center; padding: 12px 16px; font-size: 12px;">ACTION</th>
+                                        <th id="thWebScansCount" style="width: 15%; text-align: left; padding: 12px 16px; font-size: 12px;">SCANS</th>
+                                        <th style="width: 10%; text-align: left; padding: 12px 16px; font-size: 12px;">STATUS</th>
+                                        <th style="width: 25%; text-align: left; padding: 12px 16px; font-size: 12px;">TARGET</th>
+                                        <th style="width: 25%; text-align: left; padding: 12px 16px; font-size: 12px;">SUMMARY</th>
+                                        <th style="width: 15%; text-align: left; padding: 12px 16px; font-size: 12px;">DATE</th>
+                                        <th style="width: 120px; text-align: center; padding: 12px 16px; font-size: 12px;">ACTION</th>
                                     </tr>
                                 </thead>
                                 <tbody id="webScannerTableBody">
@@ -704,26 +719,21 @@
                                 </svg>
                                 <input type="text" id="netSearchInput" oninput="applyNetworkFilters()" placeholder="Search target or scan ID..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 13px; color: #1e293b; margin-left: 8px; font-family: inherit;">
                             </div>
-                            <button class="btn btn-secondary" style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: #64748b; background: white; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 6px;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-                                </svg> Filters off
-                            </button>
                         </div>
                         
                         <div class="table-container">
-                            <table class="modern-table" style="margin: 0; width: 100%;">
+                            <table class="modern-table" style="margin: 0; width: 100%; table-layout: fixed;">
                                 <thead>
                                     <tr>
                                         <th style="width: 48px; text-align: center; padding: 12px 16px;">
                                             <input type="checkbox" id="selectAllNetworkScans" onchange="window.toggleAllNetworkScans(this)" style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--primary);">
                                         </th>
-                                        <th id="thNetworkScansCount" style="text-align: left; padding: 12px 16px; font-size: 12px;">SCANS</th>
-                                        <th style="text-align: left; padding: 12px 16px; font-size: 12px;">STATUS</th>
-                                        <th style="text-align: left; padding: 12px 16px; font-size: 12px;">TARGET</th>
-                                        <th style="text-align: left; padding: 12px 16px; font-size: 12px;">SUMMARY</th>
-                                        <th style="text-align: left; padding: 12px 16px; font-size: 12px;">DATE</th>
-                                        <th style="text-align: center; padding: 12px 16px; font-size: 12px;">ACTION</th>
+                                        <th id="thNetworkScansCount" style="width: 15%; text-align: left; padding: 12px 16px; font-size: 12px;">SCANS</th>
+                                        <th style="width: 10%; text-align: left; padding: 12px 16px; font-size: 12px;">STATUS</th>
+                                        <th style="width: 25%; text-align: left; padding: 12px 16px; font-size: 12px;">TARGET</th>
+                                        <th style="width: 25%; text-align: left; padding: 12px 16px; font-size: 12px;">SUMMARY</th>
+                                        <th style="width: 15%; text-align: left; padding: 12px 16px; font-size: 12px;">DATE</th>
+                                        <th style="width: 120px; text-align: center; padding: 12px 16px; font-size: 12px;">ACTION</th>
                                     </tr>
                                 </thead>
                                 <tbody id="networkScansTableBody">
@@ -835,7 +845,7 @@
         <div class="modal-dialog">
             <div class="modal-header">
                 <div class="modal-title-group">
-                    <h2 id="modalTitle">Web Scanner</h2>
+                    <h2 id="modalTitle">Website Scanner</h2>
                     <span id="modalThreatCategory" class="badge badge-orange-outline">Anomaly Detection</span>
                 </div>
                 <div class="modal-actions">
@@ -924,7 +934,7 @@
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
                     </div>
                     <div>
-                        <h2 style="margin: 0; font-size: 17px; font-weight: 600; color: var(--color-ink);">Launch New Web Scan</h2>
+                        <h2 style="margin: 0; font-size: 17px; font-weight: 600; color: var(--color-ink);">Launch New Website Scan</h2>
                         <p style="margin: 2px 0 0 0; font-size: 13px; color: var(--color-muted);">Configure and start a vulnerability scan</p>
                     </div>
                 </div>
