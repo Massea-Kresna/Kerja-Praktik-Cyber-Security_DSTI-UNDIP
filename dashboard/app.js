@@ -19,6 +19,12 @@ let liveNetworkScans = [];
 let netCurrentPage = 1;
 let netRowsPerPage = 15;
 
+// Web Scanner Logic
+let webScans = [];
+let filteredWebScans = [];
+let webCurrentPage = 1;
+let webRowsPerPage = 15;
+
 // Pagination State for Scan History
 let vulnCurrentPage = 1;
 let vulnRowsPerPage = 15;
@@ -494,7 +500,8 @@ async function refreshData(preservePage = true) {
         ]);
         
         // Memanggil fungsi render tabel network khusus
-        if (typeof processNetworkScans === 'function') processNetworkScans();
+        if (typeof processNetworkScans === 'function') processNetworkScans(preservePage);
+        if (typeof processWebScans === 'function') processWebScans(preservePage);
     } catch (err) {
         console.error('Refresh error:', err);
     }
@@ -874,8 +881,9 @@ window.renderVulnTrendChart = function () {
                             },
                             label: function (context) {
                                 let label = context.dataset.label || '';
-                                if (label) label += ' | Vulns: ';
-                                if (context.parsed.y !== null) label += context.parsed.y;
+                                if (context.parsed.y !== null) {
+                                    return `${label} (${context.parsed.y})`;
+                                }
                                 return label;
                             }
                         }
@@ -909,11 +917,11 @@ window.renderSevTrendChart = function () {
     updateDropdownLabel('sevTrendDropdown', 'All Severities');
 
     const sevColors = {
-        'Critical': '#ef4444',
-        'High': '#f97316',
-        'Medium': '#eab308',
-        'Low': '#3b82f6',
-        'Info': '#22c55e'
+        'Critical': '#8A2E2E',
+        'High': '#FF4A4A',
+        'Medium': '#FF9F2A',
+        'Low': '#4287F5',
+        'Info': '#00D182'
     };
 
     let baseDatasets = rawSevTrendData.datasets || [];
@@ -946,7 +954,9 @@ window.renderSevTrendChart = function () {
             fill: true,
             spanGaps: true,
             pointRadius: 0,
-            pointHoverRadius: 6
+            pointHoverRadius: 6,
+            pointBackgroundColor: color,
+            pointHoverBackgroundColor: color
         };
     });
 
@@ -1014,17 +1024,24 @@ window.renderSevTrendChart = function () {
                             return tooltipItem.parsed.y !== 0;
                         },
                         callbacks: {
+                            labelColor: function (context) {
+                                return {
+                                    borderColor: context.dataset.borderColor,
+                                    backgroundColor: context.dataset.borderColor
+                                };
+                            },
                             label: function (context) {
                                 let label = context.dataset.label || '';
                                 let val = context.parsed.y;
-                                if (label) label += ': ';
-                                label += val;
+                                if (val !== null) {
+                                    label += ` (${val})`;
+                                }
 
-                                let domainsList = context.dataset.domains ? context.dataset.domains[context.dataIndex] : null;
-                                if (val > 0 && domainsList && domainsList.length > 0) {
+                                let domainsObj = context.dataset.domains ? context.dataset.domains[context.dataIndex] : null;
+                                if (val > 0 && domainsObj && typeof domainsObj === 'object') {
                                     let lines = [label];
-                                    domainsList.forEach(d => {
-                                        lines.push('   • ' + d);
+                                    Object.entries(domainsObj).forEach(([d, count]) => {
+                                        lines.push(`   • ${d} (${count})`);
                                     });
                                     return lines;
                                 }
@@ -1268,7 +1285,7 @@ function renderVulnerabilitiesList() {
 // LOGIKA NETWORK SCANNER TERBARU
 // =========================================================
 
-function processNetworkScans() {
+function processNetworkScans(preservePage = false) {
     networkScans = allVulns.filter(scan => {
         if (scan.vulnerabilities && scan.vulnerabilities.length > 0) {
             const scanType = scan.vulnerabilities[0].check_type || "";
@@ -1277,10 +1294,10 @@ function processNetworkScans() {
         return false;
     }); 
     
-    applyNetworkFilters();
+    applyNetworkFilters(preservePage);
 }
 
-function applyNetworkFilters() {
+function applyNetworkFilters(preservePage = false) {
     const searchInput = document.getElementById('netSearchInput')?.value.toLowerCase() || '';
     
     let dbFiltered = networkScans.filter(scan => {
@@ -1298,7 +1315,9 @@ function applyNetworkFilters() {
 
     filteredNetworkScans = [...liveFiltered, ...dbFiltered];
 
-    netCurrentPage = 1;
+    if (!preservePage) {
+        netCurrentPage = 1;
+    }
     renderNetworkScans();
 }
 
@@ -1436,10 +1455,10 @@ tbody.innerHTML = paginatedScans.map((scan, mapIndex) => {
             }
             summaryHtml = `
                 <div style="display:flex; gap:6px;">
-                    <span style="background:#ef4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${crit}</span>
-                    <span style="background:#f97316; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${high}</span>
-                    <span style="background:#eab308; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${med}</span>
-                    <span style="background:#3b82f6; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${low}</span>
+                    <span style="background:var(--sev-critical); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${crit}</span>
+                    <span style="background:var(--sev-high); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${high}</span>
+                    <span style="background:var(--sev-medium); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${med}</span>
+                    <span style="background:var(--sev-low); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${low}</span>
                 </div>
             `;
             
@@ -3082,10 +3101,10 @@ function fetchActiveScans() {
                 liveWebScans = allLive.filter(s => !liveNetworkScans.includes(s));
 
                 // Perbarui tabel Web Scans
-                renderWebScannerTable(liveWebScans);
+                if (typeof applyWebFilters === 'function') applyWebFilters(true);
                 
                 // Panggil render Network Scans agar memunculkan progress Live
-                if (typeof applyNetworkFilters === 'function') applyNetworkFilters();
+                if (typeof applyNetworkFilters === 'function') applyNetworkFilters(true);
 
             } else {
                 const tbody = document.querySelector('#webScannerTable tbody');
@@ -3097,56 +3116,298 @@ function fetchActiveScans() {
         });
 }
 
-function renderWebScannerTable(scans) {
-    const tbody = document.querySelector('#webScannerTable tbody');
-    if (!tbody) return;
+// =========================================================
+// LOGIKA WEB SCANNER TERBARU
+// =========================================================
+
+function processWebScans(preservePage = false) {
+    webScans = allVulns.filter(scan => {
+        if (scan.vulnerabilities && scan.vulnerabilities.length > 0) {
+            const scanType = scan.vulnerabilities[0].check_type || "";
+            return !scanType.toLowerCase().includes("network");
+        }
+        return false;
+    }); 
     
-    if (scans.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No active scans found.</td></tr>';
+    applyWebFilters(preservePage);
+}
+
+function applyWebFilters(preservePage = false) {
+    const searchInput = document.getElementById('webScannerSearch')?.value.toLowerCase() || '';
+    
+    let dbFiltered = webScans.filter(scan => {
+        const domainName = (scan.domains?.domain_name || '').toLowerCase();
+        const ip = (scan.domains?.ip_address || '').toLowerCase();
+        if (searchInput && !domainName.includes(searchInput) && !ip.includes(searchInput)) return false;
+        return true;
+    });
+
+    let liveFiltered = liveWebScans.filter(scan => {
+        const domainName = (scan.domain || '').toLowerCase();
+        if (searchInput && !domainName.includes(searchInput)) return false;
+        return true;
+    });
+
+    filteredWebScans = [...liveFiltered, ...dbFiltered];
+
+    if (!preservePage) {
+        webCurrentPage = 1;
+    }
+    renderWebScannerTable();
+}
+
+function renderWebScannerTable() {
+    const tbody = document.getElementById('webScannerTableBody');
+    const paginationContainer = document.getElementById('webPaginationControls');
+    const thCount = document.getElementById('thWebScansCount');
+    
+    if (!tbody) return;
+
+    if (!filteredWebScans || filteredWebScans.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="padding: 24px; text-align: center;">No web scans found.</td></tr>`;
+        if (paginationContainer) paginationContainer.innerHTML = '';
+        if (thCount) thCount.textContent = 'SCANS';
         return;
     }
+
+    const totalItems = filteredWebScans.length;
+    if (thCount) thCount.textContent = `SCANS`;
+
+    const totalPages = Math.ceil(totalItems / webRowsPerPage) || 1;
+    if (webCurrentPage > totalPages) webCurrentPage = totalPages;
     
-    tbody.innerHTML = '';
-    scans.forEach(scan => {
-        const tr = document.createElement('tr');
-        
-        const progressText = scan.progress > 0 ? `${scan.progress}%` : '...';
-        const displayStatus = scan.live_status === 'running' ? 'Scan in progress...' : scan.live_status;
-        
-        tr.innerHTML = `
-            <td><input type="checkbox"></td>
-            <td>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+    const startIdx = (webCurrentPage - 1) * webRowsPerPage;
+    const endIdx = Math.min(startIdx + webRowsPerPage, totalItems);
+    const paginatedScans = filteredWebScans.slice(startIdx, endIdx);
+
+    tbody.innerHTML = paginatedScans.map((scan, mapIndex) => {
+        const isLive = scan.live_status !== undefined;
+
+        let domainName = '';
+        let targetSubtitle = '';
+        let dateStr = '-'; 
+        let statusHtml = '';
+        let summaryHtml = '';
+        let actionBtn = '';
+        let scanIdLabel = '';
+        let actualIndex = -1;
+
+        // ID UNIK & CEK MEMORI UNTUK CHECKBOX (Anti-Amnesia)
+        const uniqueScanId = isLive ? `live_${scan.scan_id || mapIndex}` : `db_${scan.id}`;
+        const isChecked = window.selectedWebScans && window.selectedWebScans.has(uniqueScanId) ? 'checked' : '';
+
+        if (isLive) {
+            domainName = scan.domain || 'Unknown Target';
+            targetSubtitle = scan.target || "Scan in progress...";
+            scanIdLabel = scan.type || `Web Scanner ${scan.scan_id}`;
+            const progressVal = scan.progress || 0;
+            
+            // Konversi Waktu (EEST ke WIB)
+            if (scan.start_time) {
+                let rawTime = scan.start_time;
+                rawTime = rawTime.replace(' ', 'T');
+                if (!rawTime.includes('+') && !rawTime.includes('Z')) {
+                    rawTime += '+03:00';
+                }
+                const d = new Date(rawTime); 
+                if (!isNaN(d.getTime())) {
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const time = d.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', second:'2-digit' });
+                    dateStr = `${year}-${month}-${day} ${time}`;
+                } else {
+                    dateStr = scan.start_time; 
+                }
+            }
+
+            const radius = 14;
+            const circumference = 2 * Math.PI * radius;
+            const offset = circumference - (progressVal / 100) * circumference;
+
+            statusHtml = `
+                <div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
+                    <svg width="36" height="36" style="transform: rotate(-90deg);">
+                        <circle cx="18" cy="18" r="14" fill="none" stroke="#e2e8f0" stroke-width="2"></circle>
+                        <circle cx="18" cy="18" r="14" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" stroke-linecap="round"></circle>
                     </svg>
-                    <span style="color: #2563eb; font-weight: 500;">${scan.type || 'Website Scanner'}</span>
+                    <span style="position: absolute; font-size: 10px; font-weight: 600; color: #334155;">${progressVal}%</span>
                 </div>
-            </td>
-            <td>
-                <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid #94a3b8; border-radius: 50%; color: #64748b; font-weight: bold; font-size: 11px;">
-                    ${progressText}
+            `;
+            summaryHtml = `<span style="color: #64748b; font-size: 13px;">${scan.live_status || 'running'}...</span>`;
+            
+            actionBtn = `<button class="btn btn-secondary" onclick="stopActiveScan(${scan.scan_id})" style="padding: 6px 16px; border: 1px solid #ef4444; color: #ef4444; background: transparent; border-radius: 20px; font-size: 12px; cursor: pointer; white-space: nowrap; transition: all 0.2s;" onmouseover="this.style.background='#ef4444'; this.style.color='#ffffff';" onmouseout="this.style.background='transparent'; this.style.color='#ef4444';">Stop Scan</button>`;
+
+            return `
+                <tr style="cursor: default; border-bottom: 1px solid #f1f5f9; background: #fafafa;">
+                    <td style="text-align: center; padding: 16px;" onclick="event.stopPropagation();">
+                        <input type="checkbox" value="${uniqueScanId}" ${isChecked} onchange="window.toggleWebCheckbox(event, this.value)" onclick="event.stopPropagation();" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;">
+                    </td>
+                    <td style="padding: 16px; min-width: 140px;">
+                        <div style="display:flex; align-items:center; gap:8px; color: #2563eb; font-weight: 500; font-size: 14px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                            ${scanIdLabel}
+                        </div>
+                    </td>
+                    <td style="padding: 16px;">${statusHtml}</td>
+                    <td style="padding: 16px;">
+                        <div style="font-family: monospace; font-size: 13px; color: #334155; margin-bottom: 4px;">https://${escapeHtml(domainName)}/</div>
+                        <div style="font-size: 13px; color: #94a3b8;">${escapeHtml(targetSubtitle)}</div>
+                    </td>
+                    <td style="padding: 16px; min-width: 120px;">${summaryHtml}</td>
+                    <td style="padding: 16px; font-size: 13px; color: #64748b; white-space: nowrap;">${dateStr}</td>
+                    <td style="padding: 16px; text-align:center;">${actionBtn}</td>
+                </tr>
+            `;
+
+        } else {
+            actualIndex = allVulns.indexOf(scan);
+            domainName = scan.domains?.domain_name || 'Unknown Target';
+            targetSubtitle = scan.domains?.ip_address || '-';
+            scanIdLabel = scan.vulnerabilities && scan.vulnerabilities.length > 0 ? scan.vulnerabilities[0].check_type : 'Web Scanner';
+            
+            if (scan.scan_date) {
+                const d = new Date(scan.scan_date);
+                if (!isNaN(d.getTime())) {
+                    dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${d.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', second:'2-digit' })}`;
+                }
+            }
+
+            statusHtml = `
+                <div style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: #ecfdf5; border-radius: 50%; color: #10b981;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                 </div>
-            </td>
-            <td>
-                <div style="font-weight: 500; font-family: monospace;">${scan.domain}</div>
-                <div style="font-size: 12px; color: #64748b;">${displayStatus}</div>
-            </td>
-            <td>
-                <span style="color: #64748b; font-size: 13px;">${displayStatus}</span>
-            </td>
-            <td>
-                <div style="color: #475569; font-size: 13px;">${scan.start_time}</div>
-            </td>
-            <td>
-                <button class="btn btn-secondary" onclick="stopActiveScan(${scan.scan_id})" style="color: #ef4444; border-color: #ef4444; padding: 4px 8px; font-size: 12px;">
-                    Stop Scan
-                </button>
-            </td>
+            `;
+
+            let crit = 0, high = 0, med = 0, low = 0;
+            if (scan.vulnerabilities) {
+                scan.vulnerabilities.forEach(v => {
+                    const s = (v.severity || '').toUpperCase();
+                    if (s === 'CRITICAL') crit++;
+                    else if (s === 'HIGH') high++;
+                    else if (s === 'MEDIUM') med++;
+                    else if (s === 'LOW' || s === 'INFO') low++;
+                });
+            }
+            summaryHtml = `
+                <div style="display:flex; gap:6px;">
+                    <span style="background:var(--sev-critical); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${crit}</span>
+                    <span style="background:var(--sev-high); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${high}</span>
+                    <span style="background:var(--sev-medium); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${med}</span>
+                    <span style="background:var(--sev-low); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${low}</span>
+                </div>
+            `;
+            
+            actionBtn = `<button class="btn btn-outline btn-sm" onclick="openScanModalIndex(${actualIndex}); event.stopPropagation();" style="padding: 6px 16px; border-radius: 20px; font-size: 12px;">View Report</button>`;
+
+            return `
+                <tr onclick="openScanModalIndex(${actualIndex})" style="cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                    <td style="text-align: center; padding: 16px;" onclick="event.stopPropagation();">
+                        <input type="checkbox" value="${uniqueScanId}" ${isChecked} onchange="window.toggleWebCheckbox(event, this.value)" onclick="event.stopPropagation();" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;">
+                    </td>
+                    <td style="padding: 16px; min-width: 140px;">
+                        <div style="display:flex; align-items:center; gap:8px; color: #64748b; font-weight: 500; font-size: 14px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                            ${scanIdLabel}
+                        </div>
+                    </td>
+                    <td style="padding: 16px;">${statusHtml}</td>
+                    <td style="padding: 16px;">
+                        <div style="font-family: monospace; font-size: 13px; color: #334155; margin-bottom: 4px;">https://${escapeHtml(domainName)}/</div>
+                        <div style="font-size: 13px; color: #94a3b8;">${escapeHtml(targetSubtitle)}</div>
+                    </td>
+                    <td style="padding: 16px; min-width: 120px;">${summaryHtml}</td>
+                    <td style="padding: 16px; font-size: 13px; color: #64748b; white-space: nowrap;">${dateStr}</td>
+                    <td style="padding: 16px; text-align:center;" onclick="event.stopPropagation();">
+                        ${actionBtn}
+                    </td>
+                </tr>
+            `;
+        }
+    }).join('');
+
+    if (paginationContainer) {
+        paginationContainer.style.padding = '16px 24px'; 
+        
+        paginationContainer.innerHTML = `
+            <div class="pagination-left" style="display: flex; align-items: center;">
+                <span style="font-size: 13px; color: #64748b;">Tampilkan per halaman:</span>
+                <select onchange="window.changeWebRows(this.value)" style="margin-left: 8px; padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13px; outline: none; background: white; color: #1e293b; cursor: pointer;">
+                    <option value="10" ${webRowsPerPage === 10 ? 'selected' : ''}>10</option>
+                    <option value="15" ${webRowsPerPage === 15 ? 'selected' : ''}>15</option>
+                    <option value="25" ${webRowsPerPage === 25 ? 'selected' : ''}>25</option>
+                    <option value="50" ${webRowsPerPage === 50 ? 'selected' : ''}>50</option>
+                </select>
+            </div>
+            
+            <div class="pagination-right" style="display: flex; align-items: center; gap: 12px;">
+                <button class="btn btn-outline btn-sm" onclick="window.changeWebPage(${webCurrentPage - 1})" ${webCurrentPage === 1 ? 'disabled' : ''} style="padding: 6px 12px; min-width: auto; cursor: ${webCurrentPage === 1 ? 'not-allowed' : 'pointer'}; opacity: ${webCurrentPage === 1 ? '0.5' : '1'}; border-color: #cbd5e1; color: #475569;">Sebelumnya</button>
+                
+                <span style="font-size: 13px; font-weight: 500; color: #64748b; display: flex; align-items: center; gap: 4px;">
+                    Halaman 
+                    <input type="number" min="1" max="${totalPages}" value="${webCurrentPage}" onchange="window.changeWebPage(this.value)" onkeydown="if(event.key==='Enter') { this.blur(); window.changeWebPage(this.value); }" style="width: 45px; text-align: center; padding: 4px 6px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13px; outline: none; background: white; color: #1e293b; margin: 0 4px;"> 
+                    dari <span style="margin-left: 2px;">${totalPages}</span>
+                </span>
+                
+                <button class="btn btn-outline btn-sm" onclick="window.changeWebPage(${webCurrentPage + 1})" ${webCurrentPage === totalPages ? 'disabled' : ''} style="padding: 6px 12px; min-width: auto; cursor: ${webCurrentPage === totalPages ? 'not-allowed' : 'pointer'}; opacity: ${webCurrentPage === totalPages ? '0.5' : '1'}; border-color: #cbd5e1; color: #475569;">Selanjutnya</button>
+            </div>
         `;
-        tbody.appendChild(tr);
-    });
+    }
+    window.syncWebSelectAll();
 }
+
+window.changeWebPage = function(newPage) {
+    const parsedPage = parseInt(newPage);
+    if (!isNaN(parsedPage) && parsedPage >= 1) {
+        webCurrentPage = parsedPage;
+        renderWebScannerTable();
+    }
+};
+
+window.changeWebRows = function(newRows) {
+    webRowsPerPage = parseInt(newRows);
+    webCurrentPage = 1;
+    renderWebScannerTable();
+};
+
+window.selectedWebScans = new Set();
+
+window.toggleWebCheckbox = function(e, scanId) {
+    e.stopPropagation();
+    if (e.target.checked) {
+        window.selectedWebScans.add(scanId);
+    } else {
+        window.selectedWebScans.delete(scanId);
+    }
+    window.syncWebSelectAll();
+};
+
+window.toggleAllWebScans = function(headerCb) {
+    const rowCbs = document.querySelectorAll('#webScannerTableBody input[type="checkbox"]');
+    const isChecked = headerCb.checked;
+
+    rowCbs.forEach(cb => {
+        cb.checked = isChecked;
+        if (isChecked) {
+            window.selectedWebScans.add(cb.value);
+        } else {
+            window.selectedWebScans.delete(cb.value);
+        }
+    });
+};
+
+window.syncWebSelectAll = function() {
+    const selectAllCb = document.getElementById('selectAllWebScans');
+    const rowCbs = document.querySelectorAll('#webScannerTableBody input[type="checkbox"]');
+    
+    if (selectAllCb && rowCbs.length > 0) {
+        const allChecked = Array.from(rowCbs).every(cb => cb.checked);
+        selectAllCb.checked = allChecked;
+    } else if (selectAllCb) {
+        selectAllCb.checked = false;
+    }
+};
+
 
 function stopActiveScan(scanId) {
     if(!confirm('Are you sure you want to stop this scan?')) return;
@@ -3207,6 +3468,9 @@ function submitWebScan() {
     const select = document.getElementById('webScanTargetSelect');
     const domain = select.value;
     
+    const scanTypeElement = document.querySelector('input[name="webScanType"]:checked');
+    const selectedScanType = scanTypeElement ? scanTypeElement.value : 'deep';
+    
     if (!domain) {
         showToast('Error', 'Please select a domain to scan.', '❌');
         return;
@@ -3223,7 +3487,7 @@ function submitWebScan() {
     fetch('/api/web-scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targets: [domain] })
+        body: JSON.stringify({ targets: [domain], scan_type: selectedScanType })
     })
     .then(res => res.json())
     .then(data => {
