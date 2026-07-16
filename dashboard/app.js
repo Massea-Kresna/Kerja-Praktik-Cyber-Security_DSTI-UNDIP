@@ -1483,7 +1483,7 @@ tbody.innerHTML = paginatedScans.map((scan, mapIndex) => {
                     </td>
                     <td style="padding: 16px; min-width: 120px;">${summaryHtml}</td>
                     <td style="padding: 16px; font-size: 13px; color: #64748b; white-space: nowrap;">${dateStr}</td>
-                    <td style="padding: 16px; text-align:center;" onclick="event.stopPropagation();">
+                    <td style="padding: 16px; text-align:left;" onclick="event.stopPropagation();">
                         ${actionBtn}
                     </td>
                 </tr>
@@ -3342,7 +3342,7 @@ function renderWebScannerTable() {
                     </td>
                     <td style="padding: 16px; min-width: 120px;">${summaryHtml}</td>
                     <td style="padding: 16px; font-size: 13px; color: #64748b; white-space: nowrap;">${dateStr}</td>
-                    <td style="padding: 16px; text-align:center;" onclick="event.stopPropagation();">
+                    <td style="padding: 16px; text-align:left;" onclick="event.stopPropagation();">
                         ${actionBtn}
                     </td>
                 </tr>
