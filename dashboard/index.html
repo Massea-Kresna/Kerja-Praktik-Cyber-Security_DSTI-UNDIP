@@ -83,13 +83,13 @@
                     <p id="authSubtitle">Domain Scanner Login</p>
                 </div>
 
-                <div class="auth-error-msg" id="authErrorMsg">Username atau password salah</div>
+                <div class="auth-error-msg" id="authErrorMsg">Email atau password salah</div>
 
                 <form class="auth-form" id="authForm" onsubmit="handleAuthSubmit(event)">
                     <div class="form-group">
-                        <label for="authUsername">Email or Username</label>
-                        <input type="text" id="authUsername" class="auth-input" placeholder="Enter your credentials"
-                            required autocomplete="username">
+                        <label for="authUsername">Username</label>
+                        <input type="text" id="authUsername" class="auth-input" placeholder="Masukkan username"
+                            required autocomplete="off">
                     </div>
                     <div class="form-group">
                         <label for="authPassword">Password</label>
@@ -118,6 +118,22 @@
                     </div>
                     <button type="submit" class="auth-btn" id="authSubmitBtn">Login</button>
 
+                </form>
+                
+                <form class="auth-form" id="otpForm" style="display: none;" onsubmit="handleOtpSubmit(event)">
+                    <div style="text-align: center; margin-bottom: 24px; color: #64748b; font-size: 14px;">
+                        Kode OTP telah dikirim ke email admin. Silakan cek kotak masuk Anda.
+                    </div>
+                    <div class="form-group">
+                        <label for="authOtp">Kode OTP</label>
+                        <input type="text" id="authOtp" class="auth-input" placeholder="000000"
+                            required autocomplete="off" maxlength="6" 
+                            style="text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 8px;">
+                    </div>
+                    <button type="submit" class="auth-btn" id="otpSubmitBtn">Verifikasi OTP</button>
+                    <div style="text-align: center; margin-top: 16px;">
+                        <a href="#" onclick="document.getElementById('otpForm').style.display='none'; document.getElementById('authForm').style.display='block'; document.getElementById('authErrorMsg').style.display='none'; document.getElementById('authOtp').value=''; return false;" style="color: #64748b; font-size: 13px; text-decoration: none;">&larr; Kembali ke Login</a>
+                    </div>
                 </form>
             </div>
         </div>
@@ -1133,8 +1149,8 @@
 
                 <form class="auth-form" id="createUserForm">
                     <div class="form-group animate-slide-up">
-                        <label for="createUsername">Username</label>
-                        <input type="text" id="createUsername" class="auth-input" placeholder="Masukkan username"
+                        <label for="createUsername">Email</label>
+                        <input type="text" id="createUsername" class="auth-input" placeholder="Masukkan email"
                             required autocomplete="off">
                     </div>
                     <div class="form-group animate-slide-up" style="animation-delay: 0.1s;">

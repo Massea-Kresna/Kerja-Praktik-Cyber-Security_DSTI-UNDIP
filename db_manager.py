@@ -497,11 +497,14 @@ def delete_user(username: str) -> bool:
     return False
 
 def seed_default_admin():
-    """Melakukan seeding admin default (admin / admin123) jika database masih kosong"""
+    """Melakukan seeding admin default menggunakan ADMIN_EMAIL (jika database masih kosong)"""
+    import config
+    admin_username = config.ADMIN_EMAIL if config.ADMIN_EMAIL else "admin"
+    
     try:
-        admin_user = get_user_by_username("admin")
+        admin_user = get_user_by_username(admin_username)
         if not admin_user:
-            create_user("admin", "admin123", "admin")
-            print("[+] Seeding Sukses: User default 'admin' dengan password 'admin123' telah ditambahkan.")
+            create_user(admin_username, "admin123", "admin")
+            print(f"[+] Seeding Sukses: User default '{admin_username}' dengan password 'admin123' telah ditambahkan.")
     except Exception as e:
         print(f"[-] Gagal melakukan seeding admin: {e}")

@@ -41,6 +41,61 @@ class LoginRequest(BaseModel):
     recaptcha_token: Optional[str] = None
     remember_me: Optional[bool] = False
 
+class VerifyOTPRequest(BaseModel):
+    username: str
+    otp: str
+    remember_me: Optional[bool] = False
+
+# ===================================================================
+# In-Memory OTP Storage
+# ===================================================================
+OTP_STORE = {}
+
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import random
+
+def send_otp_email(to_email: str, otp: str):
+    if not config.SMTP_USERNAME or not config.SMTP_PASSWORD:
+        print("[-] SMTP tidak dikonfigurasi. Lewati pengiriman email.")
+        return False
+        
+    msg = MIMEMultipart()
+    # Mengatur nama pengirim agar terlihat profesional
+    msg['From'] = f"UNDIP Security Dashboard <{config.SMTP_USERNAME}>"
+    msg['To'] = to_email
+    msg['Subject'] = "Kode OTP Login Pentest Dashboard"
+    
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Kode Autentikasi Login</h2>
+        <p>Anda mencoba untuk login ke Pentest Dashboard. Berikut adalah kode OTP Anda:</p>
+        <div style="background-color: #f3f4f6; padding: 16px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 4px; border-radius: 8px;">
+            {otp}
+        </div>
+        <p style="color: #6b7280; font-size: 12px; margin-top: 16px;">Kode ini akan kadaluarsa dalam 5 menit. Jika Anda tidak meminta kode ini, abaikan email ini.</p>
+    </div>
+    """
+    msg.attach(MIMEText(html_content, 'html'))
+    
+    try:
+        if config.SMTP_PORT == 465:
+            # Menggunakan SSL secara implisit (biasanya untuk port 465)
+            server = smtplib.SMTP_SSL(config.SMTP_SERVER, config.SMTP_PORT)
+        else:
+            # Menggunakan koneksi biasa lalu di-upgrade dengan TLS (biasanya port 587)
+            server = smtplib.SMTP(config.SMTP_SERVER, config.SMTP_PORT)
+            server.starttls() 
+            
+        server.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"[-] Gagal mengirim email OTP: {e}")
+        return False
+
 # ===================================================================
 # WebSocket Connection Manager untuk Admin & Session Live Updates
 # ===================================================================
@@ -239,13 +294,52 @@ async def login(credentials: LoginRequest, response: Response):
             raise he
         except Exception:
             pass
-            
-    # 4. Buat session baru
-    session_id = str(uuid.uuid4())
-    db_manager.update_user_session(user["username"], session_id, True)
+             # 4. Generate OTP
+    otp_code = str(random.randint(100000, 999999))
+    OTP_STORE[credentials.username] = {
+        "otp": otp_code,
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5)
+    }
     
-    # 5. Simpan di cookie (maksimal aktif 30 hari jika remember me)
-    cookie_max_age = 2592000 if credentials.remember_me else 86400
+    # 5. Send OTP Email
+    target_email = credentials.username
+    if target_email == "admin":
+        target_email = config.ADMIN_EMAIL if config.ADMIN_EMAIL else "admin@undip.ac.id"
+        
+    success = send_otp_email(target_email, otp_code)
+    
+    if not success:
+        # Fallback jika email gagal dikirim (opsional: bisa di-log saja)
+        print(f"[!] Email gagal dikirim ke {target_email}. OTP untuk {credentials.username} adalah: {otp_code}")
+        
+    return {"status": "otp_required", "message": "Kode OTP telah dikirim ke email Anda."}
+
+@app.post("/api/auth/verify_otp")
+async def verify_otp(req: VerifyOTPRequest, response: Response):
+    # Cek ketersediaan OTP
+    if req.username not in OTP_STORE:
+        raise HTTPException(status_code=400, detail="Sesi OTP tidak ditemukan atau sudah kadaluarsa. Silakan login kembali.")
+        
+    otp_data = OTP_STORE[req.username]
+    
+    # Cek kedaluwarsa
+    if datetime.now(timezone.utc) > otp_data["expires_at"]:
+        del OTP_STORE[req.username]
+        raise HTTPException(status_code=400, detail="Kode OTP sudah kadaluarsa. Silakan login kembali.")
+        
+    # Cek kecocokan OTP
+    if otp_data["otp"] != req.otp:
+        raise HTTPException(status_code=401, detail="Kode OTP salah.")
+        
+    # OTP Valid! Hapus dari store
+    del OTP_STORE[req.username]
+    
+    # Buat session baru
+    session_id = str(uuid.uuid4())
+    db_manager.update_user_session(req.username, session_id, True)
+    
+    # Simpan di cookie
+    cookie_max_age = 2592000 if req.remember_me else 86400
     response.set_cookie(
         key="session_id", 
         value=session_id, 
@@ -255,15 +349,19 @@ async def login(credentials: LoginRequest, response: Response):
         path="/"
     )
     
-    # 6. Kirim notifikasi real-time via WebSocket ke semua admin yang terkoneksi
+    # Dapatkan role user untuk kembalian
+    user_data = db_manager.get_user_by_username(req.username)
+    role = user_data["role"] if user_data else "admin"
+    
+    # Broadcast
     await manager.broadcast_to_admins({
         "event": "user_login",
-        "username": user["username"],
-        "role": user["role"],
-        "time": datetime.now(timezone(timedelta(hours=7))).strftime("%H:%M:%S")
+        "username": req.username,
+        "session_id": session_id,
+        "login_time": datetime.now(config.WIB).isoformat()
     })
     
-    return {"username": user["username"], "role": user["role"], "session_id": session_id}
+    return {"username": req.username, "role": role, "session_id": session_id}
 
 @app.post("/api/auth/logout")
 def logout_user(response: Response, current_user = Depends(get_current_user)):

@@ -2442,6 +2442,14 @@ function showLoginOverlay() {
     document.getElementById('nav-admin').style.display = 'none';
     document.getElementById('mainHeader').style.display = 'none';
     document.getElementById('notifWrapper').style.display = 'none';
+    
+    // Reset form login & OTP
+    document.getElementById('authForm').style.display = 'block';
+    document.getElementById('otpForm').style.display = 'none';
+    const otpInput = document.getElementById('authOtp');
+    if (otpInput) otpInput.value = '';
+    const errorMsg = document.getElementById('authErrorMsg');
+    if (errorMsg) errorMsg.style.display = 'none';
 
     if (wsLive) {
         wsLive.close();
@@ -2548,9 +2556,16 @@ async function handleAuthSubmit(e) {
         const data = await resp.json();
 
         if (resp.status === 200) {
-            handleSuccessfulLogin(data);
+            if (data.status === "otp_required") {
+                // Sembunyikan form login, tampilkan form OTP
+                document.getElementById('authForm').style.display = 'none';
+                document.getElementById('otpForm').style.display = 'block';
+                showToast("Info", data.message, "📧");
+            } else {
+                handleSuccessfulLogin(data);
+            }
         } else {
-            errMsg.innerText = data.detail || "Username atau password salah.";
+            errMsg.innerText = data.detail || "Email atau password salah.";
             errMsg.style.display = 'block';
             grecaptcha.reset(); // Reset reCAPTCHA agar bisa dicentang lagi
         }
@@ -2560,6 +2575,61 @@ async function handleAuthSubmit(e) {
         grecaptcha.reset();
     } finally {
         submitBtn.textContent = 'Login';
+        submitBtn.style.opacity = '1';
+        submitBtn.disabled = false;
+    }
+}
+
+// Global state untuk menyimpan username sementara sebelum OTP divalidasi
+let pendingUsername = '';
+let pendingRememberMe = false;
+
+async function handleOtpSubmit(e) {
+    e.preventDefault();
+    const otpInput = document.getElementById('authOtp').value.trim();
+    const submitBtn = document.getElementById('otpSubmitBtn');
+    const errMsg = document.getElementById('authErrorMsg');
+
+    errMsg.style.display = 'none';
+    
+    // Username dan rememberMe diambil dari form sebelumnya
+    const username = document.getElementById('authUsername').value.trim();
+    const rememberMe = document.getElementById('rememberMe').checked;
+
+    submitBtn.textContent = 'Memverifikasi...';
+    submitBtn.style.opacity = '0.7';
+    submitBtn.disabled = true;
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/auth/verify_otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                username: username, 
+                otp: otpInput,
+                remember_me: rememberMe
+            })
+        });
+        const data = await resp.json();
+
+        if (resp.status === 200) {
+            // Sembunyikan pesan sukses
+            showToast("Sukses", "Verifikasi berhasil.", "✅");
+            
+            // Lakukan login
+            document.getElementById('otpForm').style.display = 'none';
+            document.getElementById('authForm').style.display = 'block';
+            
+            handleSuccessfulLogin(data);
+        } else {
+            errMsg.innerText = data.detail || "Kode OTP salah.";
+            errMsg.style.display = 'block';
+        }
+    } catch (err) {
+        errMsg.innerText = "Koneksi ke server gagal atau server error.";
+        errMsg.style.display = 'block';
+    } finally {
+        submitBtn.textContent = 'Verifikasi OTP';
         submitBtn.style.opacity = '1';
         submitBtn.disabled = false;
     }
