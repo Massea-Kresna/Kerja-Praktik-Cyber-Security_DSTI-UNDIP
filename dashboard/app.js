@@ -3285,6 +3285,10 @@ function submitNetworkScan() {
     const select = document.getElementById('networkScanTargetSelect');
     const domain = select.value;
     
+    // ✅ TAMBAHKAN KODE INI: Tangkap radio button yang sedang tercentang
+    const scanTypeElement = document.querySelector('input[name="networkScanType"]:checked');
+    const selectedScanType = scanTypeElement ? scanTypeElement.value : 'deep';
+    
     if (!domain) {
         showToast('Error', 'Please select a target to scan.', '❌');
         return;
@@ -3293,15 +3297,16 @@ function submitNetworkScan() {
     const btnSubmit = document.getElementById('btnSubmitNetworkScan');
     btnSubmit.disabled = true;
     btnSubmit.style.opacity = '0.5';
-    btnSubmit.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation: spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="8"></circle></svg>
-        Launching...
-    `;
+    btnSubmit.innerHTML = `...`; // (biarkan kode animasi loading tetap sama)
     
     fetch('/api/network-scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targets: [domain] })
+        // ✅ UBAH BODY INI: Sisipkan scan_type agar dikirim ke server
+        body: JSON.stringify({ 
+            targets: [domain],
+            scan_type: selectedScanType 
+        })
     })
     .then(res => res.json())
     .then(data => {

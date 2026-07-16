@@ -1041,12 +1041,13 @@ async def trigger_pentest(domain_name: str, background_tasks: BackgroundTasks, c
 
 class NetworkScanRequest(BaseModel):
     targets: List[str]
+    scan_type: Optional[str] = "deep"
 
-async def run_network_scan_background(targets: List[str]):
+async def run_network_scan_background(targets: List[str], scan_type: str = "deep"):
     """Fungsi latar belakang untuk menjalankan Network Scan pada beberapa target."""
     semaphore = asyncio.Semaphore(5)
     async with aiohttp.ClientSession() as session:
-        tasks = [process_network_scan(session, target, semaphore) for target in targets]
+        tasks = [process_network_scan(session, target, semaphore, scan_type) for target in targets]
         if tasks:
             await asyncio.gather(*tasks)
 
@@ -1061,6 +1062,16 @@ async def run_web_scan_background(targets: List[str]):
 class WebScanRequest(BaseModel):
     targets: List[str]
 
+@app.post("/api/network-scan")
+async def trigger_network_scan(payload: NetworkScanRequest, background_tasks: BackgroundTasks):
+    """Memicu proses Network Scan."""
+    if not payload.targets:
+        raise HTTPException(status_code=400, detail="Tidak ada target yang diberikan.")
+        
+    background_tasks.add_task(run_network_scan_background, payload.targets, payload.scan_type)
+    
+    return {"status": "success", "message": f"Network Scan via Pentest-Tools diluncurkan untuk {len(payload.targets)} aset."}
+
 @app.post("/api/web-scan")
 async def trigger_web_scan(payload: WebScanRequest, background_tasks: BackgroundTasks):
     """Memicu proses Web Scan."""
@@ -1070,16 +1081,6 @@ async def trigger_web_scan(payload: WebScanRequest, background_tasks: Background
     background_tasks.add_task(run_web_scan_background, payload.targets)
     
     return {"status": "success", "message": f"Web Scan via Pentest-Tools diluncurkan untuk {len(payload.targets)} aset."}
-
-@app.post("/api/network-scan")
-async def trigger_network_scan(payload: NetworkScanRequest, background_tasks: BackgroundTasks):
-    """Memicu proses Network Scan."""
-    if not payload.targets:
-        raise HTTPException(status_code=400, detail="Tidak ada target yang diberikan.")
-        
-    background_tasks.add_task(run_network_scan_background, payload.targets)
-    
-    return {"status": "success", "message": f"Network Scan via Pentest-Tools diluncurkan untuk {len(payload.targets)} aset."}
 
 @app.get("/api/scans/active")
 async def get_active_scans(current_user = Depends(get_current_user)):
