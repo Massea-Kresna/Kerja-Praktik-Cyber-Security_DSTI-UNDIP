@@ -2492,21 +2492,37 @@ async function handleAuthSubmit(e) {
     e.preventDefault();
     const username = document.getElementById('authUsername').value.trim();
     const password = document.getElementById('authPassword').value;
+    const rememberMe = document.getElementById('rememberMe').checked; // Ambil nilai checkbox
     const errMsg = document.getElementById('authErrorMsg');
     const submitBtn = document.getElementById('authSubmitBtn');
 
+    // === AMBIL TOKEN RECAPTCHA ===
+    const recaptchaToken = grecaptcha.getResponse();
+    
+    if (!recaptchaToken) {
+        errMsg.innerText = "Harap selesaikan verifikasi reCAPTCHA.";
+        errMsg.style.display = 'block';
+        return; 
+    }
+
     errMsg.style.display = 'none';
 
-    // UI Feedback segera saat diklik
+    // Kunci tombol saat memproses
     const originalText = submitBtn.textContent;
     submitBtn.textContent = 'Memverifikasi...';
     submitBtn.style.opacity = '0.7';
     submitBtn.disabled = true;
+
     try {
         const resp = await fetch(`${API_BASE}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ 
+                username: username, 
+                password: password, 
+                recaptcha_token: recaptchaToken,
+                remember_me: rememberMe // Kirim data remember me ke backend
+            })
         });
         const data = await resp.json();
 
@@ -2515,10 +2531,17 @@ async function handleAuthSubmit(e) {
         } else {
             errMsg.innerText = data.detail || "Username atau password salah.";
             errMsg.style.display = 'block';
+            grecaptcha.reset(); // Reset reCAPTCHA agar bisa dicentang lagi
         }
     } catch (err) {
-        errMsg.innerText = "Koneksi ke server gagal.";
+        errMsg.innerText = "Koneksi ke server gagal atau server error.";
         errMsg.style.display = 'block';
+        grecaptcha.reset();
+    } finally {
+        // === SANGAT PENTING: Kembalikan tombol seperti semula ===
+        submitBtn.textContent = 'Login';
+        submitBtn.style.opacity = '1';
+        submitBtn.disabled = false;
     }
 }
 
