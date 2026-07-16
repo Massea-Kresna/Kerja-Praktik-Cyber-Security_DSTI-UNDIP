@@ -1198,7 +1198,7 @@ async def trigger_network_scan(payload: NetworkScanRequest, background_tasks: Ba
     
     return {"status": "success", "message": f"Network Scan via Pentest-Tools diluncurkan untuk {len(payload.targets)} aset."}
 
-<<<<<<< HEAD
+
 @app.post("/api/web-scan")
 async def trigger_web_scan(payload: WebScanRequest, background_tasks: BackgroundTasks):
     """Memicu proses Web Scan."""
@@ -1286,7 +1286,7 @@ async def stop_active_scan(req: StopScanRequest, current_user = Depends(get_curr
         if isinstance(e, HTTPException): raise
         raise HTTPException(status_code=500, detail=str(e))
 
-=======
+
 @app.get("/dashboard/reports/{filename}")
 async def get_pdf_report(filename: str, current_user = Depends(get_current_user)):
     """Melayani file PDF report, atau membuatnya secara dinamis jika belum ada."""
@@ -1434,7 +1434,7 @@ async def get_pdf_report(filename: str, current_user = Depends(get_current_user)
             raise HTTPException(status_code=500, detail=f"Gagal memproduksi PDF report secara dinamis: {e}")
             
     raise HTTPException(status_code=404, detail="File PDF report tidak ditemukan.")
->>>>>>> 585a3bd (feat: Integrate authentic Pentest-Tools PDF report download with dynamic fallback)
+
 
 # ===================================================================
 # Mount Static Files — HARUS di bawah semua route API
