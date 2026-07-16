@@ -86,6 +86,8 @@ VULN_REPORT_OUTPUT = os.path.join(OUTPUT_DIR, "vuln_report.json")
 
 # --- Backend API (Opsional) ---
 API_BACKEND_URL = "http://127.0.0.1:8000/api"
+RECAPTCHA_SECRET_KEY = os.getenv("RECAPTCHA_SECRET_KEY")
+RECAPTCHA_SITE_KEY = os.getenv("RECAPTCHA_SITE_KEY")
 
 # --- HTTP Headers ---
 DEFAULT_HEADERS = {
