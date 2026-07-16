@@ -2559,7 +2559,6 @@ async function handleAuthSubmit(e) {
         errMsg.style.display = 'block';
         grecaptcha.reset();
     } finally {
-        // === SANGAT PENTING: Kembalikan tombol seperti semula ===
         submitBtn.textContent = 'Login';
         submitBtn.style.opacity = '1';
         submitBtn.disabled = false;
