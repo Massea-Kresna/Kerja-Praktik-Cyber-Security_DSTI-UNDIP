@@ -644,7 +644,7 @@
                                     <circle cx="11" cy="11" r="8"></circle>
                                     <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                                 </svg>
-                                <input type="text" id="webScannerSearch" placeholder="Search target or scan ID..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 13px; color: #1e293b; margin-left: 8px; font-family: inherit;">
+                                <input type="text" id="webScannerSearch" oninput="applyWebFilters()" placeholder="Search target or scan ID..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 13px; color: #1e293b; margin-left: 8px; font-family: inherit;">
                             </div>
                             <button class="btn btn-secondary">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -654,22 +654,28 @@
                         </div>
                         
                         <div class="table-container">
-                            <table class="modern-table" id="webScannerTable">
+                            <table class="modern-table" style="margin: 0; width: 100%;">
                                 <thead>
                                     <tr>
-                                        <th style="width: 40px;"><input type="checkbox"></th>
-                                        <th style="text-align: left;">SCANS</th>
-                                        <th style="text-align: left;">STATUS</th>
-                                        <th style="text-align: left;">TARGET</th>
-                                        <th style="text-align: left;">SUMMARY</th>
-                                        <th style="text-align: left;">DATE</th>
-                                        <th style="text-align: left;">ACTION</th>
+                                        <th style="width: 48px; text-align: center; padding: 12px 16px;">
+                                            <input type="checkbox" id="selectAllWebScans" onchange="window.toggleAllWebScans(this)" style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--primary);">
+                                        </th>
+                                        <th id="thWebScansCount" style="text-align: left; padding: 12px 16px; font-size: 12px;">SCANS</th>
+                                        <th style="text-align: left; padding: 12px 16px; font-size: 12px;">STATUS</th>
+                                        <th style="text-align: left; padding: 12px 16px; font-size: 12px;">TARGET</th>
+                                        <th style="text-align: left; padding: 12px 16px; font-size: 12px;">SUMMARY</th>
+                                        <th style="text-align: left; padding: 12px 16px; font-size: 12px;">DATE</th>
+                                        <th style="text-align: center; padding: 12px 16px; font-size: 12px;">ACTION</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    <tr><td colspan="7" style="text-align: center;">Loading...</td></tr>
+                                <tbody id="webScannerTableBody">
+                                    <tr><td colspan="7" class="empty-state" style="padding: 24px; text-align: center;">Loading...</td></tr>
                                 </tbody>
                             </table>
+                        </div>
+                        
+                        <!-- Pagination Controls -->
+                        <div id="webPaginationControls" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0 0 0; margin-top: 16px; border-top: 1px solid #e2e8f0;">
                         </div>
                     </div>
                 </div>
