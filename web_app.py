@@ -22,6 +22,7 @@ import httpx
 import uuid
 import os
 import json
+import requests
 from typing import List, Optional
 
 from datetime import datetime, timedelta, timezone
@@ -33,6 +34,12 @@ app = FastAPI(title="DSTI UNDIP Pentest Dashboard API")
 
 # Seeding admin secara otomatis saat file dimuat
 db_manager.seed_default_admin()
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+    recaptcha_token: Optional[str] = None
+    remember_me: Optional[bool] = False
 
 # ===================================================================
 # WebSocket Connection Manager untuk Admin & Session Live Updates
@@ -192,13 +199,32 @@ def register_user(user_data: UserRegister, admin_user = Depends(get_current_admi
         raise HTTPException(status_code=500, detail=f"Gagal melakukan registrasi: {str(e)}")
 
 @app.post("/api/auth/login")
-async def login_user(user_data: UserLogin, response: Response):
-    """Proses login user, menghasilkan cookie session_id"""
-    user = db_manager.get_user_by_username(user_data.username)
-    if not user or not db_manager.verify_password(user_data.password, user["password"]):
+async def login(credentials: LoginRequest, response: Response):
+    # 1. Validasi reCAPTCHA ke Google
+    secret_key = config.RECAPTCHA_SECRET_KEY
+    verify_url = "https://www.google.com/recaptcha/api/siteverify"
+    payload = {
+        "secret": secret_key,
+        "response": credentials.recaptcha_token
+    }
+    
+    # Ubah nama variabel agar tidak bentrok dengan 'response' bawaan FastAPI
+    recaptcha_result = requests.post(verify_url, data=payload).json()
+    
+    # TAMBAHKAN BARIS INI UNTUK DEBUGGING:
+    print("Jawaban dari Google:", recaptcha_result)
+    
+    if not recaptcha_result.get("success"):
+        raise HTTPException(status_code=400, detail="Verifikasi reCAPTCHA gagal.")
+    
+    # 2. Cek Username dan Password ke Database (Menggunakan fungsi bawaan db_manager)
+    user = db_manager.get_user_by_username(credentials.username)
+    
+    # Cek apakah user ditemukan dan apakah password hash-nya cocok
+    if not user or not db_manager.verify_password(credentials.password, user.get("password")):
         raise HTTPException(status_code=401, detail="Username atau password salah.")
         
-    # Cek timeout
+    # 3. Cek timeout
     timeout_until_str = user.get("timeout_until")
     if timeout_until_str:
         try:
@@ -214,12 +240,12 @@ async def login_user(user_data: UserLogin, response: Response):
         except Exception:
             pass
             
-    # Buat session baru
+    # 4. Buat session baru
     session_id = str(uuid.uuid4())
     db_manager.update_user_session(user["username"], session_id, True)
     
-    # Simpan di cookie (maksimal aktif 30 hari jika remember me)
-    cookie_max_age = 2592000 if user_data.remember_me else 86400
+    # 5. Simpan di cookie (maksimal aktif 30 hari jika remember me)
+    cookie_max_age = 2592000 if credentials.remember_me else 86400
     response.set_cookie(
         key="session_id", 
         value=session_id, 
@@ -229,7 +255,7 @@ async def login_user(user_data: UserLogin, response: Response):
         path="/"
     )
     
-    # Kirim notifikasi real-time via WebSocket ke semua admin yang terkoneksi
+    # 6. Kirim notifikasi real-time via WebSocket ke semua admin yang terkoneksi
     await manager.broadcast_to_admins({
         "event": "user_login",
         "username": user["username"],
