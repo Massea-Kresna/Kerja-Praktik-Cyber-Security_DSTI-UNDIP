@@ -1077,16 +1077,17 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
         if tasks:
             await asyncio.gather(*tasks)
 
-async def run_web_scan_background(targets: List[str]):
+async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
     """Fungsi latar belakang untuk menjalankan Web Scan pada beberapa target."""
     semaphore = asyncio.Semaphore(5)
     async with aiohttp.ClientSession() as session:
-        tasks = [process_domain_scan(session, target, semaphore) for target in targets]
+        tasks = [process_domain_scan(session, target, semaphore, scan_type) for target in targets]
         if tasks:
             await asyncio.gather(*tasks)
 
 class WebScanRequest(BaseModel):
     targets: List[str]
+    scan_type: Optional[str] = "deep"
 
 @app.post("/api/network-scan")
 async def trigger_network_scan(payload: NetworkScanRequest, background_tasks: BackgroundTasks):
@@ -1104,7 +1105,7 @@ async def trigger_web_scan(payload: WebScanRequest, background_tasks: Background
     if not payload.targets:
         raise HTTPException(status_code=400, detail="Tidak ada target yang diberikan.")
         
-    background_tasks.add_task(run_web_scan_background, payload.targets)
+    background_tasks.add_task(run_web_scan_background, payload.targets, payload.scan_type)
     
     return {"status": "success", "message": f"Web Scan via Pentest-Tools diluncurkan untuk {len(payload.targets)} aset."}
 
