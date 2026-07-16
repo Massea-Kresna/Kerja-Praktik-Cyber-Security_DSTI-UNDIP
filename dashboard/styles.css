@@ -358,6 +358,12 @@ body {
     border: 1px solid var(--sev-info);
 }
 
+.badge-safe {
+    background: #FFFFFF;
+    color: var(--color-navy);
+    border: 1px solid var(--color-border);
+}
+
 .badge-active {
     background: #10B981;
     color: #FFFFFF;
@@ -871,7 +877,7 @@ body {
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: #0b1f3a; /* Dark blue background matching primary-container */
+    background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('assets/bg-undip.jpg') center/cover no-repeat;
     display: flex;
     justify-content: center;
     align-items: center;

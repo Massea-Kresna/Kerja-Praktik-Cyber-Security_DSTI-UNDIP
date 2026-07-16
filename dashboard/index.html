@@ -65,6 +65,12 @@
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
             <polyline points="22 4 12 14.01 9 11.01" />
         </symbol>
+        <symbol id="icon-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </symbol>
     </svg>
 
     <!-- Toast Container untuk Notifikasi Real-time -->
@@ -75,12 +81,10 @@
         <div class="auth-card">
             <div class="auth-card-body">
                 <div class="auth-header">
-                    <div class="auth-icon-wrapper" style="background: transparent; color: inherit;">
-                        <img src="assets/undip-logo.png" alt="UNDIP Logo"
-                            style="width: 64px; height: 64px; object-fit: contain; display: block;">
+                    <div class="auth-icon-wrapper" style="background: transparent; color: inherit; width: 100%; height: auto; margin-top: 16px; margin-bottom: 0px;">
+                        <img src="assets/csirt-logo.png" alt="UNDIP CSIRT Logo"
+                            style="width: 100%; max-width: 280px; height: auto; object-fit: contain; display: block; margin: 0 auto;">
                     </div>
-                    <h2>UNDIP Security</h2>
-                    <p id="authSubtitle">Domain Scanner Login</p>
                 </div>
 
                 <div class="auth-error-msg" id="authErrorMsg">Email atau password salah</div>
@@ -141,15 +145,9 @@
 
     <div id="app" class="dashboard-layout">
         <aside class="sidebar">
-            <div class="sidebar-brand">
-                <div class="brand-logo" style="background: transparent; padding: 0;">
-                    <img src="assets/undip-logo.png" alt="UNDIP Logo"
-                        style="width: 34px; height: 34px; display: block; object-fit: contain;">
-                </div>
-                <div class="brand-text">
-                    <h2>UNDIP Security</h2>
-                    <p>Domain Scanner</p>
-                </div>
+            <div class="sidebar-brand" style="justify-content: center; padding: 16px 24px 32px;">
+                <img src="assets/csirt-logo.png" alt="UNDIP CSIRT Logo"
+                    style="width: 100%; max-width: 200px; height: auto; object-fit: contain; display: block; filter: drop-shadow(1px 0 0 white) drop-shadow(-1px 0 0 white) drop-shadow(0 1px 0 white) drop-shadow(0 -1px 0 white);">
             </div>
 
             <nav class="sidebar-nav">
@@ -182,7 +180,9 @@
                     </svg> Network Scanner
                 </a>
                 <a href="#" class="nav-item hidden" id="nav-admin" onclick="switchView('admin')" style="display: none;">
-                    User Management
+                    <svg class="icon">
+                        <use href="#icon-users" />
+                    </svg> User Management
                 </a>
             </nav>
 

@@ -1656,25 +1656,37 @@ function renderLowerGrid() {
         }
     }
 
-    // 2. Process Monitored Domains
+    const DOMAIN_RISK_WEIGHT = { 'CRITICAL': 6, 'HIGH': 5, 'MEDIUM': 4, 'LOW': 3, 'INFO': 2, 'SAFE': 1 };
+
     const domainMap = {};
     allVulns.forEach(scan => {
         const domainName = scan.domains?.domain_name || 'Unknown Target';
         const riskLevel = (scan.risk_level || 'SAFE').toUpperCase();
         const scanDate = new Date(scan.scan_date).getTime();
 
-        if (!domainMap[domainName] || scanDate > domainMap[domainName].date) {
+        if (!domainMap[domainName]) {
             domainMap[domainName] = {
                 domain: domainName,
                 risk: riskLevel,
                 date: scanDate,
                 ip: scan.domains?.ip_address || '-'
             };
+        } else {
+            // Gunakan tingkat risiko tertinggi yang pernah terdeteksi
+            const currentWeight = DOMAIN_RISK_WEIGHT[domainMap[domainName].risk] || 0;
+            const newWeight = DOMAIN_RISK_WEIGHT[riskLevel] || 0;
+            if (newWeight > currentWeight) {
+                domainMap[domainName].risk = riskLevel;
+            }
+            // Selalu perbarui tanggal ke scan yang paling baru
+            if (scanDate > domainMap[domainName].date) {
+                domainMap[domainName].date = scanDate;
+                domainMap[domainName].ip = scan.domains?.ip_address || '-';
+            }
         }
     });
 
     let uniqueDomains = Object.values(domainMap);
-    const DOMAIN_RISK_WEIGHT = { 'CRITICAL': 6, 'HIGH': 5, 'MEDIUM': 4, 'LOW': 3, 'INFO': 2, 'SAFE': 1 };
 
     const riskFilterEl = document.querySelector('input[name="domainRisk"]:checked');
     const selectedRiskFilter = riskFilterEl ? riskFilterEl.value : 'ALL';
@@ -2484,8 +2496,8 @@ function handleSuccessfulLogin(user) {
     }
     const roleEl = document.getElementById('sidebar-user-role');
     if (user.role === 'admin') {
-        roleEl.innerHTML = `<span class="badge-admin-role">Admin</span>`;
-        document.getElementById('nav-admin').style.display = 'block';
+        document.getElementById('sidebar-user-role').innerHTML = `<span class="badge-admin-role">Admin</span>`;
+        document.getElementById('nav-admin').style.display = 'flex';
         document.getElementById('notifWrapper').style.display = 'block';
 
         renderNotificationList();

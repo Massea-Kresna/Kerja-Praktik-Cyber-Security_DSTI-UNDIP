@@ -270,7 +270,8 @@ async def login(credentials: LoginRequest, response: Response):
     print("Jawaban dari Google:", recaptcha_result)
     
     if not recaptcha_result.get("success"):
-        raise HTTPException(status_code=400, detail="Verifikasi reCAPTCHA gagal.")
+        error_codes = recaptcha_result.get("error-codes", [])
+        raise HTTPException(status_code=400, detail=f"Verifikasi reCAPTCHA gagal. Google Error: {error_codes}")
     
     # 2. Cek Username dan Password ke Database (Menggunakan fungsi bawaan db_manager)
     user = db_manager.get_user_by_username(credentials.username)
