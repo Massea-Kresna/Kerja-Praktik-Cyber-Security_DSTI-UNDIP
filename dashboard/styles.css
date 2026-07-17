@@ -61,6 +61,10 @@ body {
     font-size: 14px;
 }
 
+button, input, select, textarea {
+    font-family: var(--font-sans);
+}
+
 .icon {
     width: 16px;
     height: 16px;
@@ -634,6 +638,30 @@ body {
 .icon-btn:hover {
     background-color: var(--color-bg);
     color: var(--color-ink);
+}
+
+.icon-btn.action-edit {
+    color: var(--color-accent) !important;
+    border-color: var(--color-accent) !important;
+    background: rgba(0, 88, 189, 0.03) !important;
+}
+.icon-btn.action-edit:hover {
+    background: var(--color-accent) !important;
+    color: #ffffff !important;
+    border-color: var(--color-accent) !important;
+    box-shadow: 0 2px 4px rgba(0, 88, 189, 0.15) !important;
+}
+
+.icon-btn.action-delete {
+    color: #ef4444 !important;
+    border-color: #ef4444 !important;
+    background: rgba(239, 68, 68, 0.03) !important;
+}
+.icon-btn.action-delete:hover {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    border-color: #ef4444 !important;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.15) !important;
 }
 
 /* MULTI-SELECT DROPDOWN (LOGIC FILTER LAMA) */
@@ -1260,6 +1288,40 @@ body {
     gap: 8px;
 }
 
+/* Premium Generate Report Button */
+.btn-generate-report {
+    font-family: var(--font-sans);
+    background-color: #1e293b;
+    color: #ffffff;
+    border: 1px solid #334155;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+}
+.btn-generate-report svg {
+    color: #94a3b8;
+    transition: color 0.2s ease;
+}
+.btn-generate-report:hover {
+    background-color: #0f172a;
+    border-color: #475569;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+.btn-generate-report:hover svg {
+    color: #eab308;
+}
+.btn-generate-report:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+
 .sso-btn:hover {
     background: #f2f4f6;
 }
@@ -1865,6 +1927,35 @@ body {
     transform: translateY(0);
 }
 
+.btn-danger {
+    background: var(--color-danger) !important;
+    color: #ffffff !important;
+    border-color: var(--color-danger) !important;
+}
+
+.btn-danger:hover {
+    background: #b91c1c !important; /* Slightly darker red */
+    border-color: #b91c1c !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px -2px rgba(220, 38, 38, 0.3);
+}
+
+.btn-danger:active {
+    transform: translateY(0);
+}
+
+.btn-warning-outline {
+    background: transparent !important;
+    color: #ea580c !important; /* Orange-yellow / amber */
+    border-color: #ea580c !important;
+}
+
+.btn-warning-outline:hover {
+    background: rgba(234, 88, 12, 0.05) !important;
+    color: #c2410c !important;
+    border-color: #c2410c !important;
+}
+
 .btn-outline {
     background: transparent;
     color: var(--color-ink-soft);
@@ -1898,6 +1989,19 @@ body {
     box-shadow: 0 2px 4px rgba(0, 88, 189, 0.15);
 }
 
+.modern-table td .btn-outline.btn-sm.btn-delete-domain {
+    color: #ef4444;
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.03);
+}
+
+.modern-table td .btn-outline.btn-sm.btn-delete-domain:hover {
+    background: #ef4444;
+    border-color: #ef4444;
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.15);
+}
+
 /* ==========================================================================
    VULNERABILITY FILTERS (MODAL CARD)
    ========================================================================== */
@@ -1909,16 +2013,18 @@ body {
 }
 
 .filter-btn {
+    font-family: var(--font-sans);
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
+    padding: 8px 18px;
     border-radius: 20px;
     border: 1px solid var(--color-border);
     background: #ffffff;
     color: var(--color-muted);
-    font-size: 12px;
-    font-weight: 500;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);
@@ -1957,6 +2063,24 @@ body {
 .filter-btn.active .filter-dot {
     box-shadow: 0 1px 2px rgba(255, 255, 255, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.quick-date-btn {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--color-ink-soft);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    font-weight: 500;
+}
+.quick-date-btn:hover {
+    background: #f1f5f9;
+    color: var(--color-ink);
+    border-color: #cbd5e1;
 }
 
 /* Hide number spinners */

@@ -54,6 +54,7 @@ OTP_STORE = {}
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 import random
 
 def send_otp_email(to_email: str, otp: str):
@@ -146,6 +147,9 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     username: str
     password: str
+
+class TimeoutRequest(BaseModel):
+    minutes: int
     remember_me: Optional[bool] = False
 
 # ===================================================================
@@ -295,25 +299,51 @@ async def login(credentials: LoginRequest, response: Response):
             raise he
         except Exception:
             pass
-             # 4. Generate OTP
-    otp_code = str(random.randint(100000, 999999))
-    OTP_STORE[credentials.username] = {
-        "otp": otp_code,
-        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5)
-    }
-    
-    # 5. Send OTP Email
-    target_email = credentials.username
-    if target_email == "admin":
-        target_email = config.ADMIN_EMAIL if config.ADMIN_EMAIL else "admin@undip.ac.id"
+    # 4. Cek Role. OTP hanya untuk admin
+    user_role = user.get("role", "user")
+    if user_role == "admin":
+        # 5a. Generate OTP untuk Admin
+        otp_code = str(random.randint(100000, 999999))
+        OTP_STORE[credentials.username] = {
+            "otp": otp_code,
+            "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5)
+        }
         
-    success = send_otp_email(target_email, otp_code)
-    
-    if not success:
-        # Fallback jika email gagal dikirim (opsional: bisa di-log saja)
-        print(f"[!] Email gagal dikirim ke {target_email}. OTP untuk {credentials.username} adalah: {otp_code}")
+        # Kirim OTP Email
+        target_email = credentials.username
+        if target_email == "admin":
+            target_email = config.ADMIN_EMAIL if config.ADMIN_EMAIL else "admin@undip.ac.id"
+            
+        success = send_otp_email(target_email, otp_code)
         
-    return {"status": "otp_required", "message": "Kode OTP telah dikirim ke email Anda."}
+        if not success:
+            print(f"[!] Email gagal dikirim ke {target_email}. OTP untuk {credentials.username} adalah: {otp_code}")
+            
+        return {"status": "otp_required", "message": "Kode OTP telah dikirim ke email Anda."}
+    else:
+        # 5b. Bypass OTP untuk User Biasa
+        session_id = str(uuid.uuid4())
+        db_manager.update_user_session(credentials.username, session_id, True)
+        
+        cookie_max_age = 2592000 if credentials.remember_me else 86400
+        response.set_cookie(
+            key="session_id",
+            value=session_id,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=cookie_max_age
+        )
+        
+        return {
+            "status": "success",
+            "message": "Login berhasil",
+            "user": {
+                "username": user["username"],
+                "role": user["role"],
+                "session_id": session_id
+            }
+        }
 
 @app.post("/api/auth/verify_otp")
 async def verify_otp(req: VerifyOTPRequest, response: Response):
@@ -397,13 +427,12 @@ async def force_logout(target_username: str, admin_user = Depends(get_current_ad
     return {"status": "ok", "message": f"User '{target_username}' berhasil di-force logout."}
 
 @app.post("/api/admin/users/{target_username}/timeout")
-async def put_user_timeout(target_username: str, admin_user = Depends(get_current_admin)):
-    """Menangguhkan user selama 2 jam"""
-    # 2 jam dari sekarang
-    timeout_time = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+async def put_user_timeout(target_username: str, req: TimeoutRequest, admin_user = Depends(get_current_admin)):
+    """Menangguhkan user selama rentang waktu tertentu"""
+    timeout_time = (datetime.now(timezone.utc) + timedelta(minutes=req.minutes)).isoformat()
     db_manager.update_user_timeout(target_username, timeout_time)
     await manager.kick_user(target_username, "timeout")
-    return {"status": "ok", "message": f"User '{target_username}' ditangguhkan selama 2 jam."}
+    return {"status": "ok", "message": f"User '{target_username}' ditangguhkan selama {req.minutes} menit."}
 
 @app.post("/api/admin/users/{target_username}/remove-timeout")
 def remove_user_timeout(target_username: str, admin_user = Depends(get_current_admin)):
@@ -598,24 +627,34 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
                 
                 if days_diff <= 1:
                     interval_minutes = 30
-                    num_buckets = 48
-                    minute_snapped = 30 if end_dt.minute >= 30 else 0
-                    end_snapped_wib = end_dt.replace(minute=minute_snapped, second=0, microsecond=0)
-                    start_snapped_wib = end_snapped_wib - timedelta(hours=24)
                     date_format = "%H:%M"
+                elif days_diff <= 3:
+                    interval_minutes = 60
+                    date_format = "%d %b %H:%M"
                 elif days_diff <= 7:
-                    interval_minutes = 6 * 60
-                    num_buckets = int((days_diff * 24) // 6)
-                    hour_snapped = (end_dt.hour // 6) * 6
-                    end_snapped_wib = end_dt.replace(hour=hour_snapped, minute=0, second=0, microsecond=0)
-                    start_snapped_wib = end_snapped_wib - timedelta(minutes=num_buckets * interval_minutes)
+                    interval_minutes = 4 * 60
+                    date_format = "%d %b %H:%M"
+                elif days_diff <= 14:
+                    interval_minutes = 12 * 60
                     date_format = "%d %b %H:%M"
                 else:
                     interval_minutes = 24 * 60
+                    date_format = "%d %b %Y"
+
+                if days_diff <= 14:
+                    num_buckets = int(math.ceil((days_diff * 24 * 60) / interval_minutes))
+                    if interval_minutes < 60:
+                        minute_snapped = 30 if end_dt.minute >= 30 else 0
+                        end_snapped_wib = end_dt.replace(minute=minute_snapped, second=0, microsecond=0)
+                    else:
+                        hour_interval = interval_minutes // 60
+                        hour_snapped = (end_dt.hour // hour_interval) * hour_interval
+                        end_snapped_wib = end_dt.replace(hour=hour_snapped, minute=0, second=0, microsecond=0)
+                    start_snapped_wib = end_snapped_wib - timedelta(minutes=num_buckets * interval_minutes)
+                else:
                     num_buckets = max(1, math.ceil(days_diff))
                     end_snapped_wib = end_dt.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
                     start_snapped_wib = end_snapped_wib - timedelta(days=num_buckets)
-                    date_format = "%d %b %Y"
             except ValueError:
                 raise HTTPException(status_code=400, detail="Format tanggal tidak valid. Gunakan YYYY-MM-DD.")
         
@@ -633,9 +672,11 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
         scans = resp.data
         
         labels = []
+        raw_labels = []
         for i in range(num_buckets + 1):
             bucket_time_wib = start_snapped_wib + timedelta(minutes=i*interval_minutes)
             labels.append(bucket_time_wib.strftime(date_format))
+            raw_labels.append(bucket_time_wib.isoformat())
             
         domains_resp = supabase.table("domains").select("domain_name").execute()
         all_domains = [d.get("domain_name") for d in domains_resp.data if d.get("domain_name")]
@@ -675,6 +716,7 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
         return {
             "source": "supabase",
             "labels": labels,
+            "raw_labels": raw_labels,
             "datasets": [
                 {
                     "label": domain,
@@ -724,24 +766,34 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
                 
                 if days_diff <= 1:
                     interval_minutes = 30
-                    num_buckets = 48
-                    minute_snapped = 30 if end_dt.minute >= 30 else 0
-                    end_snapped_wib = end_dt.replace(minute=minute_snapped, second=0, microsecond=0)
-                    start_snapped_wib = end_snapped_wib - timedelta(hours=24)
                     date_format = "%H:%M"
+                elif days_diff <= 3:
+                    interval_minutes = 60
+                    date_format = "%d %b %H:%M"
                 elif days_diff <= 7:
-                    interval_minutes = 6 * 60
-                    num_buckets = int((days_diff * 24) // 6)
-                    hour_snapped = (end_dt.hour // 6) * 6
-                    end_snapped_wib = end_dt.replace(hour=hour_snapped, minute=0, second=0, microsecond=0)
-                    start_snapped_wib = end_snapped_wib - timedelta(minutes=num_buckets * interval_minutes)
+                    interval_minutes = 4 * 60
+                    date_format = "%d %b %H:%M"
+                elif days_diff <= 14:
+                    interval_minutes = 12 * 60
                     date_format = "%d %b %H:%M"
                 else:
                     interval_minutes = 24 * 60
+                    date_format = "%d %b %Y"
+
+                if days_diff <= 14:
+                    num_buckets = int(math.ceil((days_diff * 24 * 60) / interval_minutes))
+                    if interval_minutes < 60:
+                        minute_snapped = 30 if end_dt.minute >= 30 else 0
+                        end_snapped_wib = end_dt.replace(minute=minute_snapped, second=0, microsecond=0)
+                    else:
+                        hour_interval = interval_minutes // 60
+                        hour_snapped = (end_dt.hour // hour_interval) * hour_interval
+                        end_snapped_wib = end_dt.replace(hour=hour_snapped, minute=0, second=0, microsecond=0)
+                    start_snapped_wib = end_snapped_wib - timedelta(minutes=num_buckets * interval_minutes)
+                else:
                     num_buckets = max(1, math.ceil(days_diff))
                     end_snapped_wib = end_dt.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
                     start_snapped_wib = end_snapped_wib - timedelta(days=num_buckets)
-                    date_format = "%d %b %Y"
             except ValueError:
                 raise HTTPException(status_code=400, detail="Format tanggal tidak valid. Gunakan YYYY-MM-DD.")
         
@@ -759,9 +811,11 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
         scans = resp.data
         
         labels = []
+        raw_labels = []
         for i in range(num_buckets + 1):
             bucket_time_wib = start_snapped_wib + timedelta(minutes=i*interval_minutes)
             labels.append(bucket_time_wib.strftime(date_format))
+            raw_labels.append(bucket_time_wib.isoformat())
             
         severities_data = {
             "CRITICAL": [0] * (num_buckets + 1),
@@ -820,6 +874,7 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
         return {
             "source": "supabase",
             "labels": labels,
+            "raw_labels": raw_labels,
             "datasets": [
                 {
                     "label": sev.capitalize(),
@@ -1109,6 +1164,11 @@ async def run_pentest_tools_background(domain_name: str):
     async with aiohttp.ClientSession() as session:
         await process_domain_scan(session, domain_name, semaphore)
     print(f"[+] [BACKGROUND] Scan Pentest-Tools selesai untuk: {domain_name}")
+    await manager.broadcast_to_admins({
+        "event": "scan_finished",
+        "domain": domain_name,
+        "time": datetime.now(config.WIB).isoformat()
+    })
 
 # ===================================================================
 # Simpan Jadwal
@@ -1178,6 +1238,13 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
             success_count = sum(1 for r in results if r)
             failed_count = len(results) - success_count
             print(f"[+] Network Scan Selesai: {success_count} sukses, {failed_count} gagal.")
+            await asyncio.gather(*tasks)
+            for target in targets:
+                await manager.broadcast_to_admins({
+                    "event": "scan_finished",
+                    "domain": target,
+                    "time": datetime.now(config.WIB).isoformat()
+                })
 
 async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
     """Fungsi latar belakang untuk menjalankan Web Scan pada beberapa target."""
@@ -1189,6 +1256,13 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
             success_count = sum(1 for r in results if r)
             failed_count = len(results) - success_count
             print(f"[+] Web Scan Selesai: {success_count} sukses, {failed_count} gagal.")
+            await asyncio.gather(*tasks)
+            for target in targets:
+                await manager.broadcast_to_admins({
+                    "event": "scan_finished",
+                    "domain": target,
+                    "time": datetime.now(config.WIB).isoformat()
+                })
 
 class WebScanRequest(BaseModel):
     targets: List[str]
@@ -1464,9 +1538,11 @@ class GenerateReportRequest(BaseModel):
     include_accepted: bool = True
     include_fixed: bool = True
 
-@app.post("/api/reports/generate")
-async def generate_report(req: GenerateReportRequest, current_user = Depends(get_current_user)):
-    """Generate on-demand Pentest-Tools report based on UI modal filters."""
+class ShareReportRequest(GenerateReportRequest):
+    emails: list[str]
+
+async def _generate_report_bytes(req: GenerateReportRequest) -> tuple[bytes, str]:
+    """Helper to generate on-demand Pentest-Tools report based on UI modal filters and return bytes."""
     supabase = _get_supabase_or_none()
     if not supabase:
         raise HTTPException(status_code=503, detail="Database not configured")
@@ -1548,15 +1624,9 @@ async def generate_report(req: GenerateReportRequest, current_user = Depends(get
                 if dl_resp.status == 200:
                     pdf_data = await dl_resp.read()
                     
-                    # Mengirim data biner langsung ke memori browser pengguna tanpa menyimpan di server
                     format_file = req.report_format.lower()
                     filename = f"security_report_{req.history_id}.{format_file}"
-                    
-                    return Response(
-                        content=pdf_data, 
-                        media_type="application/octet-stream", # Format universal untuk unduhan
-                        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
-                    )
+                    return pdf_data, filename
                     
                 elif dl_resp.status == 202:
                     await asyncio.sleep(5)
