@@ -354,7 +354,7 @@ async def verify_otp(req: VerifyOTPRequest, response: Response):
     user_data = db_manager.get_user_by_username(req.username)
     role = user_data["role"] if user_data else "admin"
     
-    # Broadcast
+    # Broadcast User Login event (to update user tables etc)
     await manager.broadcast_to_admins({
         "event": "user_login",
         "username": req.username,
@@ -1174,7 +1174,10 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
     async with aiohttp.ClientSession() as session:
         tasks = [process_network_scan(session, target, semaphore, scan_type) for target in targets]
         if tasks:
-            await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks)
+            success_count = sum(1 for r in results if r)
+            failed_count = len(results) - success_count
+            print(f"[+] Network Scan Selesai: {success_count} sukses, {failed_count} gagal.")
 
 async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
     """Fungsi latar belakang untuk menjalankan Web Scan pada beberapa target."""
@@ -1182,7 +1185,10 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
     async with aiohttp.ClientSession() as session:
         tasks = [process_domain_scan(session, target, semaphore, scan_type) for target in targets]
         if tasks:
-            await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks)
+            success_count = sum(1 for r in results if r)
+            failed_count = len(results) - success_count
+            print(f"[+] Web Scan Selesai: {success_count} sukses, {failed_count} gagal.")
 
 class WebScanRequest(BaseModel):
     targets: List[str]
@@ -1559,6 +1565,82 @@ async def generate_report(req: GenerateReportRequest, current_user = Depends(get
                     raise HTTPException(status_code=dl_resp.status, detail=f"Gagal mengunduh report: {err}")
                     
         raise HTTPException(status_code=408, detail="Timeout saat menunggu pembuatan report selesai.")
+
+# ==============================================================================
+# NOTIFICATIONS ROUTES
+# ==============================================================================
+@app.get("/api/notifications")
+async def api_get_notifications():
+    """Mengambil semua notifikasi lokal"""
+    try:
+        notifs = db_manager.get_notifications()
+        return {"status": "success", "data": notifs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/notifications/{notif_id}/read")
+async def api_mark_notification_read(notif_id: str):
+    """Menandai satu notifikasi telah dibaca"""
+    try:
+        success = db_manager.mark_notification_as_read(notif_id)
+        if success:
+            return {"status": "success"}
+        raise HTTPException(status_code=404, detail="Notification not found")
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/notifications/read-all")
+async def api_mark_all_notifications_read():
+    """Menandai semua notifikasi telah dibaca"""
+    try:
+        db_manager.mark_all_notifications_as_read()
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/notifications/{notif_id}")
+async def api_delete_notification(notif_id: str):
+    """Menghapus satu notifikasi"""
+    try:
+        success = db_manager.delete_notification(notif_id)
+        if success:
+            return {"status": "success"}
+        raise HTTPException(status_code=404, detail="Notification not found")
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+class InternalNotifyRequest(BaseModel):
+    title: str
+    message: str
+    notif_type: str = "info"
+
+@app.post("/api/internal/webhook-notify")
+async def webhook_notify(req: InternalNotifyRequest, request: Request):
+    """Webhook internal untuk menerima notifikasi dari Celery/Proses lain"""
+    # Hanya izinkan localhost
+    client_host = request.client.host
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+        
+    try:
+        notif = db_manager.create_notification(
+            title=req.title,
+            message=req.message,
+            notif_type=req.notif_type
+        )
+        
+        await manager.broadcast_to_admins({
+            "event": "new_notification",
+            "notification": notif
+        })
+        
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
