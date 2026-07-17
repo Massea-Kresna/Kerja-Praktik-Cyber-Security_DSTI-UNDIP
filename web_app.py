@@ -1270,13 +1270,19 @@ async def trigger_network_scan(payload: NetworkScanRequest, background_tasks: Ba
     
     return {"status": "success", "message": f"Network Scan via Pentest-Tools diluncurkan untuk {len(payload.targets)} aset."}
 
-
 @app.post("/api/web-scan")
-async def trigger_web_scan(payload: WebScanRequest, background_tasks: BackgroundTasks):
-    """Memicu proses Web Scan."""
+@app.post("/api/web-scan")
+async def trigger_web_scan(
+    payload: WebScanRequest, 
+    background_tasks: BackgroundTasks, 
+    current_user = Depends(get_current_user)
+):
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk melakukan aksi ini.")
+
     if not payload.targets:
         raise HTTPException(status_code=400, detail="Tidak ada target yang diberikan.")
-        
+
     background_tasks.add_task(run_web_scan_background, payload.targets, payload.scan_type)
     
     return {"status": "success", "message": f"Web Scan via Pentest-Tools diluncurkan untuk {len(payload.targets)} aset."}
@@ -1338,6 +1344,9 @@ class StopScanRequest(BaseModel):
 @app.post("/api/scans/stop")
 async def stop_active_scan(req: StopScanRequest, current_user = Depends(get_current_user)):
     """Menghentikan scan yang sedang berjalan di Pentest-Tools."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk melakukan aksi ini.")
+    
     scan_id = req.scan_id
     url = f"{config.PENTEST_TOOLS_BASE_URL}/scans/{scan_id}/stop"
     headers = {
@@ -1349,7 +1358,6 @@ async def stop_active_scan(req: StopScanRequest, current_user = Depends(get_curr
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, timeout=15) as resp:
                 if resp.status in (200, 201, 202, 204):
-
                     return {"status": "success", "message": f"Scan {scan_id} berhasil dihentikan."}
                 else:
                     err = await resp.text()
@@ -1358,20 +1366,20 @@ async def stop_active_scan(req: StopScanRequest, current_user = Depends(get_curr
         if isinstance(e, HTTPException): raise
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/dashboard/reports/{filename}")
 async def get_pdf_report(filename: str, current_user = Depends(get_current_user)):
     """Melayani file PDF report, atau membuatnya secara dinamis jika belum ada."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk melakukan aksi ini.")
+    
     reports_dir = os.path.join(DASHBOARD_PATH, "reports")
     os.makedirs(reports_dir, exist_ok=True)
     pdf_path = os.path.join(reports_dir, filename)
     
     if os.path.exists(pdf_path):
         return FileResponse(pdf_path, media_type="application/pdf", filename=filename)
+    
         
-    # Jika file tidak ada, coba buatkan PDF secara dinamis!
-    # Nama file berformat: pentest_tools_domain_name.pdf
-    # Misal: pentest_tools_undip_ac_id.pdf -> target domain: undip.ac.id
     if filename.startswith("pentest_tools_") and filename.endswith(".pdf"):
         domain_part = filename[len("pentest_tools_"):-4]
         # Cari domain name yang cocok (ubah underscore kembali ke titik)
@@ -1504,9 +1512,8 @@ async def get_pdf_report(filename: str, current_user = Depends(get_current_user)
         except Exception as e:
             print(f"[-] Gagal generate PDF report: {e}")
             raise HTTPException(status_code=500, detail=f"Gagal memproduksi PDF report secara dinamis: {e}")
-            
-    raise HTTPException(status_code=404, detail="File PDF report tidak ditemukan.")
 
+    raise HTTPException(status_code=404, detail="File PDF report tidak ditemukan.")
 
 # ===================================================================
 # Mount Static Files — HARUS di bawah semua route API
