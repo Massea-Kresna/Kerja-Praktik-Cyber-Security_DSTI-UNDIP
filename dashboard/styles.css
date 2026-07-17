@@ -61,6 +61,10 @@ body {
     font-size: 14px;
 }
 
+button, input, select, textarea {
+    font-family: var(--font-sans);
+}
+
 .icon {
     width: 16px;
     height: 16px;
@@ -1127,6 +1131,40 @@ body {
     gap: 8px;
 }
 
+/* Premium Generate Report Button */
+.btn-generate-report {
+    font-family: var(--font-sans);
+    background-color: #1e293b;
+    color: #ffffff;
+    border: 1px solid #334155;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+}
+.btn-generate-report svg {
+    color: #94a3b8;
+    transition: color 0.2s ease;
+}
+.btn-generate-report:hover {
+    background-color: #0f172a;
+    border-color: #475569;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+.btn-generate-report:hover svg {
+    color: #eab308;
+}
+.btn-generate-report:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+
 .sso-btn:hover {
     background: #f2f4f6;
 }
@@ -1789,16 +1827,18 @@ body {
 }
 
 .filter-btn {
+    font-family: var(--font-sans);
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
+    padding: 8px 18px;
     border-radius: 20px;
     border: 1px solid var(--color-border);
     background: #ffffff;
     color: var(--color-muted);
-    font-size: 12px;
-    font-weight: 500;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);

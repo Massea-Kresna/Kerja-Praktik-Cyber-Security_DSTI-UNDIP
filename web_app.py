@@ -54,6 +54,7 @@ OTP_STORE = {}
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 import random
 
 def send_otp_email(to_email: str, otp: str):
@@ -1484,9 +1485,11 @@ class GenerateReportRequest(BaseModel):
     include_accepted: bool = True
     include_fixed: bool = True
 
-@app.post("/api/reports/generate")
-async def generate_report(req: GenerateReportRequest, current_user = Depends(get_current_user)):
-    """Generate on-demand Pentest-Tools report based on UI modal filters."""
+class ShareReportRequest(GenerateReportRequest):
+    emails: list[str]
+
+async def _generate_report_bytes(req: GenerateReportRequest) -> tuple[bytes, str]:
+    """Helper to generate on-demand Pentest-Tools report based on UI modal filters and return bytes."""
     supabase = _get_supabase_or_none()
     if not supabase:
         raise HTTPException(status_code=503, detail="Database not configured")
@@ -1568,15 +1571,9 @@ async def generate_report(req: GenerateReportRequest, current_user = Depends(get
                 if dl_resp.status == 200:
                     pdf_data = await dl_resp.read()
                     
-                    # Mengirim data biner langsung ke memori browser pengguna tanpa menyimpan di server
                     format_file = req.report_format.lower()
                     filename = f"security_report_{req.history_id}.{format_file}"
-                    
-                    return Response(
-                        content=pdf_data, 
-                        media_type="application/octet-stream", # Format universal untuk unduhan
-                        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
-                    )
+                    return pdf_data, filename
                     
                 elif dl_resp.status == 202:
                     await asyncio.sleep(5)
@@ -1585,6 +1582,69 @@ async def generate_report(req: GenerateReportRequest, current_user = Depends(get
                     raise HTTPException(status_code=dl_resp.status, detail=f"Gagal mengunduh report: {err}")
                     
         raise HTTPException(status_code=408, detail="Timeout saat menunggu pembuatan report selesai.")
+
+@app.post("/api/reports/generate")
+async def generate_report(req: GenerateReportRequest, current_user = Depends(get_current_user)):
+    """Generate on-demand Pentest-Tools report and download as PDF."""
+    pdf_data, filename = await _generate_report_bytes(req)
+    return Response(
+        content=pdf_data, 
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+@app.post("/api/reports/share")
+async def share_report(req: ShareReportRequest, current_user = Depends(get_current_user)):
+    """Generate report and send it to specified emails one by one."""
+    if not req.emails:
+        raise HTTPException(status_code=400, detail="Tidak ada email penerima yang disertakan")
+        
+    pdf_data, filename = await _generate_report_bytes(req)
+    
+    if not config.SMTP_USERNAME or not config.SMTP_PASSWORD:
+        raise HTTPException(status_code=503, detail="SMTP credentials not configured")
+        
+    success_count = 0
+    errors = []
+    
+    for email_addr in req.emails:
+        msg = MIMEMultipart()
+        msg['From'] = config.SMTP_USERNAME
+        msg['To'] = email_addr.strip()
+        msg['Subject'] = f"Security Scan Report - {req.history_id}"
+        
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2>Security Scan Report</h2>
+            <p>Terlampir adalah laporan keamanan (Vulnerability Assessment) dari pemindaian yang diminta.</p>
+            <br/>
+            <p style="color: #6b7280; font-size: 12px;">Email ini dihasilkan otomatis oleh sistem DSTI UNDIP Pentest Dashboard.</p>
+        </div>
+        """
+        msg.attach(MIMEText(html_content, 'html'))
+        
+        part = MIMEApplication(pdf_data, Name=filename)
+        part['Content-Disposition'] = f'attachment; filename="{filename}"'
+        msg.attach(part)
+        
+        try:
+            if config.SMTP_PORT == 465:
+                server = smtplib.SMTP_SSL(config.SMTP_SERVER, config.SMTP_PORT)
+            else:
+                server = smtplib.SMTP(config.SMTP_SERVER, config.SMTP_PORT)
+                server.starttls() 
+                
+            server.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
+            server.send_message(msg)
+            server.quit()
+            success_count += 1
+        except Exception as e:
+            errors.append(f"{email_addr}: {str(e)}")
+            
+    if success_count == 0 and errors:
+        raise HTTPException(status_code=500, detail=f"Gagal mengirim email: {errors[0]}")
+        
+    return {"message": f"Berhasil mengirim ke {success_count} email", "errors": errors}
 
 if __name__ == "__main__":
     import uvicorn

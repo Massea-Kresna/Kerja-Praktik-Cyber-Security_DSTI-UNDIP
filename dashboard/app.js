@@ -3246,76 +3246,162 @@ document.getElementById('btnCancelReport')?.addEventListener('click', () => {
     document.getElementById('generateReportModalOverlay').classList.remove('active');
 });
 
-document.getElementById('generateReportForm')?.addEventListener('submit', async (e) => {
+let currentReportPayload = null;
+let currentReportAction = 'download';
+
+document.getElementById('generateReportForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
     const historyId = document.getElementById('reportHistoryId').value;
     if (!historyId) return;
     
     const form = e.target;
-    const btnSubmit = document.getElementById('btnSubmitReport');
-    const originalText = btnSubmit.innerHTML;
     
-    btnSubmit.innerHTML = 'Generating... <span style="font-size:12px; margin-left:4px;">Please wait</span>';
+    currentReportPayload = {
+        history_id: parseInt(historyId),
+        report_type: form.report_type.value,
+        report_format: form.report_format.value,
+        group_findings_by: form.group_by.value,
+        include_reproduce: form.filter_reproduce.checked,
+        include_informational: form.filter_informational.checked,
+        include_false_positives: form.filter_false_positives.checked,
+        include_ignored: form.filter_ignored.checked,
+        include_not_verified: form.filter_not_verified.checked,
+        include_accepted: form.filter_accepted.checked,
+        include_fixed: form.filter_fixed.checked
+    };
+    
+    document.getElementById('generateReportModalOverlay').classList.remove('active');
+    
+    // Reset state & show report action modal
+    setReportAction('download');
+    document.getElementById('reportActionModalOverlay').classList.add('active');
+});
+
+function setReportAction(action) {
+    currentReportAction = action;
+    const cardDownload = document.getElementById('cardDownloadOption');
+    const cardShare = document.getElementById('cardShareOption');
+    const emailContainer = document.getElementById('emailInputsContainer');
+    const btnProcess = document.getElementById('btnProcessReportAction');
+    
+    if (action === 'download') {
+        cardDownload.style.borderColor = 'var(--primary)';
+        cardDownload.style.background = '#f8fafc';
+        cardDownload.querySelector('svg').style.color = 'var(--primary)';
+        
+        cardShare.style.borderColor = 'var(--color-border)';
+        cardShare.style.background = '#ffffff';
+        cardShare.querySelector('svg').style.color = 'var(--color-muted)';
+        
+        emailContainer.style.display = 'none';
+        btnProcess.textContent = 'Download';
+    } else {
+        cardShare.style.borderColor = 'var(--primary)';
+        cardShare.style.background = '#f8fafc';
+        cardShare.querySelector('svg').style.color = 'var(--primary)';
+        
+        cardDownload.style.borderColor = 'var(--color-border)';
+        cardDownload.style.background = '#ffffff';
+        cardDownload.querySelector('svg').style.color = 'var(--color-muted)';
+        
+        emailContainer.style.display = 'block';
+        btnProcess.textContent = 'Kirim Email';
+    }
+}
+
+document.getElementById('cardDownloadOption')?.addEventListener('click', () => setReportAction('download'));
+document.getElementById('cardShareOption')?.addEventListener('click', () => setReportAction('share'));
+
+document.getElementById('closeReportActionModalBtn')?.addEventListener('click', () => {
+    document.getElementById('reportActionModalOverlay').classList.remove('active');
+});
+
+function addEmailInputRow() {
+    const wrapper = document.getElementById('emailListWrapper');
+    const row = document.createElement('div');
+    row.className = 'email-input-row';
+    row.style.display = 'flex';
+    row.style.gap = '8px';
+    row.innerHTML = `
+        <input type="email" class="auth-input email-recipient-input" placeholder="contoh@undip.ac.id" style="flex: 1; padding: 8px 12px; margin-bottom: 0;" required>
+        <button type="button" class="btn btn-outline" onclick="this.parentElement.remove()" style="padding: 0 12px; border-color: #ef4444; color: #ef4444; height: 38px; display: flex; align-items: center;" title="Hapus">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+    `;
+    wrapper.appendChild(row);
+}
+
+document.getElementById('btnProcessReportAction')?.addEventListener('click', async () => {
+    if (!currentReportPayload) return;
+    
+    const btnSubmit = document.getElementById('btnProcessReportAction');
+    const originalText = btnSubmit.textContent;
+    btnSubmit.innerHTML = 'Memproses...</span>';
     btnSubmit.disabled = true;
     btnSubmit.style.opacity = '0.7';
     
     try {
-        const payload = {
-            history_id: parseInt(historyId),
-            report_type: form.report_type.value,
-            report_format: form.report_format.value,
-            group_findings_by: form.group_by.value,
-            include_reproduce: form.filter_reproduce.checked,
-            include_informational: form.filter_informational.checked,
-            include_false_positives: form.filter_false_positives.checked,
-            include_ignored: form.filter_ignored.checked,
-            include_not_verified: form.filter_not_verified.checked,
-            include_accepted: form.filter_accepted.checked,
-            include_fixed: form.filter_fixed.checked
-        };
-        
-        const resp = await fetch(`${API_BASE}/api/reports/generate`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-        
-        if (!resp.ok) {
-            const errData = await resp.json();
-            throw new Error(errData.detail || 'Gagal generate report');
+        if (currentReportAction === 'download') {
+            const resp = await fetch(`${API_BASE}/api/reports/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(currentReportPayload)
+            });
+            
+            if (!resp.ok) {
+                const errData = await resp.json();
+                throw new Error(errData.detail || 'Gagal generate report');
+            }
+            
+            const blob = await resp.blob(); 
+            document.getElementById('reportActionModalOverlay').classList.remove('active');
+            showToast('Success', 'Report successfully downloaded!', '✅');
+            
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const formatExt = currentReportPayload.report_format.toLowerCase();
+            a.download = `security_report_${currentReportPayload.history_id}.${formatExt}`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+        } else {
+            // Share via Email
+            const emailInputs = document.querySelectorAll('.email-recipient-input');
+            const emails = Array.from(emailInputs).map(inp => inp.value.trim()).filter(v => v);
+            
+            if (emails.length === 0) {
+                throw new Error("Masukkan setidaknya satu alamat email");
+            }
+            
+            for (const email of emails) {
+                if (!email.includes('@')) throw new Error(`Email tidak valid: ${email}`);
+            }
+            
+            const sharePayload = { ...currentReportPayload, emails };
+            
+            const resp = await fetch(`${API_BASE}/api/reports/share`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(sharePayload)
+            });
+            
+            if (!resp.ok) {
+                const errData = await resp.json();
+                throw new Error(errData.detail || 'Gagal mengirim email');
+            }
+            
+            const data = await resp.json();
+            document.getElementById('reportActionModalOverlay').classList.remove('active');
+            showToast('Success', data.message, '✅');
         }
-        
-        const blob = await resp.blob(); 
-        
-        // Sembunyikan modal dan berikan notifikasi
-        document.getElementById('generateReportModalOverlay').classList.remove('active');
-        showToast('Success', 'Report successfully generated!', '✅');
-        
-        // Buat URL lokal di dalam browser (tidak ada file fisik di server)
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        
-        // Beri nama file berdasarkan format yang dipilih pengguna
-        const format = form.report_format.value.toLowerCase(); 
-        a.download = `security_report_${historyId}.${format}`;
-        
-        document.body.appendChild(a);
-        a.click(); // Paksa browser mengunduh
-        document.body.removeChild(a);
-        
-        // Bersihkan memori RAM browser agar tidak bocor (Memory Leak)
-        window.URL.revokeObjectURL(url);
-        
     } catch (err) {
         console.error(err);
         showToast('Error', err.message, '❌');
-        // Ensure modal closes so the screen doesn't stay frozen
-        document.getElementById('generateReportModalOverlay').classList.remove('active');
     } finally {
-        btnSubmit.innerHTML = originalText;
+        btnSubmit.textContent = originalText;
         btnSubmit.disabled = false;
         btnSubmit.style.opacity = '1';
     }

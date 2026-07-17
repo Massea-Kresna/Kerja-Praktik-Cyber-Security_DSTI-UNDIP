@@ -849,13 +849,12 @@
             <div class="modal-header">
                 <div class="modal-title-group">
                     <h2 id="scanModalTitle">Scan Details</h2>
-                    <span class="badge badge-medium">Scan Result</span>
                 </div>
                 <div class="modal-actions" style="display: flex; gap: 12px; align-items: center;">
-                    <a id="btnDownloadReport" href="#" target="_blank" class="badge badge-high"
-                        style="text-decoration: none; display: none; cursor: pointer; border: 1px solid rgba(255,255,255,0.2);">
-                        📄 Download PDF Report
-                    </a>
+                    <button id="btnDownloadReport" class="btn-generate-report" style="display: none;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        Generate Report
+                    </button>
                     <button class="icon-btn" onclick="closeScanModal()">✕</button>
                 </div>
             </div>
@@ -1253,8 +1252,7 @@
         <div class="modal-dialog" style="max-width: 500px;">
             <div class="modal-header" style="border-bottom: 1px solid #e2e8f0; padding-bottom: 16px;">
                 <div class="modal-title-group" style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 20px;">📄</span>
-                    <h2 id="generateReportModalTitle" style="font-size: 1.25rem;">Generate report</h2>
+                    <h2 id="generateReportModalTitle" style="font-size: 1.25rem;">Generate Report</h2>
                 </div>
                 <div class="modal-actions">
                     <button class="icon-btn" id="closeGenerateReportModalBtn">✕</button>
@@ -1321,25 +1319,25 @@
                         <label style="font-weight: 600; font-size: 14px; margin-bottom: 12px; display: block; color: #1e293b;">Filters</label>
                         <div style="display: flex; flex-direction: column; gap: 12px;">
                             <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; color: #475569;">
-                                <input type="checkbox" name="filter_reproduce"> Include <strong>How to reproduce</strong> section
+                                <input type="checkbox" name="filter_reproduce"> <span>Include <strong>How to reproduce</strong> section</span>
                             </label>
                             <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; color: #475569;">
-                                <input type="checkbox" name="filter_informational" checked> Include <strong>Informational</strong> findings
+                                <input type="checkbox" name="filter_informational" checked> <span>Include <strong>Informational</strong> findings</span>
                             </label>
                             <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; color: #475569;">
-                                <input type="checkbox" name="filter_false_positives"> Include <strong>False Positives</strong> findings
+                                <input type="checkbox" name="filter_false_positives"> <span>Include <strong>False Positives</strong> findings</span>
                             </label>
                             <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; color: #475569;">
-                                <input type="checkbox" name="filter_ignored"> Include <strong>Ignored</strong> findings
+                                <input type="checkbox" name="filter_ignored"> <span>Include <strong>Ignored</strong> findings</span>
                             </label>
                             <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; color: #475569;">
-                                <input type="checkbox" name="filter_not_verified" checked> Include <strong>Not Verified</strong> findings
+                                <input type="checkbox" name="filter_not_verified" checked> <span>Include <strong>Not Verified</strong> findings</span>
                             </label>
                             <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; color: #475569;">
-                                <input type="checkbox" name="filter_accepted" checked> Include <strong>Accepted</strong> findings
+                                <input type="checkbox" name="filter_accepted" checked> <span>Include <strong>Accepted</strong> findings</span>
                             </label>
                             <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; color: #475569;">
-                                <input type="checkbox" name="filter_fixed" checked> Include <strong>Fixed</strong> findings
+                                <input type="checkbox" name="filter_fixed" checked> <span>Include <strong>Fixed</strong> findings</span>
                             </label>
                         </div>
                     </div>
@@ -1349,6 +1347,54 @@
                         <button type="submit" class="auth-btn" id="btnSubmitReport" style="background: #eab308; color: #1e293b; width: auto; border: none; font-weight: 600;">Generate <span style="font-weight: 400; font-size: 12px; opacity: 0.8; margin-left: 4px;">Ctrl Enter</span></button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+    <!-- Report Action Modal (Download or Share) -->
+    <div class="modal-overlay" id="reportActionModalOverlay">
+        <div class="modal-dialog" style="max-width: 500px; border-radius: 12px; overflow: hidden;">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <h2 style="font-size: 1.25rem;">Report Action</h2>
+                </div>
+                <div class="modal-actions">
+                    <button class="icon-btn" id="closeReportActionModalBtn">✕</button>
+                </div>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <p style="color: var(--color-muted-light); margin-bottom: 24px;">Pilih bagaimana Anda ingin memproses laporan yang dihasilkan.</p>
+                
+                <!-- Action Cards -->
+                <div style="display: flex; gap: 16px; margin-bottom: 24px;">
+                    <div id="cardDownloadOption" class="report-option-card" style="flex: 1; padding: 16px; border: 2px solid var(--primary); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; background: #f8fafc; transition: all 0.2s;">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 12px; color: var(--primary);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        <span style="font-weight: 600; color: var(--color-ink);">Download</span>
+                        <span style="font-size: 12px; color: var(--color-muted-light); margin-top: 4px;">Unduh langsung ke perangkat</span>
+                    </div>
+                    <div id="cardShareOption" class="report-option-card" style="flex: 1; padding: 16px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; background: #ffffff; transition: all 0.2s;">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 12px; color: var(--color-muted);"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                        <span style="font-weight: 600; color: var(--color-ink);">Share via Email</span>
+                        <span style="font-size: 12px; color: var(--color-muted-light); margin-top: 4px;">Kirim laporan ke rekan tim</span>
+                    </div>
+                </div>
+                
+                <!-- Email Inputs Section -->
+                <div id="emailInputsContainer" style="display: none; margin-bottom: 24px; padding: 16px; background: #f1f5f9; border-radius: 8px;">
+                    <label style="display: block; font-weight: 500; font-size: 14px; color: var(--color-ink); margin-bottom: 12px;">Daftar Penerima Email:</label>
+                    <div id="emailListWrapper" style="display: flex; flex-direction: column; gap: 12px;">
+                        <div class="email-input-row" style="display: flex; gap: 8px;">
+                            <input type="email" class="auth-input email-recipient-input" placeholder="contoh@undip.ac.id" style="flex: 1; padding: 8px 12px; margin-bottom: 0;" required>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-outline" onclick="addEmailInputRow()" style="margin-top: 12px; padding: 6px 12px; border-color: var(--color-border); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500;" title="Tambah penerima">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        Tambah Email Lain
+                    </button>
+                </div>
+                
+                <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--color-border);">
+                    <button type="button" class="auth-btn" id="btnProcessReportAction" style="background: var(--primary); color: #ffffff; width: auto; box-shadow: none;">Download</button>
+                </div>
             </div>
         </div>
     </div>
