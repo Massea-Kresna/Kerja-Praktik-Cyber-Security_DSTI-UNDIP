@@ -499,6 +499,7 @@ function switchView(viewId) {
     // Load admin data if switching to admin page
     if (viewId === 'admin') {
         loadAdminUsers();
+                fetchNotifications();
     }
 
     // Web Scanner & Network Scanner: start/stop polling for active scans
@@ -2598,7 +2599,7 @@ function getMockCVSS(sev) {
 let autoRefreshInterval = null;
 let wsLive = null;
 let currentUser = null;
-let allNotifications = JSON.parse(localStorage.getItem('dsti_notifs') || '[]');
+let allNotifications = [];
 
 async function checkAuth() {
     try {
@@ -2916,7 +2917,8 @@ async function handleCreateUserSubmit(e) {
         if (resp.status === 200) {
             showToast("Sukses", `User baru '${username}' berhasil didaftarkan.`, "✨");
             closeCreateUserModal();
-            loadAdminUsers(); // Refresh daftar user
+            loadAdminUsers();
+                fetchNotifications(); // Refresh daftar user
         } else {
             errMsg.textContent = data.detail || "Gagal membuat user baru.";
             errMsg.style.display = 'block';
@@ -3130,6 +3132,7 @@ async function triggerForceLogout(username) {
         if (resp.status === 200) {
             showToast("Force Logout", `User '${username}' telah berhasil dikeluarkan dari sistem.`, "🔴");
             loadAdminUsers();
+                fetchNotifications();
         } else {
             alert(data.detail || "Gagal melakukan force logout.");
         }
@@ -3172,7 +3175,7 @@ window.submitTimeout = async function() {
         if (resp.status === 200) {
             showToast("User Ditangguhkan", `User '${currentTimeoutUser}' ditangguhkan selama ${minutes} menit.`, "⏳");
             loadAdminUsers();
-            closeTimeoutModal();
+                fetchNotifications();
         } else {
             alert(data.detail || "Gagal melakukan penangguhan.");
         }
@@ -3191,6 +3194,7 @@ async function triggerRemoveTimeout(username) {
         if (resp.status === 200) {
             showToast("Timeout Dicabut", `Penangguhan untuk user '${username}' berhasil dicabut!`, "💚");
             loadAdminUsers();
+                fetchNotifications();
         } else {
             alert(data.detail || "Gagal mencabut status timeout.");
         }
@@ -3209,6 +3213,7 @@ async function triggerDeleteUser(username) {
         if (resp.status === 200) {
             showToast("Hapus User", `User '${username}' berhasil dihapus dari sistem.`, "🗑️");
             loadAdminUsers();
+                fetchNotifications();
         } else {
             alert(data.detail || "Gagal menghapus user.");
         }
@@ -3279,19 +3284,55 @@ function clearBadge() {
     badge.style.display = 'none';
 }
 
-function markAllNotificationsAsRead(e) {
+
+async function markAllNotificationsAsRead(e) {
     if (e) e.stopPropagation();
-    allNotifications.forEach(n => n.unread = false);
-    localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
-    renderNotificationList();
-    showToast("Notifikasi", "Semua notifikasi ditandai telah dibaca.", "✔️");
+    try {
+        await fetch('/api/notifications/read-all', { method: 'PUT' });
+        allNotifications.forEach(n => n.unread = false);
+        renderNotificationList();
+        showToast("Notifikasi", "Semua notifikasi ditandai telah dibaca.", "✔️");
+    } catch (e) {}
 }
 
-function deleteNotification(notifId, e) {
+
+async function deleteNotification(notifId, e) {
     if (e) e.stopPropagation();
-    allNotifications = allNotifications.filter(n => n.id !== notifId);
-    localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
-    renderNotificationList();
+    
+    try {
+        const res = await fetch(`/api/notifications/${notifId}`, {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+        
+        if (data.status === 'success') {
+            allNotifications = allNotifications.filter(n => n.id !== notifId);
+            renderNotificationList();
+        }
+    } catch (err) {
+        console.error("Gagal menghapus notifikasi:", err);
+    }
+}
+
+
+async function fetchNotifications() {
+    try {
+        const res = await fetch('/api/notifications');
+        const data = await res.json();
+        if (data.status === 'success') {
+            allNotifications = data.data.map(n => ({
+                id: n.id,
+                title: n.title,
+                message: n.message,
+                type: n.type,
+                timestamp: n.created_at,
+                unread: !n.is_read
+            }));
+            renderNotificationList();
+        }
+    } catch (e) {
+        console.error('Gagal fetch notifikasi', e);
+    }
 }
 
 function renderNotificationList() {
@@ -3305,9 +3346,14 @@ function renderNotificationList() {
         return;
     }
 
+    
     listContainer.innerHTML = allNotifications.map(n => {
         const unreadClass = n.unread ? 'unread' : '';
         const relativeTime = formatRelativeTime(n.timestamp);
+        let icon = '🔔';
+        if (n.type === 'scan_complete') icon = '✅';
+        else if (n.type === 'scan_failed') icon = '❌';
+        else if (n.type === 'user_login') icon = '👤';
         
         let notifText = '';
         let avatarIcon = '';
@@ -3326,6 +3372,10 @@ function renderNotificationList() {
         return `
             <div class="notif-item ${unreadClass}" onclick="markAsRead('${n.id}')">
                 <div class="notif-unread-dot"></div>
+                <div class="notif-avatar" style="background: transparent; font-size: 20px;">${icon}</div>
+                <div class="notif-content">
+                    <div class="notif-text" style="line-height: 1.4;"><strong>${escapeHtml(n.title)}</strong><br>${escapeHtml(n.message)}</div>
+                    <div class="notif-time" style="margin-top: 4px;">${relativeTime}</div>
                 <div class="notif-avatar">${initials || avatarIcon}</div>
                 <div class="notif-content">
                     <div class="notif-text">${notifText}</div>
@@ -3337,14 +3387,25 @@ function renderNotificationList() {
             </div>
         `;
     }).join('');
+
 }
 
 async function markAsRead(notifId) {
     const notif = allNotifications.find(n => n.id === notifId);
     if (notif && notif.unread) {
-        notif.unread = false;
-        localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
-        renderNotificationList();
+        try {
+            const res = await fetch(`/api/notifications/${notifId}/read`, {
+                method: 'PUT'
+            });
+            const data = await res.json();
+            
+            if (data.status === 'success') {
+                notif.unread = false;
+                renderNotificationList();
+            }
+        } catch (err) {
+            console.error("Gagal menandai notifikasi telah dibaca:", err);
+        }
     }
     
     // Tindakan spesifik ketika notifikasi diklik
@@ -3385,30 +3446,22 @@ function connectLiveWebSocket(sessionId) {
         try {
             const data = JSON.parse(event.data);
 
-            if (data.event === 'user_login') {
-                // Notifikasi admin tentang user login baru (hanya untuk user lain, bukan diri sendiri)
-                if (currentUser && currentUser.role === 'admin' && data.username !== currentUser.username) {
+            
+            if (data.event === 'new_notification') {
+                if (currentUser && currentUser.role === 'admin') {
                     showToast(
-                        "User Login Baru",
-                        `👤 <b>${escapeHtml(data.username)}</b> (${data.role === 'admin' ? 'Admin' : 'User'}) baru saja masuk ke sistem pada pukul ${data.time}.`,
+                        data.notification.title,
+                        data.notification.message,
                         "🔔"
                     );
-
-                    const notif = {
-                        id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                        username: data.username,
-                        role: data.role,
-                        time: data.time,
-                        timestamp: new Date().toISOString(),
-                        unread: true
-                    };
-                    allNotifications.unshift(notif);
-                    localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
-                    renderNotificationList();
-
+                    fetchNotifications();
+                }
+            } else if (data.event === 'user_login') {
+                if (currentUser && currentUser.role === 'admin' && data.username !== currentUser.username) {
                     const activeNav = document.querySelector('.sidebar-nav .nav-item.active');
                     if (activeNav && activeNav.getAttribute('onclick').includes('admin')) {
                         loadAdminUsers();
+                fetchNotifications();
                     }
                 }
             } else if (data.event === 'scan_finished') {
@@ -4421,5 +4474,307 @@ function jumpToScanDetail(isoDateString, targetName, isSeverity=false) {
 document.addEventListener('click', (e) => {
     if (e.target && e.target.classList && e.target.classList.contains('modal-overlay')) {
         e.target.classList.remove('active');
+        // Close enlarged chart if clicked outside
+        if (e.target.id === 'chartModalOverlay') {
+            closeChartModal();
+        }
     }
 });
+
+// Chart Enlarge Logic
+let enlargedChartInstance = null;
+
+window.openChartModal = function(sourceChartId, title) {
+    const overlay = document.getElementById('chartModalOverlay');
+    const titleEl = document.getElementById('chartModalTitle');
+    
+    if (overlay) overlay.classList.add('active');
+    if (titleEl) titleEl.textContent = title || 'Grafik';
+    
+    // Hapus instance sebelumnya jika ada
+    if (enlargedChartInstance) {
+        enlargedChartInstance.destroy();
+        enlargedChartInstance = null;
+    }
+
+    setTimeout(() => {
+        // Render ulang elemen canvas untuk menghindari bug cache dimensi dari browser
+        const modalBody = document.querySelector('#chartModalOverlay .modal-body');
+        if (modalBody) {
+            modalBody.innerHTML = '<canvas id="enlargedChartCanvas"></canvas>';
+            const ctx = document.getElementById('enlargedChartCanvas').getContext('2d');
+            
+            if (sourceChartId === 'vulnBarChart') {
+                renderEnlargedVulnChart(ctx);
+            } else if (sourceChartId === 'sevTrendChart') {
+                renderEnlargedSevChart(ctx);
+            }
+        }
+    }, 150);
+};
+
+window.renderEnlargedVulnChart = function(ctx) {
+    if (!rawTrendData) return;
+    
+    const checkboxes = Array.from(document.querySelectorAll('#vulnTrendItems input[type="checkbox"]'));
+    const allCb = checkboxes.find(cb => cb.value === 'All');
+
+    let selectedDomains = [];
+    let allChecked = false;
+
+    if (allCb && allCb.checked) {
+        allChecked = true;
+    } else {
+        selectedDomains = checkboxes.filter(cb => cb.checked && cb.value !== 'All').map(cb => cb.value);
+        if (selectedDomains.length === 0) allChecked = true;
+    }
+
+    let allDatasets = [...(rawTrendData.datasets || [])];
+    allDatasets = allDatasets.filter(ds => Math.max(...ds.data) > 0);
+    let finalDatasets = [];
+
+    if (!allChecked && selectedDomains.length > 0) {
+        finalDatasets = allDatasets.filter(ds => selectedDomains.includes(ds.label));
+    } else {
+        allDatasets.sort((a, b) => Math.max(...b.data) - Math.max(...a.data));
+        const topN = 5;
+        finalDatasets = allDatasets.slice(0, topN);
+        if (allDatasets.length > topN) {
+            let othersData = new Array(allDatasets[0].data.length).fill(0);
+            for (let i = topN; i < allDatasets.length; i++) {
+                for (let j = 0; j < allDatasets[i].data.length; j++) {
+                    othersData[j] += allDatasets[i].data[j];
+                }
+            }
+            finalDatasets.push({ label: 'Others', data: othersData });
+        }
+    }
+
+    const domainDatasets = finalDatasets.map((ds) => {
+        const baseColor = ds.label === 'Others' ? '#6b7280' : getDomainColor(ds.label);
+        return {
+            label: ds.label,
+            data: ds.data,
+            borderColor: baseColor,
+            backgroundColor: (context) => {
+                const chart = context.chart;
+                const { ctx, chartArea } = chart;
+                if (!chartArea) return baseColor;
+                const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                const rgb = hexToRgb(baseColor);
+                if (rgb) {
+                    gradient.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.35)`);
+                    gradient.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.0)`);
+                    return gradient;
+                }
+                return baseColor;
+            },
+            borderWidth: ds.label === 'Others' ? 2 : 2.5,
+            borderDash: ds.label === 'Others' ? [5, 5] : [],
+            tension: 0.4,
+            fill: true,
+            spanGaps: true,
+            pointRadius: 4,
+            pointHoverRadius: 8
+        };
+    });
+
+    enlargedChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: rawTrendData.labels || [],
+            datasets: domainDatasets
+        },
+        options: getEnlargedChartOptions(false)
+    });
+};
+
+window.renderEnlargedSevChart = function(ctx) {
+    if (!rawSevTrendData) return;
+
+    const checkboxes = Array.from(document.querySelectorAll('#sevTrendItems input[type="checkbox"]'));
+    const allCb = checkboxes.find(cb => cb.value === 'All');
+
+    let selectedSevs = [];
+    let allChecked = false;
+
+    if (allCb && allCb.checked) {
+        allChecked = true;
+    } else {
+        selectedSevs = checkboxes.filter(cb => cb.checked && cb.value !== 'All').map(cb => cb.value);
+        if (selectedSevs.length === 0) allChecked = true;
+    }
+
+    const sevColors = {
+        'Critical': '#8A2E2E',
+        'High': '#FF4A4A',
+        'Medium': '#FF9F2A',
+        'Low': '#4287F5',
+        'Info': '#00D182'
+    };
+
+    let baseDatasets = rawSevTrendData.datasets || [];
+    if (!allChecked && selectedSevs.length > 0) {
+        baseDatasets = baseDatasets.filter(ds => selectedSevs.includes(ds.label));
+    }
+
+    const sevDatasets = baseDatasets.map((ds) => {
+        const color = sevColors[ds.label] || '#9ca3af';
+        return {
+            label: ds.label,
+            data: ds.data,
+            domains: ds.domains || [],
+            borderColor: color,
+            backgroundColor: (context) => {
+                const chart = context.chart;
+                const { ctx, chartArea } = chart;
+                if (!chartArea) return color;
+                const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                const rgb = hexToRgb(color);
+                if (rgb) {
+                    gradient.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.35)`);
+                    gradient.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.0)`);
+                    return gradient;
+                }
+                return color;
+            },
+            borderWidth: 2.5,
+            tension: 0.4,
+            fill: true,
+            spanGaps: true,
+            pointRadius: 4,
+            pointHoverRadius: 8,
+            pointBackgroundColor: color,
+            pointHoverBackgroundColor: color
+        };
+    });
+
+    enlargedChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: rawSevTrendData.labels || [],
+            datasets: sevDatasets
+        },
+        options: getEnlargedChartOptions(true)
+    });
+};
+
+function getEnlargedChartOptions(isSeverity) {
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: { precision: 0, font: { size: 14 } },
+                grid: { color: '#e5e7eb', borderDash: [5, 5] },
+                border: { display: false }
+            },
+            x: {
+                ticks: { maxTicksLimit: 12, font: { size: 14 } },
+                grid: { display: false },
+                border: { display: false }
+            }
+        },
+        plugins: {
+            legend: {
+                display: true,
+                position: 'bottom',
+                labels: {
+                    usePointStyle: true,
+                    pointStyle: 'circle',
+                    font: { size: 15, weight: '500' },
+                    padding: 20,
+                    generateLabels: (chart) => {
+                        return chart.data.datasets.map((dataset, i) => ({
+                            text: dataset.label,
+                            fillStyle: dataset.borderColor,
+                            hidden: !chart.isDatasetVisible(i),
+                            strokeStyle: dataset.borderColor,
+                            pointStyle: 'circle',
+                            datasetIndex: i
+                        }));
+                    }
+                }
+            },
+            tooltip: {
+                backgroundColor: '#ffffff',
+                titleColor: '#1f2937',
+                bodyColor: '#374151',
+                borderColor: '#e5e7eb',
+                borderWidth: 1,
+                padding: 16,
+                boxPadding: 8,
+                usePointStyle: true,
+                titleFont: { size: 15, weight: '600' },
+                bodyFont: { size: 14 },
+                mode: 'index',
+                intersect: false,
+                filter: function (tooltipItem) {
+                    return tooltipItem.parsed.y > 0;
+                },
+                callbacks: {
+                    labelColor: function (context) {
+                        return {
+                            borderColor: context.dataset.borderColor,
+                            backgroundColor: context.dataset.borderColor
+                        };
+                    },
+                    label: function (context) {
+                        let label = context.dataset.label || '';
+                        let val = context.parsed.y;
+                        if (val !== null) {
+                            label += ` (${val})`;
+                        }
+
+                        if (isSeverity) {
+                            let domainsObj = context.dataset.domains ? context.dataset.domains[context.dataIndex] : null;
+                            if (val > 0 && domainsObj && typeof domainsObj === 'object') {
+                                let lines = [label];
+                                Object.entries(domainsObj).forEach(([d, count]) => {
+                                    lines.push(`   • ${d} (${count})`);
+                                });
+                                return lines;
+                            }
+                        }
+                        return label;
+                    }
+                }
+            }
+        }
+    };
+}
+
+window.closeChartModal = function() {
+    const overlay = document.getElementById('chartModalOverlay');
+    if (overlay) overlay.classList.remove('active');
+    if (enlargedChartInstance) {
+        enlargedChartInstance.destroy();
+        enlargedChartInstance = null;
+    }
+};
+
+window.toggleSidebar = function() {
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+        const isCollapsed = sidebar.classList.toggle('collapsed');
+        const tooltip = document.getElementById('sidebarTooltip');
+        const arrow = document.getElementById('sidebarToggleArrow');
+        
+        if (tooltip && arrow) {
+            if (isCollapsed) {
+                tooltip.textContent = 'Buka sidebar';
+                // Panah ke kanan
+                arrow.setAttribute('d', 'M10 16l4-4-4-4');
+            } else {
+                tooltip.textContent = 'Tutup sidebar';
+                // Panah ke kiri
+                arrow.setAttribute('d', 'M14 16l-4-4 4-4');
+            }
+        }
+    }
+};
+
+async 
+
+async 

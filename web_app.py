@@ -384,7 +384,7 @@ async def verify_otp(req: VerifyOTPRequest, response: Response):
     user_data = db_manager.get_user_by_username(req.username)
     role = user_data["role"] if user_data else "admin"
     
-    # Broadcast
+    # Broadcast User Login event (to update user tables etc)
     await manager.broadcast_to_admins({
         "event": "user_login",
         "username": req.username,
@@ -1234,6 +1234,10 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
     async with aiohttp.ClientSession() as session:
         tasks = [process_network_scan(session, target, semaphore, scan_type) for target in targets]
         if tasks:
+            results = await asyncio.gather(*tasks)
+            success_count = sum(1 for r in results if r)
+            failed_count = len(results) - success_count
+            print(f"[+] Network Scan Selesai: {success_count} sukses, {failed_count} gagal.")
             await asyncio.gather(*tasks)
             for target in targets:
                 await manager.broadcast_to_admins({
@@ -1248,6 +1252,10 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
     async with aiohttp.ClientSession() as session:
         tasks = [process_domain_scan(session, target, semaphore, scan_type) for target in targets]
         if tasks:
+            results = await asyncio.gather(*tasks)
+            success_count = sum(1 for r in results if r)
+            failed_count = len(results) - success_count
+            print(f"[+] Web Scan Selesai: {success_count} sukses, {failed_count} gagal.")
             await asyncio.gather(*tasks)
             for target in targets:
                 await manager.broadcast_to_admins({
@@ -1635,68 +1643,81 @@ async def _generate_report_bytes(req: GenerateReportRequest) -> tuple[bytes, str
                     
         raise HTTPException(status_code=408, detail="Timeout saat menunggu pembuatan report selesai.")
 
-@app.post("/api/reports/generate")
-async def generate_report(req: GenerateReportRequest, current_user = Depends(get_current_user)):
-    """Generate on-demand Pentest-Tools report and download as PDF."""
-    pdf_data, filename = await _generate_report_bytes(req)
-    return Response(
-        content=pdf_data, 
-        media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
-    )
+# ==============================================================================
+# NOTIFICATIONS ROUTES
+# ==============================================================================
+@app.get("/api/notifications")
+async def api_get_notifications():
+    """Mengambil semua notifikasi lokal"""
+    try:
+        notifs = db_manager.get_notifications()
+        return {"status": "success", "data": notifs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/reports/share")
-async def share_report(req: ShareReportRequest, current_user = Depends(get_current_user)):
-    """Generate report and send it to specified emails one by one."""
-    if not req.emails:
-        raise HTTPException(status_code=400, detail="Tidak ada email penerima yang disertakan")
+@app.put("/api/notifications/{notif_id}/read")
+async def api_mark_notification_read(notif_id: str):
+    """Menandai satu notifikasi telah dibaca"""
+    try:
+        success = db_manager.mark_notification_as_read(notif_id)
+        if success:
+            return {"status": "success"}
+        raise HTTPException(status_code=404, detail="Notification not found")
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/notifications/read-all")
+async def api_mark_all_notifications_read():
+    """Menandai semua notifikasi telah dibaca"""
+    try:
+        db_manager.mark_all_notifications_as_read()
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/notifications/{notif_id}")
+async def api_delete_notification(notif_id: str):
+    """Menghapus satu notifikasi"""
+    try:
+        success = db_manager.delete_notification(notif_id)
+        if success:
+            return {"status": "success"}
+        raise HTTPException(status_code=404, detail="Notification not found")
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+class InternalNotifyRequest(BaseModel):
+    title: str
+    message: str
+    notif_type: str = "info"
+
+@app.post("/api/internal/webhook-notify")
+async def webhook_notify(req: InternalNotifyRequest, request: Request):
+    """Webhook internal untuk menerima notifikasi dari Celery/Proses lain"""
+    # Hanya izinkan localhost
+    client_host = request.client.host
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(status_code=403, detail="Forbidden")
         
-    pdf_data, filename = await _generate_report_bytes(req)
-    
-    if not config.SMTP_USERNAME or not config.SMTP_PASSWORD:
-        raise HTTPException(status_code=503, detail="SMTP credentials not configured")
+    try:
+        notif = db_manager.create_notification(
+            title=req.title,
+            message=req.message,
+            notif_type=req.notif_type
+        )
         
-    success_count = 0
-    errors = []
-    
-    for email_addr in req.emails:
-        msg = MIMEMultipart()
-        msg['From'] = config.SMTP_USERNAME
-        msg['To'] = email_addr.strip()
-        msg['Subject'] = f"Security Scan Report - {req.history_id}"
+        await manager.broadcast_to_admins({
+            "event": "new_notification",
+            "notification": notif
+        })
         
-        html_content = f"""
-        <div style="font-family: Arial, sans-serif; padding: 20px;">
-            <h2>Security Scan Report</h2>
-            <p>Terlampir adalah laporan keamanan (Vulnerability Assessment) dari pemindaian yang diminta.</p>
-            <br/>
-            <p style="color: #6b7280; font-size: 12px;">Email ini dihasilkan otomatis oleh sistem DSTI UNDIP Pentest Dashboard.</p>
-        </div>
-        """
-        msg.attach(MIMEText(html_content, 'html'))
-        
-        part = MIMEApplication(pdf_data, Name=filename)
-        part['Content-Disposition'] = f'attachment; filename="{filename}"'
-        msg.attach(part)
-        
-        try:
-            if config.SMTP_PORT == 465:
-                server = smtplib.SMTP_SSL(config.SMTP_SERVER, config.SMTP_PORT)
-            else:
-                server = smtplib.SMTP(config.SMTP_SERVER, config.SMTP_PORT)
-                server.starttls() 
-                
-            server.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
-            server.send_message(msg)
-            server.quit()
-            success_count += 1
-        except Exception as e:
-            errors.append(f"{email_addr}: {str(e)}")
-            
-    if success_count == 0 and errors:
-        raise HTTPException(status_code=500, detail=f"Gagal mengirim email: {errors[0]}")
-        
-    return {"message": f"Berhasil mengirim ke {success_count} email", "errors": errors}
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
