@@ -8,5 +8,15 @@
         "timeout_until": null,
         "session_id": "3cc1e96a-6917-4f77-8a7f-aa3420a5aeb1",
         "created_at": "2026-07-14T04:50:04.477379+00:00"
+    },
+    {
+        "username": "dsti.cgpt@live.undip.ac.id",
+        "password": "c1c2246e99d24b4689d9ceea8ba75ecd$dce218792a18cc2226b68704f2a3197eb1b7f93fca6cd7cc9b1339d0b3acb939",
+        "role": "admin",
+        "is_online": false,
+        "last_online": null,
+        "timeout_until": null,
+        "session_id": null,
+        "created_at": "2026-07-17T02:46:18.774386+00:00"
     }
 ]

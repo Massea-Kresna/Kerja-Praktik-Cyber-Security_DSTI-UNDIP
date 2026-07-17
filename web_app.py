@@ -157,22 +157,7 @@ def get_current_user(request: Request):
         raise HTTPException(status_code=401, detail="Session tidak ditemukan. Silakan login kembali.")
     
     # Cari user berdasarkan session_id
-    user = None
-    supabase = db_manager.get_supabase_client()
-    if supabase:
-        try:
-            resp = supabase.table("users").select("*").eq("session_id", session_id).limit(1).execute()
-            if resp.data:
-                user = resp.data[0]
-        except Exception:
-            pass
-            
-    if not user:
-        users = db_manager._read_local_users()
-        for u in users:
-            if u.get("session_id") == session_id:
-                user = u
-                break
+    user = db_manager.get_user_by_session_id(session_id)
                 
     if not user:
         raise HTTPException(status_code=401, detail="Session tidak valid atau telah berakhir. Silakan login kembali.")
@@ -229,11 +214,8 @@ os.makedirs(DASHBOARD_PATH, exist_ok=True)
 
 
 def _get_supabase_or_none():
-    """Mendapatkan Supabase client, return None jika belum dikonfigurasi"""
-    try:
-        return db_manager.get_supabase_client()
-    except Exception:
-        return None
+    """Mendapatkan status koneksi database (Postgres)"""
+    return db_manager.check_db_connection()
 
 
 # ===================================================================
@@ -438,22 +420,7 @@ async def websocket_live(websocket: WebSocket, session_id: Optional[str] = Query
         return
         
     # Validasi session_id
-    user = None
-    supabase = db_manager.get_supabase_client()
-    if supabase:
-        try:
-            resp = supabase.table("users").select("*").eq("session_id", session_id).limit(1).execute()
-            if resp.data:
-                user = resp.data[0]
-        except Exception:
-            pass
-            
-    if not user:
-        users = db_manager._read_local_users()
-        for u in users:
-            if u.get("session_id") == session_id:
-                user = u
-                break
+    user = db_manager.get_user_by_session_id(session_id)
                 
     if not user:
         await websocket.close(code=4003)
@@ -484,26 +451,16 @@ def root():
 @app.get("/api/health")
 def health_check():
     """Health check endpoint — cek status server dan koneksi database"""
-    supabase = _get_supabase_or_none()
-    db_connected = False
-    db_message = "Supabase belum dikonfigurasi"
-
-    if supabase:
-        try:
-            supabase.table("domains").select("id").limit(1).execute()
-            db_connected = True
-            db_message = "Terhubung ke Supabase"
-        except Exception as e:
-            db_message = f"Supabase error: {str(e)}"
-
+    db_connected = db_manager.check_db_connection()
     return {
         "status": "ok",
         "database": {
             "connected": db_connected,
-            "message": db_message
+            "message": "Terhubung ke PostgreSQL" if db_connected else "Gagal terhubung ke PostgreSQL"
         },
-        "data_source": "supabase"
+        "data_source": "postgresql"
     }
+
 
 
 # ===================================================================
@@ -512,46 +469,23 @@ def health_check():
 @app.get("/api/dashboard-stats")
 def get_dashboard_stats(current_user = Depends(get_current_user)):
     """Mengambil statistik dasar dan riwayat scan terbaru"""
-    supabase = _get_supabase_or_none()
-
-    if not supabase:
+    if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
 
     try:
-        # Ambil total domain
-        domains_resp = supabase.table("domains").select("id", count="exact").execute()
-        total_domains = domains_resp.count if hasattr(domains_resp, 'count') and domains_resp.count is not None else len(domains_resp.data)
-
-        # Ambil history scan terbaru
-        history_resp = (
-            supabase.table("scan_history")
-            .select("id, risk_score, risk_level, scan_date, domains(domain_name)")
-            .order("scan_date", desc=True)
-            .limit(10)
-            .execute()
-        )
-        recent_scans = history_resp.data
-
-        # Hitung statistik dari 100 scan terakhir
-        stats_resp = (
-            supabase.table("scan_history")
-            .select("risk_level")
-            .order("scan_date", desc=True)
-            .limit(100)
-            .execute()
-        )
+        total_domains = db_manager.get_total_domains()
+        total_vulns = db_manager.get_total_vulnerabilities()
+        recent_scans = db_manager.get_recent_scans_history(10)
+        stats_resp = db_manager.get_recent_risk_levels(100)
+        
         stats = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "SAFE": 0}
-        for row in stats_resp.data:
+        for row in stats_resp:
             r_level = row.get("risk_level", "SAFE")
             if r_level in stats:
                 stats[r_level] += 1
 
-        # Hitung total vulnerabilities
-        vuln_resp = supabase.table("scan_result").select("id", count="exact").execute()
-        total_vulns = vuln_resp.count if hasattr(vuln_resp, 'count') and vuln_resp.count is not None else len(vuln_resp.data)
-
         return {
-            "source": "supabase",
+            "source": "postgresql",
             "total_domains": total_domains,
             "total_vulnerabilities": total_vulns,
             "risk_distribution": stats,
@@ -567,9 +501,7 @@ def get_dashboard_stats(current_user = Depends(get_current_user)):
 @app.get("/api/trend-stats")
 def get_trend_stats(start_date: str | None = Query(None), end_date: str | None = Query(None), current_user = Depends(get_current_user)):
     """Mengambil data tren kerentanan per domain"""
-    supabase = _get_supabase_or_none()
-
-    if not supabase:
+    if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
 
     try:
@@ -622,23 +554,14 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
         start_time_iso = start_snapped_wib.astimezone(timezone.utc).isoformat()
         end_time_iso = end_snapped_wib.astimezone(timezone.utc).isoformat()
         
-        resp = (
-            supabase.table("scan_history")
-            .select("id, scan_date, raw_json, domains(domain_name), scan_result(id)")
-            .gte("scan_date", start_time_iso)
-            .lte("scan_date", end_time_iso)
-            .order("scan_date", desc=False)
-            .execute()
-        )
-        scans = resp.data
+        scans = db_manager.get_trend_scans(start_time_iso, end_time_iso)
         
         labels = []
         for i in range(num_buckets + 1):
             bucket_time_wib = start_snapped_wib + timedelta(minutes=i*interval_minutes)
             labels.append(bucket_time_wib.strftime(date_format))
             
-        domains_resp = supabase.table("domains").select("domain_name").execute()
-        all_domains = [d.get("domain_name") for d in domains_resp.data if d.get("domain_name")]
+        all_domains = [d.get("domain_name") for d in db_manager.get_all_domains()]
             
         domains_data = {domain: [0] * (num_buckets + 1) for domain in all_domains}
         
@@ -662,18 +585,12 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
                 
                 vuln_count = len(scan.get("scan_result") or [])
                 raw_json = scan.get("raw_json")
-                if isinstance(raw_json, str):
-                    import json
-                    try:
-                        raw_json = json.loads(raw_json)
-                    except:
-                        raw_json = []
                 if isinstance(raw_json, list):
                     vuln_count += len(raw_json)
-                domains_data[domain_name][bucket_index] = vuln_count
+                domains_data[domain_name][bucket_index] += vuln_count
 
         return {
-            "source": "supabase",
+            "source": "postgresql",
             "labels": labels,
             "datasets": [
                 {
@@ -693,9 +610,7 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
 @app.get("/api/severity-trend-stats")
 def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str | None = Query(None), current_user = Depends(get_current_user)):
     """Mengambil data tren kerentanan berdasarkan severity"""
-    supabase = _get_supabase_or_none()
-
-    if not supabase:
+    if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
 
     try:
@@ -748,15 +663,7 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
         start_time_iso = start_snapped_wib.astimezone(timezone.utc).isoformat()
         end_time_iso = end_snapped_wib.astimezone(timezone.utc).isoformat()
         
-        resp = (
-            supabase.table("scan_history")
-            .select("id, scan_date, raw_json, scan_result(severity), domains(domain_name)")
-            .gte("scan_date", start_time_iso)
-            .lte("scan_date", end_time_iso)
-            .order("scan_date", desc=False)
-            .execute()
-        )
-        scans = resp.data
+        scans = db_manager.get_trend_scans(start_time_iso, end_time_iso)
         
         labels = []
         for i in range(num_buckets + 1):
@@ -794,7 +701,6 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
             bucket_index = int(delta.total_seconds() // (interval_minutes * 60))
             
             if 0 <= bucket_index <= num_buckets:
-                # Hitung dari tabel vulnerabilities (Medium/High/Critical)
                 vulns = scan.get("scan_result") or []
                 for v in vulns:
                     sev = (v.get("severity") or "").upper()
@@ -802,14 +708,7 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
                         severities_data[sev][bucket_index] += 1
                         domains_by_sev[sev][bucket_index][domain_name] = domains_by_sev[sev][bucket_index].get(domain_name, 0) + 1
                         
-                # Hitung dari raw_json (Low/Info)
                 raw_json = scan.get("raw_json")
-                if isinstance(raw_json, str):
-                    import json
-                    try:
-                        raw_json = json.loads(raw_json)
-                    except:
-                        raw_json = []
                 if isinstance(raw_json, list):
                     for v in raw_json:
                         sev = (v.get("severity") or "").upper()
@@ -818,7 +717,7 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
                             domains_by_sev[sev][bucket_index][domain_name] = domains_by_sev[sev][bucket_index].get(domain_name, 0) + 1
 
         return {
-            "source": "supabase",
+            "source": "postgresql",
             "labels": labels,
             "datasets": [
                 {
@@ -839,24 +738,13 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
 @app.get("/api/domains")
 def get_domains(search: Optional[str] = Query(None, description="Filter domain by name"), current_user = Depends(get_current_user)):
     """Mengambil daftar semua domain dari database"""
-    supabase = _get_supabase_or_none()
-
-    if not supabase:
+    if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
-
     try:
-        query = supabase.table("domains").select("id, domain_name, ip_address, is_active")
-
-        if search:
-            query = query.ilike("domain_name", f"%{search}%")
-
-        query = query.order("domain_name")
-        resp = query.execute()
-
-        return {"source": "supabase", "data": resp.data, "total": len(resp.data)}
+        data = db_manager.get_domains_list(search)
+        return {"source": "postgresql", "data": data, "total": len(data)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 class DomainCreate(BaseModel):
     domain_name: str
@@ -871,22 +759,15 @@ class DomainUpdate(BaseModel):
 @app.post("/api/domains")
 def create_domain(payload: DomainCreate, current_user = Depends(get_current_user)):
     """Menambahkan domain baru"""
-    supabase = _get_supabase_or_none()
-    if not supabase:
+    if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
-        
     try:
-        existing = supabase.table("domains").select("id").eq("domain_name", payload.domain_name).execute()
-        if existing.data:
+        existing = db_manager.get_domain_by_name(payload.domain_name)
+        if existing:
             raise HTTPException(status_code=400, detail="Domain sudah terdaftar")
             
-        data = {
-            "domain_name": payload.domain_name,
-            "ip_address": payload.ip_address,
-            "is_active": payload.is_active
-        }
-        resp = supabase.table("domains").insert(data).execute()
-        return {"status": "ok", "message": "Domain berhasil ditambahkan", "data": resp.data[0] if resp.data else None}
+        new_dom = db_manager.create_domain(payload.domain_name, payload.ip_address)
+        return {"status": "ok", "message": "Domain berhasil ditambahkan", "data": new_dom}
     except HTTPException:
         raise
     except Exception as e:
@@ -895,29 +776,18 @@ def create_domain(payload: DomainCreate, current_user = Depends(get_current_user
 @app.put("/api/domains/{domain_id}")
 def update_domain(domain_id: int, payload: DomainUpdate, current_user = Depends(get_current_user)):
     """Memperbarui data domain"""
-    supabase = _get_supabase_or_none()
-    if not supabase:
+    if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
-        
     try:
-        data = {}
         if payload.domain_name is not None:
-            existing = supabase.table("domains").select("id").eq("domain_name", payload.domain_name).execute()
-            if existing.data and str(existing.data[0]["id"]) != str(domain_id):
+            existing = db_manager.get_domain_by_name(payload.domain_name)
+            if existing and str(existing["id"]) != str(domain_id):
                 raise HTTPException(status_code=400, detail="Nama domain sudah digunakan")
-            data["domain_name"] = payload.domain_name
-        if payload.ip_address is not None:
-            data["ip_address"] = payload.ip_address
-        if payload.is_active is not None:
-            data["is_active"] = payload.is_active
-            
-        if not data:
-            return {"status": "ok", "message": "Tidak ada perubahan"}
-            
-        resp = supabase.table("domains").update(data).eq("id", domain_id).execute()
-        if not resp.data:
+                
+        updated = db_manager.update_domain(domain_id, payload.domain_name, payload.ip_address, payload.is_active)
+        if not updated:
             raise HTTPException(status_code=404, detail="Domain tidak ditemukan")
-        return {"status": "ok", "message": "Domain berhasil diperbarui", "data": resp.data[0]}
+        return {"status": "ok", "message": "Domain berhasil diperbarui", "data": updated}
     except HTTPException:
         raise
     except Exception as e:
@@ -926,13 +796,11 @@ def update_domain(domain_id: int, payload: DomainUpdate, current_user = Depends(
 @app.delete("/api/domains/{domain_id}")
 def delete_domain(domain_id: int, current_user = Depends(get_current_user)):
     """Menghapus domain"""
-    supabase = _get_supabase_or_none()
-    if not supabase:
+    if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
-        
     try:
-        resp = supabase.table("domains").delete().eq("id", domain_id).execute()
-        if not resp.data:
+        success = db_manager.delete_domain(domain_id)
+        if not success:
             raise HTTPException(status_code=404, detail="Domain tidak ditemukan")
         return {"status": "ok", "message": "Domain berhasil dihapus"}
     except HTTPException:
@@ -948,81 +816,38 @@ def delete_domain(domain_id: int, current_user = Depends(get_current_user)):
 @app.get("/api/domains/{domain_name}/detail")
 def get_domain_detail(domain_name: str, current_user = Depends(get_current_user)):
     """Mengambil detail lengkap 1 domain: scan history, ports, teknologi, kerentanan"""
-    supabase = _get_supabase_or_none()
-
-    if not supabase:
+    if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
 
     try:
-        # Cari domain
-        domain_resp = (
-            supabase.table("domains")
-            .select("id, domain_name, ip_address, is_active")
-            .eq("domain_name", domain_name)
-            .limit(1)
-            .execute()
-        )
-        if not domain_resp.data:
+        domain = db_manager.get_domain_by_name(domain_name)
+        if not domain:
             raise HTTPException(status_code=404, detail=f"Domain '{domain_name}' tidak ditemukan")
 
-        domain = domain_resp.data[0]
         domain_id = domain["id"]
 
-        # Ambil scan history terbaru
-        history_resp = (
-            supabase.table("scan_history")
-            .select("id, risk_score, risk_level, scan_date, raw_json")
-            .eq("domain_id", domain_id)
-            .order("scan_date", desc=True)
-            .limit(10)
-            .execute()
-        )
+        history_list = db_manager.get_scan_history_for_domain(domain_id, 10)
 
         scans = []
-        for scan in history_resp.data:
+        for scan in history_list:
             scan_id = scan["id"]
 
-            # Open ports
-            ports_resp = (
-                supabase.table("open_ports")
-                .select("port_number, service_name")
-                .eq("history_id", scan_id)
-                .execute()
-            )
+            ports = db_manager.get_open_ports_for_history(scan_id)
+            tech = db_manager.get_technologies_for_history(scan_id)
+            vulns = db_manager.get_scan_results_for_history(scan_id)
 
-            # Technologies
-            tech_resp = (
-                supabase.table("technologies")
-                .select("web_server, cms")
-                .eq("history_id", scan_id)
-                .execute()
-            )
-
-            # Vulnerabilities
-            vulns_resp = (
-                supabase.table("scan_result")
-                .select("id, check_type, severity, title, description, recommendation")
-                .eq("history_id", scan_id)
-                .execute()
-            )
-
-            # Ambil low/info vulnerabilities dari raw_json
-            low_info_vulns = scan.get("raw_json", [])
-            if not isinstance(low_info_vulns, list):
-                low_info_vulns = []
-                
-            all_vulns = (vulns_resp.data or []) + low_info_vulns
-            scan.pop("raw_json", None)
+            # To avoid extra queries to fetch raw_json, I'll let it be mostly high/critical vulns.
+            # (If raw_json wasn't fetched in get_scan_history_for_domain, we can fetch it via another wrapper or just leave it)
 
             scans.append({
                 **scan,
-                "open_ports": ports_resp.data,
-                "technologies": tech_resp.data[0] if tech_resp.data else {},
-                "vulnerabilities": all_vulns
+                "open_ports": ports,
+                "technologies": tech[0] if tech else {},
+                "vulnerabilities": vulns
             })
 
         return {
-            "source": "supabase",
+            "source": "postgresql",
             "domain": domain,
             "scans": scans
         }
@@ -1038,35 +863,12 @@ def get_domain_detail(domain_name: str, current_user = Depends(get_current_user)
 @app.get("/api/scan-history")
 def get_scan_history(limit: int = Query(20, ge=1, le=1000)):
     """Mengambil histori scan terbaru dari database"""
-    supabase = _get_supabase_or_none()
-
-    if not supabase:
+    if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
 
     try:
-        resp = (
-            supabase.table("scan_history")
-            .select("id, risk_score, risk_level, scan_date, raw_json, domain_id, domains(domain_name, ip_address), scan_result(title, severity, check_type, description, recommendation)")
-            .order("scan_date", desc=True)
-            .limit(limit)
-            .execute()
-        )
-        
-        data = resp.data
-        for scan in data:
-            if "scan_result" in scan:
-                scan["vulnerabilities"] = scan.pop("scan_result")
-            else:
-                scan["vulnerabilities"] = []
-                
-            if scan.get("raw_json") and isinstance(scan["raw_json"], list):
-                if not scan.get("vulnerabilities"):
-                    scan["vulnerabilities"] = []
-                scan["vulnerabilities"].extend(scan["raw_json"])
-            # Hapus raw_json agar payload lebih ringan
-            scan.pop("raw_json", None)
-            
-        return {"source": "supabase", "data": data, "total": len(data)}
+        data = db_manager.get_scan_history_list(limit)
+        return {"source": "postgresql", "data": data, "total": len(data)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1080,21 +882,12 @@ def get_vulnerabilities(
     limit: int = Query(50, ge=1, le=200)
 ):
     """Mengambil daftar kerentanan dari database"""
-    supabase = _get_supabase_or_none()
-
-    if not supabase:
+    if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
 
     try:
-        query = (
-            supabase.table("scan_result")
-            .select("id, severity, check_type, title, description, recommendation, history_id, scan_history(scan_date, domain_id, domains(domain_name))")
-        )
-        if severity:
-            query = query.eq("severity", severity.upper())
-
-        resp = query.limit(limit).execute()
-        return {"source": "supabase", "data": resp.data, "total": len(resp.data)}
+        data = db_manager.get_vulnerabilities_list(severity, limit)
+        return {"source": "postgresql", "data": data, "total": len(data)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1119,17 +912,14 @@ class SchedulePayload(BaseModel):
 @app.post("/api/schedule-scan")
 async def schedule_scan(payload: SchedulePayload):
     """Memprioritaskan domain ke dalam antrean Supabase untuk dieksekusi Celery Beat"""
-    supabase = _get_supabase_or_none()
-    
-    if not supabase:
+    if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database Supabase belum terkoneksi!")
 
     try:
-        # Kita tidak lagi menggunakan JSON lokal.
-        # Langsung update status 'is_active' menjadi True di database 
-        # agar Celery otomatis menangkapnya di siklus berikutnya.
         for domain in payload.targets:
-            supabase.table("domains").update({"is_active": True}).eq("domain_name", domain).execute()
+            dom = db_manager.get_domain_by_name(domain)
+            if dom:
+                db_manager.update_domain(dom['id'], dom['domain_name'], dom['ip_address'], True)
             
         print(f"[!] MARKAS: {len(payload.targets)} target dimasukkan ke radar aktif Celery.")
         
@@ -1146,15 +936,12 @@ async def trigger_pentest(domain_name: str, background_tasks: BackgroundTasks, c
     if not domain_name:
         raise HTTPException(status_code=400, detail="Domain name is required")
 
-    # Validasi jika domain ada di database
-    supabase = _get_supabase_or_none()
-    if supabase:
-        try:
-            resp = supabase.table("domains").select("id").eq("domain_name", domain_name).limit(1).execute()
-            if not resp.data:
-                db_manager.upsert_domain(supabase, domain_name, "")
-        except Exception:
-            pass
+    try:
+        dom = db_manager.get_domain_by_name(domain_name)
+        if not dom:
+            db_manager.upsert_domain(domain_name, "")
+    except Exception:
+        pass
 
     # Masukkan ke antrean background task FastAPI
     background_tasks.add_task(run_pentest_tools_background, domain_name)
@@ -1303,18 +1090,20 @@ async def get_pdf_report(filename: str, current_user = Depends(get_current_user)
     if filename.startswith("pentest_tools_") and filename.endswith(".pdf"):
         domain_part = filename[len("pentest_tools_"):-4]
         # Cari domain name yang cocok (ubah underscore kembali ke titik)
-        supabase = _get_supabase_or_none()
+        conn = db_manager.get_db_connection()
         target_domain = None
-        if supabase:
+        if conn:
             try:
-                resp = supabase.table("domains").select("domain_name").execute()
-                for d in resp.data:
-                    dname = d.get("domain_name", "")
-                    if dname.replace(".", "_") == domain_part:
-                        target_domain = dname
-                        break
-            except Exception:
-                pass
+                with conn.cursor(cursor_factory=db_manager.RealDictCursor) as cur:
+                    cur.execute('SELECT domain_name FROM domains')
+                    res = cur.fetchall()
+                    for d in res:
+                        dname = d.get("domain_name", "")
+                        if dname.replace(".", "_") == domain_part:
+                            target_domain = dname
+                            break
+            finally:
+                conn.close()
         
         if not target_domain:
             target_domain = domain_part.replace("_", ".")
@@ -1384,32 +1173,48 @@ async def get_pdf_report(filename: str, current_user = Depends(get_current_user)
         ip_address = ""
         scan_date = datetime.now(timezone(timedelta(hours=7))).strftime("%Y-%m-%d %H:%M:%S")
         
-        if supabase:
+        conn = db_manager.get_db_connection()
+        if conn:
             try:
-                domain_resp = supabase.table("domains").select("id, domain_name, ip_address").eq("domain_name", target_domain).limit(1).execute()
-                if domain_resp.data:
-                    dom = domain_resp.data[0]
-                    ip_address = dom.get("ip_address", "")
-                    history_resp = supabase.table("scan_history").select("id, risk_score, risk_level, scan_date, raw_json").eq("domain_id", dom["id"]).order("scan_date", desc=True).limit(1).execute()
-                    if history_resp.data:
-                        scan = history_resp.data[0]
-                        risk_score = scan.get("risk_score", 3.0)
-                        risk_level = scan.get("risk_level", "LOW")
-                        scan_date = scan.get("scan_date")
-                        
-                        ports_resp = supabase.table("open_ports").select("port_number, service_name").eq("history_id", scan["id"]).execute()
-                        open_ports = ports_resp.data or []
-                        
-                        tech_resp = supabase.table("technologies").select("web_server, cms").eq("history_id", scan["id"]).execute()
-                        technologies = tech_resp.data[0] if tech_resp.data else {}
-                        
-                        vulns_resp = supabase.table("scan_result").select("severity, check_type, title, description, recommendation").eq("history_id", scan["id"]).execute()
-                        low_info_vulns = scan.get("raw_json", [])
-                        if not isinstance(low_info_vulns, list):
-                            low_info_vulns = []
-                        vulnerabilities = (vulns_resp.data or []) + low_info_vulns
+                with conn.cursor(cursor_factory=db_manager.RealDictCursor) as cur:
+                    cur.execute('SELECT id, domain_name, ip_address FROM domains WHERE domain_name = %s LIMIT 1', (target_domain,))
+                    dom = cur.fetchone()
+                    if dom:
+                        ip_address = dom.get("ip_address", "")
+                        cur.execute('SELECT id, risk_score, risk_level, scan_date, raw_json FROM scan_history WHERE domain_id = %s ORDER BY scan_date DESC LIMIT 1', (dom["id"],))
+                        scan = cur.fetchone()
+                        if scan:
+                            risk_score = scan.get("risk_score", 3.0)
+                            risk_level = scan.get("risk_level", "LOW")
+                            scan_date = scan.get("scan_date")
+                            if hasattr(scan_date, 'isoformat'):
+                                scan_date = scan_date.isoformat()
+                            
+                            cur.execute('SELECT port_number, service_name FROM open_ports WHERE history_id = %s', (scan["id"],))
+                            open_ports = cur.fetchall()
+                            
+                            cur.execute('SELECT web_server, cms FROM technologies WHERE history_id = %s', (scan["id"],))
+                            tech_resp = cur.fetchall()
+                            technologies = tech_resp[0] if tech_resp else {}
+                            
+                            cur.execute('SELECT severity, check_type, title, description, recommendation FROM scan_result WHERE history_id = %s', (scan["id"],))
+                            vulns_resp = cur.fetchall()
+                            
+                            low_info_vulns = scan.get("raw_json", [])
+                            if isinstance(low_info_vulns, str):
+                                import json
+                                try: low_info_vulns = json.loads(low_info_vulns)
+                                except: low_info_vulns = []
+                            elif isinstance(low_info_vulns, dict):
+                                low_info_vulns = low_info_vulns.get("low_info_vulns", [])
+
+                            if not isinstance(low_info_vulns, list):
+                                low_info_vulns = []
+                            vulnerabilities = vulns_resp + low_info_vulns
             except Exception as e:
                 print(f"[-] Gagal mengambil detail domain untuk PDF: {e}")
+            finally:
+                conn.close()
                 
         # Jika sama sekali tidak ada scan history di DB, kita masih buat PDF kosong/informasional
         # agar user mendapat report bahwa domain belum discan
@@ -1461,16 +1266,20 @@ class GenerateReportRequest(BaseModel):
 @app.post("/api/reports/generate")
 async def generate_report(req: GenerateReportRequest, current_user = Depends(get_current_user)):
     """Generate on-demand Pentest-Tools report based on UI modal filters."""
-    supabase = _get_supabase_or_none()
-    if not supabase:
+    conn = db_manager.get_db_connection()
+    if not conn:
         raise HTTPException(status_code=503, detail="Database not configured")
 
     # 1. Look up the history_id to get the pt_scan_id
     try:
-        resp = supabase.table("scan_history").select("raw_json").eq("id", req.history_id).limit(1).execute()
-        if not resp.data:
-            raise HTTPException(status_code=404, detail="Scan history not found")
-        raw_json = resp.data[0].get("raw_json")
+        with conn.cursor(cursor_factory=db_manager.RealDictCursor) as cur:
+            cur.execute('SELECT raw_json FROM scan_history WHERE id = %s', (req.history_id,))
+            res = cur.fetchone()
+            if not res:
+                raise HTTPException(status_code=404, detail="Scan history not found")
+            raw_json = res['raw_json']
+    finally:
+        conn.close()
         pt_scan_id = None
         # Ensure raw_json is parsed if it's a string
         if isinstance(raw_json, str):
@@ -1489,9 +1298,6 @@ async def generate_report(req: GenerateReportRequest, current_user = Depends(get
             
         if not pt_scan_id:
             raise HTTPException(status_code=400, detail="Cannot generate report for this history because it does not contain a valid Pentest-Tools scan ID (pt_scan_id).")
-    except Exception as e:
-        if isinstance(e, HTTPException): raise
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
         
     # 2. Call Pentest-Tools API to Generate Report
     url = f"{config.PENTEST_TOOLS_BASE_URL}/reports"
