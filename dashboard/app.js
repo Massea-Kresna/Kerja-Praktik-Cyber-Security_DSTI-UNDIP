@@ -4033,11 +4033,10 @@ window.syncWebSelectAll = function() {
     }
 };
 
-
 function stopActiveScan(scanId) {
     if(!confirm('Are you sure you want to stop this scan?')) return;
     
-    fetch('/api/scans/stop', {
+    fetch(`${API_BASE}/api/scans/stop`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scan_id: scanId })
@@ -4109,7 +4108,7 @@ function submitWebScan() {
         Launching...
     `;
     
-    fetch('/api/web-scan', {
+    fetch(`${API_BASE}/api/web-scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targets: [domain], scan_type: selectedScanType })
@@ -4188,7 +4187,7 @@ function submitNetworkScan() {
     btnSubmit.style.opacity = '0.5';
     btnSubmit.innerHTML = `...`; // (biarkan kode animasi loading tetap sama)
     
-    fetch('/api/network-scan', {
+    fetch(`${API_BASE}/api/network-scan`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // ✅ UBAH BODY INI: Sisipkan scan_type agar dikirim ke server
