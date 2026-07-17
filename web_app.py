@@ -147,6 +147,9 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     username: str
     password: str
+
+class TimeoutRequest(BaseModel):
+    minutes: int
     remember_me: Optional[bool] = False
 
 # ===================================================================
@@ -424,13 +427,12 @@ async def force_logout(target_username: str, admin_user = Depends(get_current_ad
     return {"status": "ok", "message": f"User '{target_username}' berhasil di-force logout."}
 
 @app.post("/api/admin/users/{target_username}/timeout")
-async def put_user_timeout(target_username: str, admin_user = Depends(get_current_admin)):
-    """Menangguhkan user selama 2 jam"""
-    # 2 jam dari sekarang
-    timeout_time = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+async def put_user_timeout(target_username: str, req: TimeoutRequest, admin_user = Depends(get_current_admin)):
+    """Menangguhkan user selama rentang waktu tertentu"""
+    timeout_time = (datetime.now(timezone.utc) + timedelta(minutes=req.minutes)).isoformat()
     db_manager.update_user_timeout(target_username, timeout_time)
     await manager.kick_user(target_username, "timeout")
-    return {"status": "ok", "message": f"User '{target_username}' ditangguhkan selama 2 jam."}
+    return {"status": "ok", "message": f"User '{target_username}' ditangguhkan selama {req.minutes} menit."}
 
 @app.post("/api/admin/users/{target_username}/remove-timeout")
 def remove_user_timeout(target_username: str, admin_user = Depends(get_current_admin)):

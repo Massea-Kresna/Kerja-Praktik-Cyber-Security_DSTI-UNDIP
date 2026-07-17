@@ -1386,6 +1386,39 @@
             </div>
         </div>
     </div>
+    <!-- Timeout Action Modal -->
+    <div class="modal-overlay" id="timeoutActionModalOverlay">
+        <div class="modal-dialog" style="max-width: 450px; border-radius: 12px; overflow: hidden;">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <h2 style="font-size: 1.25rem;">Timeout User</h2>
+                </div>
+                <div class="modal-actions">
+                    <button class="icon-btn" onclick="closeTimeoutModal()">✕</button>
+                </div>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <p style="color: var(--color-muted-light); margin-bottom: 24px;">Pilih durasi penangguhan (timeout) untuk pengguna ini. Pengguna akan segera dikeluarkan secara paksa dan tidak bisa login hingga waktu habis.</p>
+                
+                <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                    <button class="btn btn-outline" style="flex: 1;" onclick="document.getElementById('timeoutMinutesInput').value = 30">30 Menit</button>
+                    <button class="btn btn-outline" style="flex: 1;" onclick="document.getElementById('timeoutMinutesInput').value = 60">1 Jam</button>
+                    <button class="btn btn-outline" style="flex: 1;" onclick="document.getElementById('timeoutMinutesInput').value = 120">2 Jam</button>
+                </div>
+                
+                <div style="margin-bottom: 24px;">
+                    <label style="display: block; font-weight: 500; font-size: 14px; color: var(--color-ink); margin-bottom: 8px;">Atau Kustom (Menit):</label>
+                    <input type="number" id="timeoutMinutesInput" class="auth-input" value="30" min="1" style="width: 100%;" placeholder="Contoh: 45">
+                </div>
+                
+                <div style="display: flex; justify-content: flex-end; gap: 12px; padding-top: 16px; border-top: 1px solid var(--color-border);">
+                    <button type="button" class="btn btn-outline" onclick="closeTimeoutModal()">Batal</button>
+                    <button type="button" class="btn btn-outline btn-warning-outline" onclick="submitTimeout()" style="padding: 6px 16px; font-weight: 500; border-radius: 6px;">Terapkan Timeout</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Report Action Modal (Download or Share) -->
     <div class="modal-overlay" id="reportActionModalOverlay">
         <div class="modal-dialog" style="max-width: 500px; border-radius: 12px; overflow: hidden;">

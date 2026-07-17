@@ -2932,6 +2932,7 @@ let allAdminUsers = [];
 let filteredAdminUsers = [];
 let userCurrentPage = 1;
 let userRowsPerPage = 10;
+let currentTimeoutUser = null;
 
 // Admin Panel: User Table List & Control Actions
 async function loadAdminUsers() {
@@ -3087,15 +3088,18 @@ function renderUserTable() {
             actionButtons = `<span style="color:var(--text-tertiary); font-style:italic;">Akun Anda</span>`;
         } else if (isTimedOut) {
             actionButtons = `
-                <span class="text-timeout" style="margin-right: 12px;">Ditangguhkan (Timeout)</span>
-                <button class="btn-timeout" style="border-color:#22c55e; color:#22c55e; margin-left:0;" onclick="triggerRemoveTimeout('${u.username}')">Cabut Timeout</button>
-                <button class="btn-delete-user" onclick="triggerDeleteUser('${u.username}')">Hapus</button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn-timeout" style="border-color:#22c55e; color:#22c55e; margin: 0;" onclick="triggerRemoveTimeout('${u.username}')">Cabut Timeout</button>
+                    <button class="btn-delete-user" style="margin: 0;" onclick="triggerDeleteUser('${u.username}')">Hapus</button>
+                </div>
             `;
         } else {
             actionButtons = `
-                <button class="btn-force-logout" onclick="triggerForceLogout('${u.username}')">Force Logout</button>
-                <button class="btn-timeout" onclick="triggerTimeoutUser('${u.username}')">Timeout 2 Jam</button>
-                <button class="btn-delete-user" onclick="triggerDeleteUser('${u.username}')">Hapus</button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn-force-logout" style="margin: 0;" onclick="triggerForceLogout('${u.username}')">Force Logout</button>
+                    <button class="btn-timeout" style="margin: 0;" onclick="openTimeoutModal('${u.username}')">Timeout</button>
+                    <button class="btn-delete-user" style="margin: 0;" onclick="triggerDeleteUser('${u.username}')">Hapus</button>
+                </div>
             `;
         }
 
@@ -3134,23 +3138,48 @@ async function triggerForceLogout(username) {
     }
 }
 
-async function triggerTimeoutUser(username) {
-    if (!confirm(`Apakah Anda yakin ingin menangguhkan (timeout) user '${username}' selama 2 jam?`)) return;
+window.openTimeoutModal = function(username) {
+    currentTimeoutUser = username;
+    document.getElementById('timeoutMinutesInput').value = 30; // default 30 menit
+    const modal = document.getElementById('timeoutActionModalOverlay');
+    if (modal) modal.classList.add('active');
+};
+
+window.closeTimeoutModal = function() {
+    currentTimeoutUser = null;
+    const modal = document.getElementById('timeoutActionModalOverlay');
+    if (modal) modal.classList.remove('active');
+};
+
+window.submitTimeout = async function() {
+    if (!currentTimeoutUser) return;
+    const minutesVal = document.getElementById('timeoutMinutesInput').value;
+    const minutes = parseInt(minutesVal, 10);
+    
+    if (isNaN(minutes) || minutes < 1) {
+        alert("Masukkan durasi menit yang valid (minimal 1).");
+        return;
+    }
+    
     try {
-        const resp = await fetch(`${API_BASE}/api/admin/users/${username}/timeout`, {
-            method: 'POST'
+        const resp = await fetch(`${API_BASE}/api/admin/users/${currentTimeoutUser}/timeout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ minutes: minutes })
         });
         const data = await resp.json();
+        
         if (resp.status === 200) {
-            showToast("User Ditangguhkan", `User '${username}' ditangguhkan selama 2 jam.`, "⏳");
+            showToast("User Ditangguhkan", `User '${currentTimeoutUser}' ditangguhkan selama ${minutes} menit.`, "⏳");
             loadAdminUsers();
+            closeTimeoutModal();
         } else {
             alert(data.detail || "Gagal melakukan penangguhan.");
         }
     } catch (err) {
         alert("Gagal menghubungi server.");
     }
-}
+};
 
 async function triggerRemoveTimeout(username) {
     if (!confirm(`Apakah Anda yakin ingin mencabut status penangguhan (timeout) user '${username}'?`)) return;
