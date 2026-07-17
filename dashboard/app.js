@@ -46,6 +46,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     checkAuth();
     setupTabs();
+    
+    // Pastikan filter tanggal tren di-reset pada saat dimuat (refresh)
+    ['vulnTrend', 'sevTrend'].forEach(prefix => {
+        const startInput = document.getElementById(`${prefix}StartDate`);
+        const endInput = document.getElementById(`${prefix}EndDate`);
+        const label = document.getElementById(`${prefix}DateLabel`);
+        if (startInput) startInput.value = '';
+        if (endInput) endInput.value = '';
+        if (label) label.textContent = '24 Jam';
+    });
+    
     // -- (Taruh di dalam blok DOMContentLoaded) --
     const saveBtn = document.getElementById('saveTargetsBtn');
     if (saveBtn) {
@@ -582,9 +593,6 @@ async function applyCustomDate(chartPrefix, dropdownId) {
     } else {
         if (labelEl) labelEl.textContent = '24 Jam';
     }
-    
-    const dd = document.getElementById(dropdownId);
-    if (dd) dd.classList.remove('open');
     
     if (chartPrefix === 'vulnTrend') {
         await loadVulnTrendData();
