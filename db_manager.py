@@ -508,6 +508,7 @@ def seed_default_admin():
             print(f"[+] Seeding Sukses: User default '{admin_username}' dengan password 'admin123' telah ditambahkan.")
     except Exception as e:
         print(f"[-] Gagal melakukan seeding admin: {e}")
+        
 # ==============================================================================
 # NOTIFICATIONS MANAGEMENT (LOCAL JSON)
 # ==============================================================================
