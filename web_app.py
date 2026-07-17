@@ -296,25 +296,51 @@ async def login(credentials: LoginRequest, response: Response):
             raise he
         except Exception:
             pass
-             # 4. Generate OTP
-    otp_code = str(random.randint(100000, 999999))
-    OTP_STORE[credentials.username] = {
-        "otp": otp_code,
-        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5)
-    }
-    
-    # 5. Send OTP Email
-    target_email = credentials.username
-    if target_email == "admin":
-        target_email = config.ADMIN_EMAIL if config.ADMIN_EMAIL else "admin@undip.ac.id"
+    # 4. Cek Role. OTP hanya untuk admin
+    user_role = user.get("role", "user")
+    if user_role == "admin":
+        # 5a. Generate OTP untuk Admin
+        otp_code = str(random.randint(100000, 999999))
+        OTP_STORE[credentials.username] = {
+            "otp": otp_code,
+            "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5)
+        }
         
-    success = send_otp_email(target_email, otp_code)
-    
-    if not success:
-        # Fallback jika email gagal dikirim (opsional: bisa di-log saja)
-        print(f"[!] Email gagal dikirim ke {target_email}. OTP untuk {credentials.username} adalah: {otp_code}")
+        # Kirim OTP Email
+        target_email = credentials.username
+        if target_email == "admin":
+            target_email = config.ADMIN_EMAIL if config.ADMIN_EMAIL else "admin@undip.ac.id"
+            
+        success = send_otp_email(target_email, otp_code)
         
-    return {"status": "otp_required", "message": "Kode OTP telah dikirim ke email Anda."}
+        if not success:
+            print(f"[!] Email gagal dikirim ke {target_email}. OTP untuk {credentials.username} adalah: {otp_code}")
+            
+        return {"status": "otp_required", "message": "Kode OTP telah dikirim ke email Anda."}
+    else:
+        # 5b. Bypass OTP untuk User Biasa
+        session_id = str(uuid.uuid4())
+        db_manager.update_user_session(credentials.username, session_id, True)
+        
+        cookie_max_age = 2592000 if credentials.remember_me else 86400
+        response.set_cookie(
+            key="session_id",
+            value=session_id,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=cookie_max_age
+        )
+        
+        return {
+            "status": "success",
+            "message": "Login berhasil",
+            "user": {
+                "username": user["username"],
+                "role": user["role"],
+                "session_id": session_id
+            }
+        }
 
 @app.post("/api/auth/verify_otp")
 async def verify_otp(req: VerifyOTPRequest, response: Response):
