@@ -1136,6 +1136,11 @@ async def run_pentest_tools_background(domain_name: str):
     async with aiohttp.ClientSession() as session:
         await process_domain_scan(session, domain_name, semaphore)
     print(f"[+] [BACKGROUND] Scan Pentest-Tools selesai untuk: {domain_name}")
+    await manager.broadcast_to_admins({
+        "event": "scan_finished",
+        "domain": domain_name,
+        "time": datetime.now(config.WIB).isoformat()
+    })
 
 # ===================================================================
 # Simpan Jadwal
@@ -1202,6 +1207,12 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
         tasks = [process_network_scan(session, target, semaphore, scan_type) for target in targets]
         if tasks:
             await asyncio.gather(*tasks)
+            for target in targets:
+                await manager.broadcast_to_admins({
+                    "event": "scan_finished",
+                    "domain": target,
+                    "time": datetime.now(config.WIB).isoformat()
+                })
 
 async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
     """Fungsi latar belakang untuk menjalankan Web Scan pada beberapa target."""
@@ -1210,6 +1221,12 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
         tasks = [process_domain_scan(session, target, semaphore, scan_type) for target in targets]
         if tasks:
             await asyncio.gather(*tasks)
+            for target in targets:
+                await manager.broadcast_to_admins({
+                    "event": "scan_finished",
+                    "domain": target,
+                    "time": datetime.now(config.WIB).isoformat()
+                })
 
 class WebScanRequest(BaseModel):
     targets: List[str]

@@ -2413,7 +2413,7 @@ function openScanModal(scan) {
     }
 
     const btnDownload = document.getElementById('btnDownloadReport');
-    if (btnDownload && domainName) {
+    if (btnDownload && domainName && currentUser && currentUser.role === 'admin') {
         // Open Generate Report Modal instead of directly downloading
         btnDownload.removeAttribute('href');
         btnDownload.removeAttribute('target');
@@ -2628,17 +2628,36 @@ function handleSuccessfulLogin(user) {
         document.getElementById('sidebar-user-role').innerHTML = `<span class="badge-admin-role">Admin</span>`;
         document.getElementById('nav-admin').style.display = 'flex';
         document.getElementById('notifWrapper').style.display = 'block';
+        
+        // Tampilkan menu khusus admin
+        const navInventory = document.querySelector('[onclick="switchView(\'inventory\')"]');
+        const navWebScanner = document.querySelector('[onclick="switchView(\'web-scanner\')"]');
+        const navNetworkScanner = document.querySelector('[onclick="switchView(\'network-scanner\')"]');
+        if (navInventory) navInventory.style.display = 'flex';
+        if (navWebScanner) navWebScanner.style.display = 'flex';
+        if (navNetworkScanner) navNetworkScanner.style.display = 'flex';
 
         renderNotificationList();
     } else {
         roleEl.innerHTML = `<span class="badge-user-role">User</span>`;
         document.getElementById('nav-admin').style.display = 'none';
         document.getElementById('notifWrapper').style.display = 'none';
+        
+        // Sembunyikan menu dari user biasa
+        const navInventory = document.querySelector('[onclick="switchView(\'inventory\')"]');
+        const navWebScanner = document.querySelector('[onclick="switchView(\'web-scanner\')"]');
+        const navNetworkScanner = document.querySelector('[onclick="switchView(\'network-scanner\')"]');
+        if (navInventory) navInventory.style.display = 'none';
+        if (navWebScanner) navWebScanner.style.display = 'none';
+        if (navNetworkScanner) navNetworkScanner.style.display = 'none';
 
-        // If regular user was on admin tab, redirect to overview
+        // Jika user berada di halaman terlarang, kembalikan ke overview
         const activeNav = document.querySelector('.sidebar-nav .nav-item.active');
-        if (activeNav && activeNav.getAttribute('onclick').includes('admin')) {
-            switchView('overview');
+        if (activeNav) {
+            const attr = activeNav.getAttribute('onclick') || '';
+            if (attr.includes('admin') || attr.includes('inventory') || attr.includes('web-scanner') || attr.includes('network-scanner')) {
+                switchView('overview');
+            }
         }
     }
 
@@ -3106,17 +3125,29 @@ function renderNotificationList() {
     }
 
     listContainer.innerHTML = allNotifications.map(n => {
-        const initials = (n.username || 'U').substring(0, 2).toUpperCase();
-        const roleText = n.role === 'admin' ? 'Admin' : 'User';
         const unreadClass = n.unread ? 'unread' : '';
         const relativeTime = formatRelativeTime(n.timestamp);
+        
+        let notifText = '';
+        let avatarIcon = '';
+        let initials = '';
+
+        if (n.type === 'scan_finished') {
+            avatarIcon = '🚀';
+            notifText = `Scan untuk <strong>${escapeHtml(n.domain || '')}</strong> telah selesai.`;
+        } else {
+            // Legacy / user_login
+            initials = (n.username || 'U').substring(0, 2).toUpperCase();
+            const roleText = n.role === 'admin' ? 'Admin' : 'User';
+            notifText = `👤 <strong>${escapeHtml(n.username || '')}</strong> (${roleText}) masuk ke sistem.`;
+        }
 
         return `
             <div class="notif-item ${unreadClass}" onclick="markAsRead('${n.id}')">
                 <div class="notif-unread-dot"></div>
-                <div class="notif-avatar">${initials}</div>
+                <div class="notif-avatar">${initials || avatarIcon}</div>
                 <div class="notif-content">
-                    <div class="notif-text">👤 <strong>${escapeHtml(n.username)}</strong> (${roleText}) baru saja masuk ke sistem.</div>
+                    <div class="notif-text">${notifText}</div>
                     <div class="notif-time">${relativeTime}</div>
                 </div>
                 <div class="notif-actions">
@@ -3127,12 +3158,30 @@ function renderNotificationList() {
     }).join('');
 }
 
-function markAsRead(notifId) {
+async function markAsRead(notifId) {
     const notif = allNotifications.find(n => n.id === notifId);
     if (notif && notif.unread) {
         notif.unread = false;
         localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
         renderNotificationList();
+    }
+    
+    // Tindakan spesifik ketika notifikasi diklik
+    if (notif) {
+        if (notif.type === 'scan_finished') {
+            // Tutup dropdown notifikasi (jika terbuka)
+            const dropdown = document.getElementById('notificationDropdown');
+            if (dropdown) dropdown.style.display = 'none';
+            
+            // Refresh data dari backend agar scan terbaru termuat ke memori (allVulns)
+            await loadVulnerabilities(true);
+            
+            // Cari dan buka detail
+            jumpToScanDetail(notif.time, notif.domain, false);
+        } else {
+            // Tampilkan info basic saja untuk login user
+            showToast("Info Notifikasi", `Terkait user: ${notif.username || '-'}`, "ℹ️");
+        }
     }
 }
 
@@ -3180,6 +3229,25 @@ function connectLiveWebSocket(sessionId) {
                     if (activeNav && activeNav.getAttribute('onclick').includes('admin')) {
                         loadAdminUsers();
                     }
+                }
+            } else if (data.event === 'scan_finished') {
+                if (currentUser && currentUser.role === 'admin') {
+                    showToast(
+                        "Scan Selesai",
+                        `🚀 Scan untuk domain <b>${escapeHtml(data.domain)}</b> telah selesai dijalankan.`,
+                        "✅"
+                    );
+                    const notif = {
+                        id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                        type: 'scan_finished',
+                        domain: data.domain,
+                        time: data.time,
+                        timestamp: new Date().toISOString(),
+                        unread: true
+                    };
+                    allNotifications.unshift(notif);
+                    localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
+                    renderNotificationList();
                 }
             } else if (data.event === 'force_logout') {
                 showToast("Sesi Diakhiri", "Anda telah dipaksa keluar oleh Administrator.", "⚠️");
