@@ -479,6 +479,30 @@ body {
     color: var(--color-ink);
 }
 
+.icon-btn.action-edit {
+    color: var(--color-accent) !important;
+    border-color: var(--color-accent) !important;
+    background: rgba(0, 88, 189, 0.03) !important;
+}
+.icon-btn.action-edit:hover {
+    background: var(--color-accent) !important;
+    color: #ffffff !important;
+    border-color: var(--color-accent) !important;
+    box-shadow: 0 2px 4px rgba(0, 88, 189, 0.15) !important;
+}
+
+.icon-btn.action-delete {
+    color: #ef4444 !important;
+    border-color: #ef4444 !important;
+    background: rgba(239, 68, 68, 0.03) !important;
+}
+.icon-btn.action-delete:hover {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    border-color: #ef4444 !important;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.15) !important;
+}
+
 /* MULTI-SELECT DROPDOWN (LOGIC FILTER LAMA) */
 .multi-select-dropdown {
     position: relative;
@@ -1739,6 +1763,19 @@ body {
     border-color: var(--color-accent);
     color: #ffffff;
     box-shadow: 0 2px 4px rgba(0, 88, 189, 0.15);
+}
+
+.modern-table td .btn-outline.btn-sm.btn-delete-domain {
+    color: #ef4444;
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.03);
+}
+
+.modern-table td .btn-outline.btn-sm.btn-delete-domain:hover {
+    background: #ef4444;
+    border-color: #ef4444;
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.15);
 }
 
 /* ==========================================================================
