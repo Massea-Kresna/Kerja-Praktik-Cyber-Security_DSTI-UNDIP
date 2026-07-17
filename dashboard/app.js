@@ -2927,6 +2927,12 @@ async function handleCreateUserSubmit(e) {
     }
 }
 
+// Global variables for user management state
+let allAdminUsers = [];
+let filteredAdminUsers = [];
+let userCurrentPage = 1;
+let userRowsPerPage = 10;
+
 // Admin Panel: User Table List & Control Actions
 async function loadAdminUsers() {
     const tbody = document.getElementById('userTableBody');
@@ -2935,7 +2941,8 @@ async function loadAdminUsers() {
         const result = await resp.json();
 
         if (resp.status === 200) {
-            renderUserTable(result.data);
+            allAdminUsers = result.data || [];
+            applyUserFilters();
         } else {
             tbody.innerHTML = `<tr><td colspan="5" class="empty-state text-danger">${result.detail || 'Gagal memuat daftar user.'}</td></tr>`;
         }
@@ -2944,14 +2951,116 @@ async function loadAdminUsers() {
     }
 }
 
-function renderUserTable(users) {
+window.applyUserFilters = function(preservePage = false) {
+    const searchVal = (document.getElementById('userSearchInput')?.value || '').toLowerCase();
+    
+    filteredAdminUsers = allAdminUsers.filter(u => {
+        if (!searchVal) return true;
+        return (u.username && u.username.toLowerCase().includes(searchVal)) || 
+               (u.role && u.role.toLowerCase().includes(searchVal));
+    });
+    
+    // Sort logic: 
+    // 1. Role: 'admin' > 'user'
+    // 2. Status: online > offline
+    // 3. Last Active: recent > older
+    // 4. Username: A-Z
+    filteredAdminUsers.sort((a, b) => {
+        if (a.role === 'admin' && b.role !== 'admin') return -1;
+        if (a.role !== 'admin' && b.role === 'admin') return 1;
+        
+        const aOnline = a.is_online ? 1 : 0;
+        const bOnline = b.is_online ? 1 : 0;
+        if (aOnline !== bOnline) return bOnline - aOnline;
+        
+        const timeA = new Date(a.last_online || 0).getTime();
+        const timeB = new Date(b.last_online || 0).getTime();
+        if (timeA !== timeB) return timeB - timeA;
+        
+        const nameA = (a.username || '').toLowerCase();
+        const nameB = (b.username || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+    
+    if (!preservePage) {
+        userCurrentPage = 1;
+    }
+    renderUserTable();
+};
+
+window.changeUserPage = function(delta) {
+    const totalPages = Math.ceil(filteredAdminUsers.length / userRowsPerPage) || 1;
+    let newPage = userCurrentPage + delta;
+    if (newPage < 1) newPage = 1;
+    if (newPage > totalPages) newPage = totalPages;
+    if (newPage !== userCurrentPage) {
+        userCurrentPage = newPage;
+        renderUserTable();
+    }
+};
+
+window.changeUserRowsPerPage = function() {
+    const select = document.getElementById('userRowsSelect');
+    if (!select) return;
+    userRowsPerPage = parseInt(select.value, 10);
+    userCurrentPage = 1;
+    renderUserTable();
+};
+
+window.jumpUserPage = function() {
+    const input = document.getElementById('userPageInput');
+    if (!input) return;
+    let page = parseInt(input.value, 10);
+    const totalPages = Math.ceil(filteredAdminUsers.length / userRowsPerPage) || 1;
+    if (isNaN(page) || page < 1) page = 1;
+    if (page > totalPages) page = totalPages;
+    userCurrentPage = page;
+    renderUserTable();
+};
+
+function renderUserPagination(totalItems) {
+    const container = document.getElementById('userPaginationControls');
+    if (!container) return;
+    
+    if (totalItems === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    container.style.display = 'flex';
+    const totalPages = Math.ceil(totalItems / userRowsPerPage) || 1;
+    
+    const prevBtn = document.getElementById('userPrevPageBtn');
+    const nextBtn = document.getElementById('userNextPageBtn');
+    const pageInput = document.getElementById('userPageInput');
+    const totalPagesSpan = document.getElementById('userTotalPages');
+    
+    if (prevBtn) prevBtn.disabled = (userCurrentPage === 1);
+    if (nextBtn) nextBtn.disabled = (userCurrentPage === totalPages);
+    if (pageInput) {
+        pageInput.value = userCurrentPage;
+        pageInput.max = totalPages;
+    }
+    if (totalPagesSpan) totalPagesSpan.textContent = totalPages;
+}
+
+function renderUserTable() {
     const tbody = document.getElementById('userTableBody');
-    if (!users || users.length === 0) {
+    if (!filteredAdminUsers || filteredAdminUsers.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Tidak ada user terdaftar.</td></tr>`;
+        renderUserPagination(0);
         return;
     }
 
-    tbody.innerHTML = users.map(u => {
+    const totalItems = filteredAdminUsers.length;
+    const totalPages = Math.ceil(totalItems / userRowsPerPage) || 1;
+    if (userCurrentPage > totalPages) userCurrentPage = totalPages;
+    
+    const startIdx = (userCurrentPage - 1) * userRowsPerPage;
+    const endIdx = Math.min(startIdx + userRowsPerPage, totalItems);
+    const paginatedUsers = filteredAdminUsers.slice(startIdx, endIdx);
+
+    tbody.innerHTML = paginatedUsers.map(u => {
         const isSelf = u.username === currentUser.username;
         const roleBadge = u.role === 'admin'
             ? `<span class="badge-admin-role">Admin</span>`
@@ -2992,14 +3101,19 @@ function renderUserTable(users) {
 
         return `
             <tr>
-                <td style="font-weight: 600; color: var(--text-primary);">${escapeHtml(u.username)}</td>
+                <td style="font-weight:500;">
+                    ${escapeHtml(u.username)}
+                    ${isSelf ? '<span style="font-size:10px; color:var(--text-tertiary); margin-left:6px;">(You)</span>' : ''}
+                </td>
                 <td>${roleBadge}</td>
                 <td>${statusBadge}</td>
-                <td>${lastActiveText}</td>
+                <td style="font-size:13px; color:var(--text-secondary);">${lastActiveText}</td>
                 <td>${actionButtons}</td>
             </tr>
         `;
     }).join('');
+    
+    renderUserPagination(totalItems);
 }
 
 async function triggerForceLogout(username) {
