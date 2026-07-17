@@ -303,11 +303,21 @@ def upsert_domain(domain_name, ip_address):
             conn.commit()
             return res['id'] if res else None
     except Exception as e:
+# --- [Bagian penutup try-except yang terpotong dari kode di atasnya] ---
+        # 1. Penutup dari fungsi upsert_domain (dari Patch-17)
         print(f'[-] Error upsert_domain: {e}')
         if conn: conn.rollback()
         return None
     finally:
         conn.close()
+
+        # 2. Penutup dari fungsi seeding admin (dari main)
+        # Catatan: Pastikan indentasi sebaris ini sejajar dengan blok except-mu di atasnya
+        # print(f"[-] Gagal melakukan seeding admin: {e}")
+
+# ==============================================================================
+# FUNGSI DATABASE POSTGRESQL (DARI PATCH-17)
+# ==============================================================================
 
 def create_scan_history(domain_id, risk_score, risk_level, raw_json=None, scan_date=None):
     if not scan_date:
@@ -972,3 +982,73 @@ def get_vulnerabilities_list(severity=None, limit=50):
         return []
     finally:
         conn.close()
+
+# ==============================================================================
+# NOTIFICATIONS MANAGEMENT (LOCAL JSON) DARI CABANG MAIN
+# ==============================================================================
+
+LOCAL_NOTIFICATIONS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'notifications_db.json')
+
+def _read_local_notifications():
+    if not os.path.exists(LOCAL_NOTIFICATIONS_FILE):
+        return []
+    try:
+        with open(LOCAL_NOTIFICATIONS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def _write_local_notifications(notifs):
+    try:
+        with open(LOCAL_NOTIFICATIONS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(notifs, f, indent=4, default=str)
+        return True
+    except Exception:
+        return False
+
+def create_notification(title: str, message: str, notif_type: str = 'info'):
+    notifs = _read_local_notifications()
+    new_notif = {
+        'id': uuid.uuid4().hex,
+        'title': title,
+        'message': message,
+        'type': notif_type,
+        'is_read': False,
+        'created_at': datetime.now(timezone.utc).isoformat()
+    }
+    notifs.insert(0, new_notif) # Insert at beginning
+    # Keep only last 100 notifications to prevent bloat
+    if len(notifs) > 100:
+        notifs = notifs[:100]
+    _write_local_notifications(notifs)
+    return new_notif
+
+def get_notifications(include_read: bool = True):
+    notifs = _read_local_notifications()
+    if not include_read:
+        notifs = [n for n in notifs if not n.get('is_read')]
+    return notifs
+
+def mark_notification_as_read(notif_id: str):
+    notifs = _read_local_notifications()
+    for n in notifs:
+        if n['id'] == notif_id:
+            n['is_read'] = True
+            _write_local_notifications(notifs)
+            return True
+    return False
+
+def mark_all_notifications_as_read():
+    notifs = _read_local_notifications()
+    for n in notifs:
+        n['is_read'] = True
+    _write_local_notifications(notifs)
+    return True
+
+def delete_notification(notif_id: str):
+    notifs = _read_local_notifications()
+    filtered = [n for n in notifs if n['id'] != notif_id]
+    if len(filtered) != len(notifs):
+        _write_local_notifications(filtered)
+        return True
+    return False

@@ -61,6 +61,10 @@ body {
     font-size: 14px;
 }
 
+button, input, select, textarea {
+    font-family: var(--font-sans);
+}
+
 .icon {
     width: 16px;
     height: 16px;
@@ -81,15 +85,170 @@ body {
     color: #FFFFFF;
     display: flex;
     flex-direction: column;
-    padding: 24px 0;
+    padding: 0 0 24px 0;
     overflow-y: auto;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.sidebar.collapsed {
+    width: 80px;
+}
+
+.sidebar.collapsed .brand-text,
+.sidebar.collapsed .nav-title,
+.sidebar.collapsed .nav-item span,
+.sidebar.collapsed .nav-item text {
+    display: none;
+}
+
+/* Kita pastikan layout nav-item hanya menampilkan icon saja dengan menyembunyikan span. */
+.sidebar.collapsed .nav-item {
+    justify-content: center;
+    padding: 12px;
+    margin: 0 12px;
+    border-radius: 8px;
+    width: 56px;
+    height: 44px;
+}
+
+.sidebar.collapsed .nav-item.active {
+    border-left: none;
+    padding-left: 12px;
+    background: rgba(20, 112, 232, 0.2);
+}
+
+.sidebar.collapsed .sidebar-user {
+    padding: 16px 0;
+    justify-content: center;
+}
+
+.sidebar.collapsed .user-info {
+    display: none;
+}
+
+/* Sidebar toggle button with Tooltip */
+.sidebar-toggle-wrapper {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    transition: all 0.2s;
+    opacity: 0;
+    visibility: hidden;
+}
+
+.sidebar-brand:hover .sidebar-toggle-wrapper {
+    opacity: 1;
+    visibility: visible;
+}
+
+.sidebar-toggle-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #e2e8f0;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.sidebar-toggle-btn:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.sidebar-tooltip {
+    position: absolute;
+    top: calc(100% + 12px);
+    right: 0;
+    left: auto;
+    transform: none;
+    background-color: #1e293b;
+    color: #f8fafc;
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: normal;
+    text-align: center;
+    width: max-content;
+    max-width: 70px;
+    line-height: 1.3;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s;
+    pointer-events: none;
+    z-index: 100;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.sidebar.collapsed .sidebar-tooltip {
+    right: 50%;
+    transform: translateX(50%);
 }
 
 .sidebar-brand {
-    padding: 0 24px 32px;
+    padding: 16px 24px 16px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: center;
+    position: relative;
+    transition: all 0.3s;
+    min-height: 72px;
+}
+
+.sidebar.collapsed .sidebar-brand {
+    padding: 16px 12px 16px;
+}
+
+/* Logic for logos */
+.logo-full {
+    width: 100%;
+    max-width: 200px;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    filter: drop-shadow(1px 0 0 white) drop-shadow(-1px 0 0 white) drop-shadow(0 1px 0 white) drop-shadow(0 -1px 0 white);
+}
+
+.logo-small {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    display: none; /* Default hidden */
+    filter: drop-shadow(1px 0 0 white) drop-shadow(-1px 0 0 white) drop-shadow(0 1px 0 white) drop-shadow(0 -1px 0 white);
+}
+
+.sidebar.collapsed .logo-full {
+    display: none;
+}
+
+.sidebar.collapsed .logo-small {
+    display: block;
+}
+
+/* Optional: Centering the toggle button when collapsed */
+.sidebar.collapsed .sidebar-toggle-wrapper {
+    right: 50%;
+    transform: translate(50%, -50%);
+    /* Make button slightly more opaque when collapsed since it covers the logo */
+}
+
+.sidebar.collapsed .sidebar-toggle-btn {
+    background-color: rgba(15, 28, 44, 0.85); /* Dark background to cover logo nicely */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar.collapsed .brand-logo {
+    display: none; /* Kita sembunyikan logo CSIRT jika collapsed agar rapi */
 }
 
 .brand-logo {
@@ -131,6 +290,7 @@ body {
     color: var(--color-navy-soft);
     letter-spacing: 0.55px;
     padding: 16px 24px 8px;
+    white-space: nowrap;
 }
 
 .nav-item {
@@ -142,6 +302,7 @@ body {
     align-items: center;
     gap: 12px;
     transition: 0.2s;
+    white-space: nowrap;
 }
 
 .nav-item:hover {
@@ -172,7 +333,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 24px;
+    padding: 0 40px;
 }
 
 .topbar-title {
@@ -477,6 +638,30 @@ body {
 .icon-btn:hover {
     background-color: var(--color-bg);
     color: var(--color-ink);
+}
+
+.icon-btn.action-edit {
+    color: var(--color-accent) !important;
+    border-color: var(--color-accent) !important;
+    background: rgba(0, 88, 189, 0.03) !important;
+}
+.icon-btn.action-edit:hover {
+    background: var(--color-accent) !important;
+    color: #ffffff !important;
+    border-color: var(--color-accent) !important;
+    box-shadow: 0 2px 4px rgba(0, 88, 189, 0.15) !important;
+}
+
+.icon-btn.action-delete {
+    color: #ef4444 !important;
+    border-color: #ef4444 !important;
+    background: rgba(239, 68, 68, 0.03) !important;
+}
+.icon-btn.action-delete:hover {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    border-color: #ef4444 !important;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.15) !important;
 }
 
 /* MULTI-SELECT DROPDOWN (LOGIC FILTER LAMA) */
@@ -1103,6 +1288,40 @@ body {
     gap: 8px;
 }
 
+/* Premium Generate Report Button */
+.btn-generate-report {
+    font-family: var(--font-sans);
+    background-color: #1e293b;
+    color: #ffffff;
+    border: 1px solid #334155;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+}
+.btn-generate-report svg {
+    color: #94a3b8;
+    transition: color 0.2s ease;
+}
+.btn-generate-report:hover {
+    background-color: #0f172a;
+    border-color: #475569;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+.btn-generate-report:hover svg {
+    color: #eab308;
+}
+.btn-generate-report:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+
 .sso-btn:hover {
     background: #f2f4f6;
 }
@@ -1708,6 +1927,35 @@ body {
     transform: translateY(0);
 }
 
+.btn-danger {
+    background: var(--color-danger) !important;
+    color: #ffffff !important;
+    border-color: var(--color-danger) !important;
+}
+
+.btn-danger:hover {
+    background: #b91c1c !important; /* Slightly darker red */
+    border-color: #b91c1c !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px -2px rgba(220, 38, 38, 0.3);
+}
+
+.btn-danger:active {
+    transform: translateY(0);
+}
+
+.btn-warning-outline {
+    background: transparent !important;
+    color: #ea580c !important; /* Orange-yellow / amber */
+    border-color: #ea580c !important;
+}
+
+.btn-warning-outline:hover {
+    background: rgba(234, 88, 12, 0.05) !important;
+    color: #c2410c !important;
+    border-color: #c2410c !important;
+}
+
 .btn-outline {
     background: transparent;
     color: var(--color-ink-soft);
@@ -1741,6 +1989,19 @@ body {
     box-shadow: 0 2px 4px rgba(0, 88, 189, 0.15);
 }
 
+.modern-table td .btn-outline.btn-sm.btn-delete-domain {
+    color: #ef4444;
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.03);
+}
+
+.modern-table td .btn-outline.btn-sm.btn-delete-domain:hover {
+    background: #ef4444;
+    border-color: #ef4444;
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.15);
+}
+
 /* ==========================================================================
    VULNERABILITY FILTERS (MODAL CARD)
    ========================================================================== */
@@ -1752,16 +2013,18 @@ body {
 }
 
 .filter-btn {
+    font-family: var(--font-sans);
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
+    padding: 8px 18px;
     border-radius: 20px;
     border: 1px solid var(--color-border);
     background: #ffffff;
     color: var(--color-muted);
-    font-size: 12px;
-    font-weight: 500;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);
@@ -1802,6 +2065,24 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
+.quick-date-btn {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--color-ink-soft);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    font-weight: 500;
+}
+.quick-date-btn:hover {
+    background: #f1f5f9;
+    color: var(--color-ink);
+    border-color: #cbd5e1;
+}
+
 /* Hide number spinners */
 input[type=number]::-webkit-outer-spin-button,
 input[type=number]::-webkit-inner-spin-button {
@@ -1810,6 +2091,7 @@ input[type=number]::-webkit-inner-spin-button {
 }
 input[type=number] {
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 @keyframes spin {

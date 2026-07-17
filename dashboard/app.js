@@ -1,8 +1,6 @@
-/**
- * JAGAWEB — Security Dashboard App.js
- */
-
 const API_BASE = window.location.origin;
+// const API_BASE = "http://10.70.128.26:8000";
+// const API_BASE = "http://" + window.location.hostname + ":8000";
 
 // State
 let allDomains = [];
@@ -46,6 +44,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
     checkAuth();
     setupTabs();
+    
+    // Pastikan filter tanggal tren di-reset pada saat dimuat (refresh)
+    ['vulnTrend', 'sevTrend'].forEach(prefix => {
+        const startInput = document.getElementById(`${prefix}StartDate`);
+        const endInput = document.getElementById(`${prefix}EndDate`);
+        const label = document.getElementById(`${prefix}DateLabel`);
+        if (startInput) startInput.value = '';
+        if (endInput) endInput.value = '';
+        if (label) label.textContent = '24 Jam';
+    });
+    
+    // Reset semua input dan form di seluruh halaman ke setelan awalnya
+    document.querySelectorAll('form').forEach(f => f.reset());
+    document.querySelectorAll('input, select, textarea').forEach(el => {
+        if (el.type === 'radio' || el.type === 'checkbox') {
+            el.checked = el.defaultChecked;
+        } else if (el.tagName === 'SELECT') {
+            let hasDefault = false;
+            for (let i = 0; i < el.options.length; i++) {
+                if (el.options[i].defaultSelected) {
+                    el.selectedIndex = i;
+                    hasDefault = true;
+                    break;
+                }
+            }
+            if (!hasDefault && el.options.length > 0) el.selectedIndex = 0;
+        } else if (!['button', 'submit', 'hidden'].includes(el.type)) {
+            el.value = el.defaultValue || '';
+        }
+    });
+    
+    // Reset khusus untuk daftar email di Report Action
+    const emailListWrapper = document.getElementById('emailListWrapper');
+    if (emailListWrapper) {
+        emailListWrapper.innerHTML = `
+            <div class="email-input-row" style="display: flex; gap: 8px;">
+                <input type="email" class="auth-input email-recipient-input" placeholder="contoh@undip.ac.id" style="flex: 1; padding: 8px 12px; margin-bottom: 0;" required>
+            </div>
+        `;
+    }
+    
     // -- (Taruh di dalam blok DOMContentLoaded) --
     const saveBtn = document.getElementById('saveTargetsBtn');
     if (saveBtn) {
@@ -320,19 +359,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const vulnTrendEnd = document.getElementById('vulnTrendEndDate');
     const vulnTrendResetBtn = document.getElementById('vulnTrendResetBtn');
     
-    if (vulnTrendStart && vulnTrendEnd) {
-        const triggerVulnLoad = async () => {
-            if (vulnTrendStart.value && vulnTrendEnd.value) {
-                await loadVulnTrendData();
-            }
-        };
-        vulnTrendStart.addEventListener('change', triggerVulnLoad);
-        vulnTrendEnd.addEventListener('change', triggerVulnLoad);
-    }
     if (vulnTrendResetBtn) {
         vulnTrendResetBtn.addEventListener('click', async () => {
             if (vulnTrendStart) vulnTrendStart.value = '';
             if (vulnTrendEnd) vulnTrendEnd.value = '';
+            const lbl = document.getElementById('vulnTrendDateLabel');
+            if (lbl) lbl.textContent = '24 Jam';
             await loadVulnTrendData();
         });
     }
@@ -342,19 +374,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const sevTrendEnd = document.getElementById('sevTrendEndDate');
     const sevTrendResetBtn = document.getElementById('sevTrendResetBtn');
 
-    if (sevTrendStart && sevTrendEnd) {
-        const triggerSevLoad = async () => {
-            if (sevTrendStart.value && sevTrendEnd.value) {
-                await loadSevTrendData();
-            }
-        };
-        sevTrendStart.addEventListener('change', triggerSevLoad);
-        sevTrendEnd.addEventListener('change', triggerSevLoad);
-    }
     if (sevTrendResetBtn) {
         sevTrendResetBtn.addEventListener('click', async () => {
             if (sevTrendStart) sevTrendStart.value = '';
             if (sevTrendEnd) sevTrendEnd.value = '';
+            const lbl = document.getElementById('sevTrendDateLabel');
+            if (lbl) lbl.textContent = '24 Jam';
             await loadSevTrendData();
         });
     }
@@ -472,6 +497,7 @@ function switchView(viewId) {
     // Load admin data if switching to admin page
     if (viewId === 'admin') {
         loadAdminUsers();
+                fetchNotifications();
     }
 
     // Web Scanner & Network Scanner: start/stop polling for active scans
@@ -553,6 +579,55 @@ function hexToRgb(hex) {
     if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
     const bigint = parseInt(hex, 16);
     return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+}
+
+// --- Date Dropdown Helpers ---
+async function setQuickDate(chartPrefix, days, dropdownId) {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - days);
+    
+    document.getElementById(`${chartPrefix}StartDate`).value = start.toISOString().split('T')[0];
+    document.getElementById(`${chartPrefix}EndDate`).value = end.toISOString().split('T')[0];
+    
+    let labelText = `${days} Hari`;
+    if (days === 1) labelText = '24 Jam';
+    
+    const labelEl = document.getElementById(`${chartPrefix}DateLabel`);
+    if (labelEl) labelEl.textContent = labelText;
+    
+    const dd = document.getElementById(dropdownId);
+    if (dd) dd.classList.remove('open');
+    
+    if (chartPrefix === 'vulnTrend') {
+        await loadVulnTrendData();
+    } else if (chartPrefix === 'sevTrend') {
+        await loadSevTrendData();
+    }
+}
+
+async function applyCustomDate(chartPrefix, dropdownId) {
+    const start = document.getElementById(`${chartPrefix}StartDate`).value;
+    const end = document.getElementById(`${chartPrefix}EndDate`).value;
+    
+    const labelEl = document.getElementById(`${chartPrefix}DateLabel`);
+    if (start && end) {
+        if (labelEl) {
+            const formatDt = (dStr) => {
+                const dt = new Date(dStr);
+                return dt.toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'});
+            };
+            labelEl.textContent = `${formatDt(start)} - ${formatDt(end)}`;
+        }
+    } else {
+        if (labelEl) labelEl.textContent = '24 Jam';
+    }
+    
+    if (chartPrefix === 'vulnTrend') {
+        await loadVulnTrendData();
+    } else if (chartPrefix === 'sevTrend') {
+        await loadSevTrendData();
+    }
 }
 
 // --- Multi-Select Dropdown Helpers ---
@@ -804,8 +879,9 @@ window.renderVulnTrendChart = function () {
             tension: 0.4,
             fill: true,
             spanGaps: true,
-            pointRadius: 0,
-            pointHoverRadius: 6
+            pointRadius: (ctx) => ctx.raw === 0 ? 0 : 4,
+            pointHoverRadius: (ctx) => ctx.raw === 0 ? 0 : 6,
+            pointBackgroundColor: baseColor
         };
     });
 
@@ -821,11 +897,47 @@ window.renderVulnTrendChart = function () {
                 datasets: domainDatasets
             },
             options: {
+                interaction: {
+                    mode: 'nearest',
+                    intersect: true
+                },
+                onClick: (event, activeElements) => {
+                    if (activeElements && activeElements.length > 0) {
+                        const index = activeElements[0].index;
+                        const datasetIndex = activeElements[0].datasetIndex;
+                        const clickedValue = vulnChartInstance.data.datasets[datasetIndex].data[index];
+                        
+                        if (rawTrendData && rawTrendData.raw_labels) {
+                            let activeCount = 0;
+                            let lastActiveLabel = null;
+                            vulnChartInstance.data.datasets.forEach(ds => {
+                                const val = ds.data[index] || 0;
+                                if (val === clickedValue && val > 0) {
+                                    activeCount++;
+                                    lastActiveLabel = ds.label;
+                                }
+                            });
+                            
+                            if (activeCount === 1) {
+                                jumpToScanDetail(rawTrendData.raw_labels[index], lastActiveLabel);
+                            } else if (activeCount > 1) {
+                                showChartDetailModal(vulnChartInstance, index, "Vulnerabilities", rawTrendData.raw_labels[index], false, clickedValue);
+                            }
+                        }
+                    }
+                },
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        top: 15,
+                        right: 15
+                    }
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
+                        grace: '5%',
                         ticks: { precision: 0 },
                         grid: { color: '#e5e7eb', borderDash: [5, 5] },
                         border: { display: false }
@@ -867,8 +979,6 @@ window.renderVulnTrendChart = function () {
                         usePointStyle: true,
                         titleFont: { size: 13, weight: '600' },
                         bodyFont: { size: 12 },
-                        mode: 'index',
-                        intersect: false,
                         filter: function (tooltipItem) {
                             return tooltipItem.parsed.y > 0;
                         },
@@ -953,8 +1063,8 @@ window.renderSevTrendChart = function () {
             tension: 0.4,
             fill: true,
             spanGaps: true,
-            pointRadius: 0,
-            pointHoverRadius: 6,
+            pointRadius: (ctx) => ctx.raw === 0 ? 0 : 4,
+            pointHoverRadius: (ctx) => ctx.raw === 0 ? 0 : 6,
             pointBackgroundColor: color,
             pointHoverBackgroundColor: color
         };
@@ -972,11 +1082,69 @@ window.renderSevTrendChart = function () {
                 datasets: sevDatasets
             },
             options: {
+                interaction: {
+                    mode: 'nearest',
+                    intersect: true
+                },
+                onClick: (event, activeElements) => {
+                    if (activeElements && activeElements.length > 0) {
+                        const index = activeElements[0].index;
+                        const datasetIndex = activeElements[0].datasetIndex;
+                        const clickedValue = sevChartInstance.data.datasets[datasetIndex].data[index];
+                        
+                        if (rawSevTrendData && rawSevTrendData.raw_labels) {
+                            let itemBreakdown = [];
+                            sevChartInstance.data.datasets.forEach(ds => {
+                                const val = ds.data[index] || 0;
+                                if (val === clickedValue && val > 0) {
+                                    if (ds.domains && ds.domains[index] && Object.keys(ds.domains[index]).length > 0) {
+                                        const domainsMap = ds.domains[index];
+                                        Object.keys(domainsMap).forEach(dName => {
+                                            if (domainsMap[dName] > 0) {
+                                                itemBreakdown.push({
+                                                    severity: ds.label,
+                                                    domain: dName,
+                                                    count: domainsMap[dName],
+                                                    color: ds.borderColor
+                                                });
+                                            }
+                                        });
+                                    } else {
+                                        itemBreakdown.push({
+                                            severity: ds.label,
+                                            domain: null,
+                                            count: val,
+                                            color: ds.borderColor
+                                        });
+                                    }
+                                }
+                            });
+                            
+                            if (itemBreakdown.length === 1) {
+                                const item = itemBreakdown[0];
+                                if (item.domain) {
+                                    jumpToScanDetail(rawSevTrendData.raw_labels[index], item.domain, false);
+                                } else {
+                                    jumpToScanDetail(rawSevTrendData.raw_labels[index], item.severity, true);
+                                }
+                            } else if (itemBreakdown.length > 1) {
+                                showSeverityDetailModal(itemBreakdown, sevChartInstance.data.labels[index], rawSevTrendData.raw_labels[index]);
+                            }
+                        }
+                    }
+                },
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        top: 15,
+                        right: 15
+                    }
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
+                        grace: '5%',
                         ticks: { precision: 0 },
                         grid: { color: '#e5e7eb', borderDash: [5, 5] },
                         border: { display: false }
@@ -1018,8 +1186,6 @@ window.renderSevTrendChart = function () {
                         usePointStyle: true,
                         titleFont: { size: 13, weight: '600' },
                         bodyFont: { size: 12 },
-                        mode: 'index',
-                        intersect: false,
                         filter: function (tooltipItem) {
                             return tooltipItem.parsed.y !== 0;
                         },
@@ -1954,10 +2120,10 @@ function renderInventoryList() {
             <td><span class="badge ${d.is_active ? 'badge-active' : 'badge-inactive'}">${d.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
             <td style="text-align: center;">
                 <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
-                    <button class="icon-btn" onclick='openEditDomainModal(${JSON.stringify(d).replace(/'/g, "&#39;")})' title="Edit">
+                    <button class="icon-btn action-edit" onclick='openEditDomainModal(${JSON.stringify(d).replace(/'/g, "&#39;")})' title="Edit">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
                     </button>
-                    <button class="icon-btn" onclick="deleteDomain(${d.id})" title="Hapus" style="color: var(--color-error); border-color: rgba(239, 68, 68, 0.3);">
+                    <button class="icon-btn action-delete" onclick="deleteDomain(${d.id})" title="Hapus">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                     </button>
                 </div>
@@ -2284,7 +2450,7 @@ function openScanModal(scan) {
     }
 
     const btnDownload = document.getElementById('btnDownloadReport');
-    if (btnDownload && domainName) {
+    if (btnDownload && domainName && currentUser && currentUser.role === 'admin') {
         // Open Generate Report Modal instead of directly downloading
         btnDownload.removeAttribute('href');
         btnDownload.removeAttribute('target');
@@ -2431,7 +2597,7 @@ function getMockCVSS(sev) {
 let autoRefreshInterval = null;
 let wsLive = null;
 let currentUser = null;
-let allNotifications = JSON.parse(localStorage.getItem('dsti_notifs') || '[]');
+let allNotifications = [];
 
 async function checkAuth() {
     try {
@@ -2499,17 +2665,36 @@ function handleSuccessfulLogin(user) {
         document.getElementById('sidebar-user-role').innerHTML = `<span class="badge-admin-role">Admin</span>`;
         document.getElementById('nav-admin').style.display = 'flex';
         document.getElementById('notifWrapper').style.display = 'block';
+        
+        // Tampilkan menu khusus admin
+        const navInventory = document.querySelector('[onclick="switchView(\'inventory\')"]');
+        const navWebScanner = document.querySelector('[onclick="switchView(\'web-scanner\')"]');
+        const navNetworkScanner = document.querySelector('[onclick="switchView(\'network-scanner\')"]');
+        if (navInventory) navInventory.style.display = 'flex';
+        if (navWebScanner) navWebScanner.style.display = 'flex';
+        if (navNetworkScanner) navNetworkScanner.style.display = 'flex';
 
         renderNotificationList();
     } else {
         roleEl.innerHTML = `<span class="badge-user-role">User</span>`;
         document.getElementById('nav-admin').style.display = 'none';
         document.getElementById('notifWrapper').style.display = 'none';
+        
+        // Sembunyikan menu dari user biasa
+        const navInventory = document.querySelector('[onclick="switchView(\'inventory\')"]');
+        const navWebScanner = document.querySelector('[onclick="switchView(\'web-scanner\')"]');
+        const navNetworkScanner = document.querySelector('[onclick="switchView(\'network-scanner\')"]');
+        if (navInventory) navInventory.style.display = 'none';
+        if (navWebScanner) navWebScanner.style.display = 'none';
+        if (navNetworkScanner) navNetworkScanner.style.display = 'none';
 
-        // If regular user was on admin tab, redirect to overview
+        // Jika user berada di halaman terlarang, kembalikan ke overview
         const activeNav = document.querySelector('.sidebar-nav .nav-item.active');
-        if (activeNav && activeNav.getAttribute('onclick').includes('admin')) {
-            switchView('overview');
+        if (activeNav) {
+            const attr = activeNav.getAttribute('onclick') || '';
+            if (attr.includes('admin') || attr.includes('inventory') || attr.includes('web-scanner') || attr.includes('network-scanner')) {
+                switchView('overview');
+            }
         }
     }
 
@@ -2730,7 +2915,8 @@ async function handleCreateUserSubmit(e) {
         if (resp.status === 200) {
             showToast("Sukses", `User baru '${username}' berhasil didaftarkan.`, "✨");
             closeCreateUserModal();
-            loadAdminUsers(); // Refresh daftar user
+            loadAdminUsers();
+                fetchNotifications(); // Refresh daftar user
         } else {
             errMsg.textContent = data.detail || "Gagal membuat user baru.";
             errMsg.style.display = 'block';
@@ -2741,6 +2927,13 @@ async function handleCreateUserSubmit(e) {
     }
 }
 
+// Global variables for user management state
+let allAdminUsers = [];
+let filteredAdminUsers = [];
+let userCurrentPage = 1;
+let userRowsPerPage = 10;
+let currentTimeoutUser = null;
+
 // Admin Panel: User Table List & Control Actions
 async function loadAdminUsers() {
     const tbody = document.getElementById('userTableBody');
@@ -2749,7 +2942,8 @@ async function loadAdminUsers() {
         const result = await resp.json();
 
         if (resp.status === 200) {
-            renderUserTable(result.data);
+            allAdminUsers = result.data || [];
+            applyUserFilters();
         } else {
             tbody.innerHTML = `<tr><td colspan="5" class="empty-state text-danger">${result.detail || 'Gagal memuat daftar user.'}</td></tr>`;
         }
@@ -2758,14 +2952,116 @@ async function loadAdminUsers() {
     }
 }
 
-function renderUserTable(users) {
+window.applyUserFilters = function(preservePage = false) {
+    const searchVal = (document.getElementById('userSearchInput')?.value || '').toLowerCase();
+    
+    filteredAdminUsers = allAdminUsers.filter(u => {
+        if (!searchVal) return true;
+        return (u.username && u.username.toLowerCase().includes(searchVal)) || 
+               (u.role && u.role.toLowerCase().includes(searchVal));
+    });
+    
+    // Sort logic: 
+    // 1. Role: 'admin' > 'user'
+    // 2. Status: online > offline
+    // 3. Last Active: recent > older
+    // 4. Username: A-Z
+    filteredAdminUsers.sort((a, b) => {
+        if (a.role === 'admin' && b.role !== 'admin') return -1;
+        if (a.role !== 'admin' && b.role === 'admin') return 1;
+        
+        const aOnline = a.is_online ? 1 : 0;
+        const bOnline = b.is_online ? 1 : 0;
+        if (aOnline !== bOnline) return bOnline - aOnline;
+        
+        const timeA = new Date(a.last_online || 0).getTime();
+        const timeB = new Date(b.last_online || 0).getTime();
+        if (timeA !== timeB) return timeB - timeA;
+        
+        const nameA = (a.username || '').toLowerCase();
+        const nameB = (b.username || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+    
+    if (!preservePage) {
+        userCurrentPage = 1;
+    }
+    renderUserTable();
+};
+
+window.changeUserPage = function(delta) {
+    const totalPages = Math.ceil(filteredAdminUsers.length / userRowsPerPage) || 1;
+    let newPage = userCurrentPage + delta;
+    if (newPage < 1) newPage = 1;
+    if (newPage > totalPages) newPage = totalPages;
+    if (newPage !== userCurrentPage) {
+        userCurrentPage = newPage;
+        renderUserTable();
+    }
+};
+
+window.changeUserRowsPerPage = function() {
+    const select = document.getElementById('userRowsSelect');
+    if (!select) return;
+    userRowsPerPage = parseInt(select.value, 10);
+    userCurrentPage = 1;
+    renderUserTable();
+};
+
+window.jumpUserPage = function() {
+    const input = document.getElementById('userPageInput');
+    if (!input) return;
+    let page = parseInt(input.value, 10);
+    const totalPages = Math.ceil(filteredAdminUsers.length / userRowsPerPage) || 1;
+    if (isNaN(page) || page < 1) page = 1;
+    if (page > totalPages) page = totalPages;
+    userCurrentPage = page;
+    renderUserTable();
+};
+
+function renderUserPagination(totalItems) {
+    const container = document.getElementById('userPaginationControls');
+    if (!container) return;
+    
+    if (totalItems === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    container.style.display = 'flex';
+    const totalPages = Math.ceil(totalItems / userRowsPerPage) || 1;
+    
+    const prevBtn = document.getElementById('userPrevPageBtn');
+    const nextBtn = document.getElementById('userNextPageBtn');
+    const pageInput = document.getElementById('userPageInput');
+    const totalPagesSpan = document.getElementById('userTotalPages');
+    
+    if (prevBtn) prevBtn.disabled = (userCurrentPage === 1);
+    if (nextBtn) nextBtn.disabled = (userCurrentPage === totalPages);
+    if (pageInput) {
+        pageInput.value = userCurrentPage;
+        pageInput.max = totalPages;
+    }
+    if (totalPagesSpan) totalPagesSpan.textContent = totalPages;
+}
+
+function renderUserTable() {
     const tbody = document.getElementById('userTableBody');
-    if (!users || users.length === 0) {
+    if (!filteredAdminUsers || filteredAdminUsers.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Tidak ada user terdaftar.</td></tr>`;
+        renderUserPagination(0);
         return;
     }
 
-    tbody.innerHTML = users.map(u => {
+    const totalItems = filteredAdminUsers.length;
+    const totalPages = Math.ceil(totalItems / userRowsPerPage) || 1;
+    if (userCurrentPage > totalPages) userCurrentPage = totalPages;
+    
+    const startIdx = (userCurrentPage - 1) * userRowsPerPage;
+    const endIdx = Math.min(startIdx + userRowsPerPage, totalItems);
+    const paginatedUsers = filteredAdminUsers.slice(startIdx, endIdx);
+
+    tbody.innerHTML = paginatedUsers.map(u => {
         const isSelf = u.username === currentUser.username;
         const roleBadge = u.role === 'admin'
             ? `<span class="badge-admin-role">Admin</span>`
@@ -2792,28 +3088,36 @@ function renderUserTable(users) {
             actionButtons = `<span style="color:var(--text-tertiary); font-style:italic;">Akun Anda</span>`;
         } else if (isTimedOut) {
             actionButtons = `
-                <span class="text-timeout" style="margin-right: 12px;">Ditangguhkan (Timeout)</span>
-                <button class="btn-timeout" style="border-color:#22c55e; color:#22c55e; margin-left:0;" onclick="triggerRemoveTimeout('${u.username}')">Cabut Timeout</button>
-                <button class="btn-delete-user" onclick="triggerDeleteUser('${u.username}')">Hapus</button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn-timeout" style="border-color:#22c55e; color:#22c55e; margin: 0;" onclick="triggerRemoveTimeout('${u.username}')">Cabut Timeout</button>
+                    <button class="btn-delete-user" style="margin: 0;" onclick="triggerDeleteUser('${u.username}')">Hapus</button>
+                </div>
             `;
         } else {
             actionButtons = `
-                <button class="btn-force-logout" onclick="triggerForceLogout('${u.username}')">Force Logout</button>
-                <button class="btn-timeout" onclick="triggerTimeoutUser('${u.username}')">Timeout 2 Jam</button>
-                <button class="btn-delete-user" onclick="triggerDeleteUser('${u.username}')">Hapus</button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn-force-logout" style="margin: 0;" onclick="triggerForceLogout('${u.username}')">Force Logout</button>
+                    <button class="btn-timeout" style="margin: 0;" onclick="openTimeoutModal('${u.username}')">Timeout</button>
+                    <button class="btn-delete-user" style="margin: 0;" onclick="triggerDeleteUser('${u.username}')">Hapus</button>
+                </div>
             `;
         }
 
         return `
             <tr>
-                <td style="font-weight: 600; color: var(--text-primary);">${escapeHtml(u.username)}</td>
+                <td style="font-weight:500;">
+                    ${escapeHtml(u.username)}
+                    ${isSelf ? '<span style="font-size:10px; color:var(--text-tertiary); margin-left:6px;">(You)</span>' : ''}
+                </td>
                 <td>${roleBadge}</td>
                 <td>${statusBadge}</td>
-                <td>${lastActiveText}</td>
+                <td style="font-size:13px; color:var(--text-secondary);">${lastActiveText}</td>
                 <td>${actionButtons}</td>
             </tr>
         `;
     }).join('');
+    
+    renderUserPagination(totalItems);
 }
 
 async function triggerForceLogout(username) {
@@ -2826,6 +3130,7 @@ async function triggerForceLogout(username) {
         if (resp.status === 200) {
             showToast("Force Logout", `User '${username}' telah berhasil dikeluarkan dari sistem.`, "🔴");
             loadAdminUsers();
+                fetchNotifications();
         } else {
             alert(data.detail || "Gagal melakukan force logout.");
         }
@@ -2834,23 +3139,48 @@ async function triggerForceLogout(username) {
     }
 }
 
-async function triggerTimeoutUser(username) {
-    if (!confirm(`Apakah Anda yakin ingin menangguhkan (timeout) user '${username}' selama 2 jam?`)) return;
+window.openTimeoutModal = function(username) {
+    currentTimeoutUser = username;
+    document.getElementById('timeoutMinutesInput').value = 30; // default 30 menit
+    const modal = document.getElementById('timeoutActionModalOverlay');
+    if (modal) modal.classList.add('active');
+};
+
+window.closeTimeoutModal = function() {
+    currentTimeoutUser = null;
+    const modal = document.getElementById('timeoutActionModalOverlay');
+    if (modal) modal.classList.remove('active');
+};
+
+window.submitTimeout = async function() {
+    if (!currentTimeoutUser) return;
+    const minutesVal = document.getElementById('timeoutMinutesInput').value;
+    const minutes = parseInt(minutesVal, 10);
+    
+    if (isNaN(minutes) || minutes < 1) {
+        alert("Masukkan durasi menit yang valid (minimal 1).");
+        return;
+    }
+    
     try {
-        const resp = await fetch(`${API_BASE}/api/admin/users/${username}/timeout`, {
-            method: 'POST'
+        const resp = await fetch(`${API_BASE}/api/admin/users/${currentTimeoutUser}/timeout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ minutes: minutes })
         });
         const data = await resp.json();
+        
         if (resp.status === 200) {
-            showToast("User Ditangguhkan", `User '${username}' ditangguhkan selama 2 jam.`, "⏳");
+            showToast("User Ditangguhkan", `User '${currentTimeoutUser}' ditangguhkan selama ${minutes} menit.`, "⏳");
             loadAdminUsers();
+                fetchNotifications();
         } else {
             alert(data.detail || "Gagal melakukan penangguhan.");
         }
     } catch (err) {
         alert("Gagal menghubungi server.");
     }
-}
+};
 
 async function triggerRemoveTimeout(username) {
     if (!confirm(`Apakah Anda yakin ingin mencabut status penangguhan (timeout) user '${username}'?`)) return;
@@ -2862,6 +3192,7 @@ async function triggerRemoveTimeout(username) {
         if (resp.status === 200) {
             showToast("Timeout Dicabut", `Penangguhan untuk user '${username}' berhasil dicabut!`, "💚");
             loadAdminUsers();
+                fetchNotifications();
         } else {
             alert(data.detail || "Gagal mencabut status timeout.");
         }
@@ -2880,6 +3211,7 @@ async function triggerDeleteUser(username) {
         if (resp.status === 200) {
             showToast("Hapus User", `User '${username}' berhasil dihapus dari sistem.`, "🗑️");
             loadAdminUsers();
+                fetchNotifications();
         } else {
             alert(data.detail || "Gagal menghapus user.");
         }
@@ -2950,19 +3282,55 @@ function clearBadge() {
     badge.style.display = 'none';
 }
 
-function markAllNotificationsAsRead(e) {
+
+async function markAllNotificationsAsRead(e) {
     if (e) e.stopPropagation();
-    allNotifications.forEach(n => n.unread = false);
-    localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
-    renderNotificationList();
-    showToast("Notifikasi", "Semua notifikasi ditandai telah dibaca.", "✔️");
+    try {
+        await fetch('/api/notifications/read-all', { method: 'PUT' });
+        allNotifications.forEach(n => n.unread = false);
+        renderNotificationList();
+        showToast("Notifikasi", "Semua notifikasi ditandai telah dibaca.", "✔️");
+    } catch (e) {}
 }
 
-function deleteNotification(notifId, e) {
+
+async function deleteNotification(notifId, e) {
     if (e) e.stopPropagation();
-    allNotifications = allNotifications.filter(n => n.id !== notifId);
-    localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
-    renderNotificationList();
+    
+    try {
+        const res = await fetch(`/api/notifications/${notifId}`, {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+        
+        if (data.status === 'success') {
+            allNotifications = allNotifications.filter(n => n.id !== notifId);
+            renderNotificationList();
+        }
+    } catch (err) {
+        console.error("Gagal menghapus notifikasi:", err);
+    }
+}
+
+
+async function fetchNotifications() {
+    try {
+        const res = await fetch('/api/notifications');
+        const data = await res.json();
+        if (data.status === 'success') {
+            allNotifications = data.data.map(n => ({
+                id: n.id,
+                title: n.title,
+                message: n.message,
+                type: n.type,
+                timestamp: n.created_at,
+                unread: !n.is_read
+            }));
+            renderNotificationList();
+        }
+    } catch (e) {
+        console.error('Gagal fetch notifikasi', e);
+    }
 }
 
 function renderNotificationList() {
@@ -2976,18 +3344,39 @@ function renderNotificationList() {
         return;
     }
 
+    
     listContainer.innerHTML = allNotifications.map(n => {
-        const initials = (n.username || 'U').substring(0, 2).toUpperCase();
-        const roleText = n.role === 'admin' ? 'Admin' : 'User';
         const unreadClass = n.unread ? 'unread' : '';
         const relativeTime = formatRelativeTime(n.timestamp);
+        let icon = '🔔';
+        if (n.type === 'scan_complete') icon = '✅';
+        else if (n.type === 'scan_failed') icon = '❌';
+        else if (n.type === 'user_login') icon = '👤';
+        
+        let notifText = '';
+        let avatarIcon = '';
+        let initials = '';
+
+        if (n.type === 'scan_finished') {
+            avatarIcon = '🚀';
+            notifText = `Scan untuk <strong>${escapeHtml(n.domain || '')}</strong> telah selesai.`;
+        } else {
+            // Legacy / user_login
+            initials = (n.username || 'U').substring(0, 2).toUpperCase();
+            const roleText = n.role === 'admin' ? 'Admin' : 'User';
+            notifText = `👤 <strong>${escapeHtml(n.username || '')}</strong> (${roleText}) masuk ke sistem.`;
+        }
 
         return `
             <div class="notif-item ${unreadClass}" onclick="markAsRead('${n.id}')">
                 <div class="notif-unread-dot"></div>
-                <div class="notif-avatar">${initials}</div>
+                <div class="notif-avatar" style="background: transparent; font-size: 20px;">${icon}</div>
                 <div class="notif-content">
-                    <div class="notif-text">👤 <strong>${escapeHtml(n.username)}</strong> (${roleText}) baru saja masuk ke sistem.</div>
+                    <div class="notif-text" style="line-height: 1.4;"><strong>${escapeHtml(n.title)}</strong><br>${escapeHtml(n.message)}</div>
+                    <div class="notif-time" style="margin-top: 4px;">${relativeTime}</div>
+                <div class="notif-avatar">${initials || avatarIcon}</div>
+                <div class="notif-content">
+                    <div class="notif-text">${notifText}</div>
                     <div class="notif-time">${relativeTime}</div>
                 </div>
                 <div class="notif-actions">
@@ -2996,14 +3385,43 @@ function renderNotificationList() {
             </div>
         `;
     }).join('');
+
 }
 
-function markAsRead(notifId) {
+async function markAsRead(notifId) {
     const notif = allNotifications.find(n => n.id === notifId);
     if (notif && notif.unread) {
-        notif.unread = false;
-        localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
-        renderNotificationList();
+        try {
+            const res = await fetch(`/api/notifications/${notifId}/read`, {
+                method: 'PUT'
+            });
+            const data = await res.json();
+            
+            if (data.status === 'success') {
+                notif.unread = false;
+                renderNotificationList();
+            }
+        } catch (err) {
+            console.error("Gagal menandai notifikasi telah dibaca:", err);
+        }
+    }
+    
+    // Tindakan spesifik ketika notifikasi diklik
+    if (notif) {
+        if (notif.type === 'scan_finished') {
+            // Tutup dropdown notifikasi (jika terbuka)
+            const dropdown = document.getElementById('notificationDropdown');
+            if (dropdown) dropdown.style.display = 'none';
+            
+            // Refresh data dari backend agar scan terbaru termuat ke memori (allVulns)
+            await loadVulnerabilities(true);
+            
+            // Cari dan buka detail
+            jumpToScanDetail(notif.time, notif.domain, false);
+        } else {
+            // Tampilkan info basic saja untuk login user
+            showToast("Info Notifikasi", `Terkait user: ${notif.username || '-'}`, "ℹ️");
+        }
     }
 }
 
@@ -3015,6 +3433,7 @@ function connectLiveWebSocket(sessionId) {
 
     const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProto}//${window.location.host}/ws/live?session_id=${sessionId}`;
+    // const wsUrl = `ws://10.70.128.26:8000/ws/live?session_id=${sessionId}`;
 
     wsLive = new WebSocket(wsUrl);
 
@@ -3026,19 +3445,35 @@ function connectLiveWebSocket(sessionId) {
         try {
             const data = JSON.parse(event.data);
 
-            if (data.event === 'user_login') {
-                // Notifikasi admin tentang user login baru (hanya untuk user lain, bukan diri sendiri)
-                if (currentUser && currentUser.role === 'admin' && data.username !== currentUser.username) {
+            
+            if (data.event === 'new_notification') {
+                if (currentUser && currentUser.role === 'admin') {
                     showToast(
-                        "User Login Baru",
-                        `👤 <b>${escapeHtml(data.username)}</b> (${data.role === 'admin' ? 'Admin' : 'User'}) baru saja masuk ke sistem pada pukul ${data.time}.`,
+                        data.notification.title,
+                        data.notification.message,
                         "🔔"
                     );
-
+                    fetchNotifications();
+                }
+            } else if (data.event === 'user_login') {
+                if (currentUser && currentUser.role === 'admin' && data.username !== currentUser.username) {
+                    const activeNav = document.querySelector('.sidebar-nav .nav-item.active');
+                    if (activeNav && activeNav.getAttribute('onclick').includes('admin')) {
+                        loadAdminUsers();
+                fetchNotifications();
+                    }
+                }
+            } else if (data.event === 'scan_finished') {
+                if (currentUser && currentUser.role === 'admin') {
+                    showToast(
+                        "Scan Selesai",
+                        `🚀 Scan untuk domain <b>${escapeHtml(data.domain)}</b> telah selesai dijalankan.`,
+                        "✅"
+                    );
                     const notif = {
                         id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                        username: data.username,
-                        role: data.role,
+                        type: 'scan_finished',
+                        domain: data.domain,
                         time: data.time,
                         timestamp: new Date().toISOString(),
                         unread: true
@@ -3046,11 +3481,6 @@ function connectLiveWebSocket(sessionId) {
                     allNotifications.unshift(notif);
                     localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
                     renderNotificationList();
-
-                    const activeNav = document.querySelector('.sidebar-nav .nav-item.active');
-                    if (activeNav && activeNav.getAttribute('onclick').includes('admin')) {
-                        loadAdminUsers();
-                    }
                 }
             } else if (data.event === 'force_logout') {
                 showToast("Sesi Diakhiri", "Anda telah dipaksa keluar oleh Administrator.", "⚠️");
@@ -3117,76 +3547,162 @@ document.getElementById('btnCancelReport')?.addEventListener('click', () => {
     document.getElementById('generateReportModalOverlay').classList.remove('active');
 });
 
-document.getElementById('generateReportForm')?.addEventListener('submit', async (e) => {
+let currentReportPayload = null;
+let currentReportAction = 'download';
+
+document.getElementById('generateReportForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
     const historyId = document.getElementById('reportHistoryId').value;
     if (!historyId) return;
     
     const form = e.target;
-    const btnSubmit = document.getElementById('btnSubmitReport');
-    const originalText = btnSubmit.innerHTML;
     
-    btnSubmit.innerHTML = 'Generating... <span style="font-size:12px; margin-left:4px;">Please wait</span>';
+    currentReportPayload = {
+        history_id: parseInt(historyId),
+        report_type: form.report_type.value,
+        report_format: form.report_format.value,
+        group_findings_by: form.group_by.value,
+        include_reproduce: form.filter_reproduce.checked,
+        include_informational: form.filter_informational.checked,
+        include_false_positives: form.filter_false_positives.checked,
+        include_ignored: form.filter_ignored.checked,
+        include_not_verified: form.filter_not_verified.checked,
+        include_accepted: form.filter_accepted.checked,
+        include_fixed: form.filter_fixed.checked
+    };
+    
+    document.getElementById('generateReportModalOverlay').classList.remove('active');
+    
+    // Reset state & show report action modal
+    setReportAction('download');
+    document.getElementById('reportActionModalOverlay').classList.add('active');
+});
+
+function setReportAction(action) {
+    currentReportAction = action;
+    const cardDownload = document.getElementById('cardDownloadOption');
+    const cardShare = document.getElementById('cardShareOption');
+    const emailContainer = document.getElementById('emailInputsContainer');
+    const btnProcess = document.getElementById('btnProcessReportAction');
+    
+    if (action === 'download') {
+        cardDownload.style.borderColor = 'var(--primary)';
+        cardDownload.style.background = '#f8fafc';
+        cardDownload.querySelector('svg').style.color = 'var(--primary)';
+        
+        cardShare.style.borderColor = 'var(--color-border)';
+        cardShare.style.background = '#ffffff';
+        cardShare.querySelector('svg').style.color = 'var(--color-muted)';
+        
+        emailContainer.style.display = 'none';
+        btnProcess.textContent = 'Download';
+    } else {
+        cardShare.style.borderColor = 'var(--primary)';
+        cardShare.style.background = '#f8fafc';
+        cardShare.querySelector('svg').style.color = 'var(--primary)';
+        
+        cardDownload.style.borderColor = 'var(--color-border)';
+        cardDownload.style.background = '#ffffff';
+        cardDownload.querySelector('svg').style.color = 'var(--color-muted)';
+        
+        emailContainer.style.display = 'block';
+        btnProcess.textContent = 'Kirim Email';
+    }
+}
+
+document.getElementById('cardDownloadOption')?.addEventListener('click', () => setReportAction('download'));
+document.getElementById('cardShareOption')?.addEventListener('click', () => setReportAction('share'));
+
+document.getElementById('closeReportActionModalBtn')?.addEventListener('click', () => {
+    document.getElementById('reportActionModalOverlay').classList.remove('active');
+});
+
+function addEmailInputRow() {
+    const wrapper = document.getElementById('emailListWrapper');
+    const row = document.createElement('div');
+    row.className = 'email-input-row';
+    row.style.display = 'flex';
+    row.style.gap = '8px';
+    row.innerHTML = `
+        <input type="email" class="auth-input email-recipient-input" placeholder="contoh@undip.ac.id" style="flex: 1; padding: 8px 12px; margin-bottom: 0;" required>
+        <button type="button" class="btn btn-outline" onclick="this.parentElement.remove()" style="padding: 0 12px; border-color: #ef4444; color: #ef4444; height: 38px; display: flex; align-items: center;" title="Hapus">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+    `;
+    wrapper.appendChild(row);
+}
+
+document.getElementById('btnProcessReportAction')?.addEventListener('click', async () => {
+    if (!currentReportPayload) return;
+    
+    const btnSubmit = document.getElementById('btnProcessReportAction');
+    const originalText = btnSubmit.textContent;
+    btnSubmit.innerHTML = 'Memproses...</span>';
     btnSubmit.disabled = true;
     btnSubmit.style.opacity = '0.7';
     
     try {
-        const payload = {
-            history_id: parseInt(historyId),
-            report_type: form.report_type.value,
-            report_format: form.report_format.value,
-            group_findings_by: form.group_by.value,
-            include_reproduce: form.filter_reproduce.checked,
-            include_informational: form.filter_informational.checked,
-            include_false_positives: form.filter_false_positives.checked,
-            include_ignored: form.filter_ignored.checked,
-            include_not_verified: form.filter_not_verified.checked,
-            include_accepted: form.filter_accepted.checked,
-            include_fixed: form.filter_fixed.checked
-        };
-        
-        const resp = await fetch(`${API_BASE}/api/reports/generate`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-        
-        if (!resp.ok) {
-            const errData = await resp.json();
-            throw new Error(errData.detail || 'Gagal generate report');
+        if (currentReportAction === 'download') {
+            const resp = await fetch(`${API_BASE}/api/reports/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(currentReportPayload)
+            });
+            
+            if (!resp.ok) {
+                const errData = await resp.json();
+                throw new Error(errData.detail || 'Gagal generate report');
+            }
+            
+            const blob = await resp.blob(); 
+            document.getElementById('reportActionModalOverlay').classList.remove('active');
+            showToast('Success', 'Report successfully downloaded!', '✅');
+            
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const formatExt = currentReportPayload.report_format.toLowerCase();
+            a.download = `security_report_${currentReportPayload.history_id}.${formatExt}`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+        } else {
+            // Share via Email
+            const emailInputs = document.querySelectorAll('.email-recipient-input');
+            const emails = Array.from(emailInputs).map(inp => inp.value.trim()).filter(v => v);
+            
+            if (emails.length === 0) {
+                throw new Error("Masukkan setidaknya satu alamat email");
+            }
+            
+            for (const email of emails) {
+                if (!email.includes('@')) throw new Error(`Email tidak valid: ${email}`);
+            }
+            
+            const sharePayload = { ...currentReportPayload, emails };
+            
+            const resp = await fetch(`${API_BASE}/api/reports/share`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(sharePayload)
+            });
+            
+            if (!resp.ok) {
+                const errData = await resp.json();
+                throw new Error(errData.detail || 'Gagal mengirim email');
+            }
+            
+            const data = await resp.json();
+            document.getElementById('reportActionModalOverlay').classList.remove('active');
+            showToast('Success', data.message, '✅');
         }
-        
-        const blob = await resp.blob(); 
-        
-        // Sembunyikan modal dan berikan notifikasi
-        document.getElementById('generateReportModalOverlay').classList.remove('active');
-        showToast('Success', 'Report successfully generated!', '✅');
-        
-        // Buat URL lokal di dalam browser (tidak ada file fisik di server)
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        
-        // Beri nama file berdasarkan format yang dipilih pengguna
-        const format = form.report_format.value.toLowerCase(); 
-        a.download = `security_report_${historyId}.${format}`;
-        
-        document.body.appendChild(a);
-        a.click(); // Paksa browser mengunduh
-        document.body.removeChild(a);
-        
-        // Bersihkan memori RAM browser agar tidak bocor (Memory Leak)
-        window.URL.revokeObjectURL(url);
-        
     } catch (err) {
         console.error(err);
         showToast('Error', err.message, '❌');
-        // Ensure modal closes so the screen doesn't stay frozen
-        document.getElementById('generateReportModalOverlay').classList.remove('active');
     } finally {
-        btnSubmit.innerHTML = originalText;
+        btnSubmit.textContent = originalText;
         btnSubmit.disabled = false;
         btnSubmit.style.opacity = '1';
     }
@@ -3196,7 +3712,7 @@ document.getElementById('generateReportForm')?.addEventListener('submit', async 
 let activeScansInterval = null;
 
 function fetchActiveScans() {
-    fetch('/api/scans/active')
+    fetch(`${API_BASE}/api/scans/active`)
         .then(res => res.json())
         .then(data => {
             if (data.status === 'success') {
@@ -3514,11 +4030,10 @@ window.syncWebSelectAll = function() {
     }
 };
 
-
 function stopActiveScan(scanId) {
     if(!confirm('Are you sure you want to stop this scan?')) return;
     
-    fetch('/api/scans/stop', {
+    fetch(`${API_BASE}/api/scans/stop`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scan_id: scanId })
@@ -3590,7 +4105,7 @@ function submitWebScan() {
         Launching...
     `;
     
-    fetch('/api/web-scan', {
+    fetch(`${API_BASE}/api/web-scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targets: [domain], scan_type: selectedScanType })
@@ -3669,7 +4184,7 @@ function submitNetworkScan() {
     btnSubmit.style.opacity = '0.5';
     btnSubmit.innerHTML = `...`; // (biarkan kode animasi loading tetap sama)
     
-    fetch('/api/network-scan', {
+    fetch(`${API_BASE}/api/network-scan`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // ✅ UBAH BODY INI: Sisipkan scan_type agar dikirim ke server
@@ -3725,9 +4240,539 @@ window.triggerSingleNetworkScan = async function(domainName) {
     }
 }
 
+function showSeverityDetailModal(items, timeLabel, rawIsoString) {
+    document.getElementById('chartDetailTitle').textContent = `Detail Analisis (${timeLabel})`;
+    
+    const listContainer = document.getElementById('chartDetailList');
+    listContainer.innerHTML = '';
+    
+    items.forEach(item => {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.justifyContent = 'space-between';
+        row.style.alignItems = 'center';
+        row.style.padding = '10px 14px';
+        row.style.background = '#f8fafc';
+        row.style.borderRadius = '6px';
+        row.style.border = '1px solid var(--color-border)';
+        row.style.cursor = 'pointer';
+        row.style.transition = 'background 0.2s, border-color 0.2s';
+        
+        row.onmouseover = () => {
+            row.style.background = '#f1f5f9';
+            row.style.borderColor = '#cbd5e1';
+        };
+        row.onmouseout = () => {
+            row.style.background = '#f8fafc';
+            row.style.borderColor = 'var(--color-border)';
+        };
+        
+        row.onclick = () => {
+            closeChartDetailModal();
+            if (item.domain) {
+                jumpToScanDetail(rawIsoString, item.domain, false);
+            } else {
+                jumpToScanDetail(rawIsoString, item.severity, true);
+            }
+        };
+        
+        const leftDiv = document.createElement('div');
+        leftDiv.style.display = 'flex';
+        leftDiv.style.alignItems = 'center';
+        leftDiv.style.gap = '8px';
+        
+        const dot = document.createElement('div');
+        dot.style.width = '10px';
+        dot.style.height = '10px';
+        dot.style.borderRadius = '50%';
+        dot.style.background = item.color || '#333';
+        
+        const label = document.createElement('span');
+        label.style.fontSize = '14px';
+        label.style.color = 'var(--color-ink)';
+        label.style.fontWeight = '500';
+        label.textContent = item.domain ? `${item.severity} - ${item.domain}` : item.severity;
+        
+        leftDiv.appendChild(dot);
+        leftDiv.appendChild(label);
+        
+        const rightDiv = document.createElement('div');
+        rightDiv.style.display = 'flex';
+        rightDiv.style.alignItems = 'center';
+        rightDiv.style.gap = '12px';
+        
+        const valSpan = document.createElement('span');
+        valSpan.style.fontSize = '14px';
+        valSpan.style.fontWeight = '600';
+        valSpan.style.color = 'var(--color-ink)';
+        valSpan.textContent = item.count;
+        
+        const chevron = document.createElement('span');
+        chevron.style.color = 'var(--color-ink-lighter)';
+        chevron.style.fontSize = '14px';
+        chevron.innerHTML = '›';
+        
+        rightDiv.appendChild(valSpan);
+        rightDiv.appendChild(chevron);
+        
+        row.appendChild(leftDiv);
+        row.appendChild(rightDiv);
+        listContainer.appendChild(row);
+    });
+    
+    document.getElementById('chartDetailModalOverlay').classList.add('active');
+}
+
+// --- Chart Click Details Modal ---
+function showChartDetailModal(chartInstance, index, titleSuffix, rawIsoString, isSeverity=false, targetValue=null) {
+    const timeLabel = chartInstance.data.labels[index];
+    const datasets = chartInstance.data.datasets;
+    
+    document.getElementById('chartDetailTitle').textContent = `Detail Analisis (${timeLabel})`;
+    
+    const listContainer = document.getElementById('chartDetailList');
+    listContainer.innerHTML = '';
+    
+    let total = 0;
+    
+    datasets.forEach(ds => {
+        const val = ds.data[index] || 0;
+        if (val > 0 && (targetValue === null || val === targetValue)) {
+            total += val;
+            
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.justifyContent = 'space-between';
+            row.style.alignItems = 'center';
+            row.style.padding = '10px 14px';
+            row.style.background = '#f8fafc';
+            row.style.borderRadius = '6px';
+            row.style.border = '1px solid var(--color-border)';
+            row.style.cursor = 'pointer';
+            row.style.transition = 'background 0.2s, border-color 0.2s';
+            
+            row.onmouseover = () => {
+                row.style.background = '#f1f5f9';
+                row.style.borderColor = '#cbd5e1';
+            };
+            row.onmouseout = () => {
+                row.style.background = '#f8fafc';
+                row.style.borderColor = 'var(--color-border)';
+            };
+            
+            row.onclick = () => {
+                closeChartDetailModal();
+                jumpToScanDetail(rawIsoString, ds.label, isSeverity);
+            };
+            
+            const leftDiv = document.createElement('div');
+            leftDiv.style.display = 'flex';
+            leftDiv.style.alignItems = 'center';
+            leftDiv.style.gap = '8px';
+            
+            const dot = document.createElement('div');
+            dot.style.width = '10px';
+            dot.style.height = '10px';
+            dot.style.borderRadius = '50%';
+            dot.style.background = ds.borderColor || '#333';
+            
+            const label = document.createElement('span');
+            label.style.fontSize = '14px';
+            label.style.color = 'var(--color-ink)';
+            label.style.fontWeight = '500';
+            label.textContent = ds.label;
+            
+            leftDiv.appendChild(dot);
+            leftDiv.appendChild(label);
+            
+            const rightDiv = document.createElement('div');
+            rightDiv.style.display = 'flex';
+            rightDiv.style.alignItems = 'center';
+            rightDiv.style.gap = '12px';
+            
+            const valSpan = document.createElement('span');
+            valSpan.style.fontSize = '14px';
+            valSpan.style.fontWeight = '600';
+            valSpan.style.color = 'var(--color-ink)';
+            valSpan.textContent = val;
+            
+            // Add a small chevron to indicate it's clickable
+            const chevron = document.createElement('span');
+            chevron.style.color = 'var(--color-ink-lighter)';
+            chevron.style.fontSize = '14px';
+            chevron.innerHTML = '›';
+            
+            rightDiv.appendChild(valSpan);
+            rightDiv.appendChild(chevron);
+            
+            row.appendChild(leftDiv);
+            row.appendChild(rightDiv);
+            listContainer.appendChild(row);
+        }
+    });
+    
+    if (total === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.style.fontSize = '13px';
+        emptyMsg.style.color = 'var(--color-ink-soft)';
+        emptyMsg.textContent = 'Tidak ada data kerentanan terdeteksi pada waktu ini.';
+        listContainer.appendChild(emptyMsg);
+    }
+    
+    document.getElementById('chartDetailModalOverlay').classList.add('active');
+}
+
+window.closeChartDetailModal = function() {
+    document.getElementById('chartDetailModalOverlay').classList.remove('active');
+};
+
+// --- Chart Click Detail Redirect ---
+function jumpToScanDetail(isoDateString, targetName, isSeverity=false) {
+    if (!isoDateString || typeof allVulns === 'undefined' || !allVulns) {
+        showToast("Info", "Data riwayat scan belum termuat.", "ℹ️");
+        return;
+    }
+    
+    const targetTime = new Date(isoDateString).getTime();
+    
+    let closestScan = null;
+    let minDiff = Infinity;
+    
+    allVulns.forEach(scan => {
+        if (!scan.scan_date) return;
+        
+        // Pastikan scan sesuai dengan kriteria yang diklik
+        if (isSeverity) {
+            let hasSeverity = false;
+            if (scan.vulnerabilities && scan.vulnerabilities.length > 0) {
+                hasSeverity = scan.vulnerabilities.some(v => (v.severity || '').toUpperCase() === targetName.toUpperCase());
+            }
+            if (!hasSeverity) return;
+        } else {
+            const domain = scan.domains?.domain_name || 'Unknown';
+            if (domain !== targetName && targetName !== 'Others' && targetName !== 'Semua Domain') return;
+        }
+        
+        const scanTime = new Date(scan.scan_date).getTime();
+        const diff = Math.abs(scanTime - targetTime);
+        if (diff < minDiff) {
+            minDiff = diff;
+            closestScan = scan;
+        }
+    });
+    
+    if (closestScan) {
+        openScanModal(closestScan);
+    } else {
+        showToast("Info", "Tidak ada detail scan spesifik yang ditemukan untuk titik ini.", "ℹ️");
+    }
+}
+
 // Global modal background click-to-close
 document.addEventListener('click', (e) => {
     if (e.target && e.target.classList && e.target.classList.contains('modal-overlay')) {
         e.target.classList.remove('active');
+        // Close enlarged chart if clicked outside
+        if (e.target.id === 'chartModalOverlay') {
+            closeChartModal();
+        }
     }
-});;
+});
+
+// Chart Enlarge Logic
+let enlargedChartInstance = null;
+
+window.openChartModal = function(sourceChartId, title) {
+    const overlay = document.getElementById('chartModalOverlay');
+    const titleEl = document.getElementById('chartModalTitle');
+    
+    if (overlay) overlay.classList.add('active');
+    if (titleEl) titleEl.textContent = title || 'Grafik';
+    
+    // Hapus instance sebelumnya jika ada
+    if (enlargedChartInstance) {
+        enlargedChartInstance.destroy();
+        enlargedChartInstance = null;
+    }
+
+    setTimeout(() => {
+        // Render ulang elemen canvas untuk menghindari bug cache dimensi dari browser
+        const modalBody = document.querySelector('#chartModalOverlay .modal-body');
+        if (modalBody) {
+            modalBody.innerHTML = '<canvas id="enlargedChartCanvas"></canvas>';
+            const ctx = document.getElementById('enlargedChartCanvas').getContext('2d');
+            
+            if (sourceChartId === 'vulnBarChart') {
+                renderEnlargedVulnChart(ctx);
+            } else if (sourceChartId === 'sevTrendChart') {
+                renderEnlargedSevChart(ctx);
+            }
+        }
+    }, 150);
+};
+
+window.renderEnlargedVulnChart = function(ctx) {
+    if (!rawTrendData) return;
+    
+    const checkboxes = Array.from(document.querySelectorAll('#vulnTrendItems input[type="checkbox"]'));
+    const allCb = checkboxes.find(cb => cb.value === 'All');
+
+    let selectedDomains = [];
+    let allChecked = false;
+
+    if (allCb && allCb.checked) {
+        allChecked = true;
+    } else {
+        selectedDomains = checkboxes.filter(cb => cb.checked && cb.value !== 'All').map(cb => cb.value);
+        if (selectedDomains.length === 0) allChecked = true;
+    }
+
+    let allDatasets = [...(rawTrendData.datasets || [])];
+    allDatasets = allDatasets.filter(ds => Math.max(...ds.data) > 0);
+    let finalDatasets = [];
+
+    if (!allChecked && selectedDomains.length > 0) {
+        finalDatasets = allDatasets.filter(ds => selectedDomains.includes(ds.label));
+    } else {
+        allDatasets.sort((a, b) => Math.max(...b.data) - Math.max(...a.data));
+        const topN = 5;
+        finalDatasets = allDatasets.slice(0, topN);
+        if (allDatasets.length > topN) {
+            let othersData = new Array(allDatasets[0].data.length).fill(0);
+            for (let i = topN; i < allDatasets.length; i++) {
+                for (let j = 0; j < allDatasets[i].data.length; j++) {
+                    othersData[j] += allDatasets[i].data[j];
+                }
+            }
+            finalDatasets.push({ label: 'Others', data: othersData });
+        }
+    }
+
+    const domainDatasets = finalDatasets.map((ds) => {
+        const baseColor = ds.label === 'Others' ? '#6b7280' : getDomainColor(ds.label);
+        return {
+            label: ds.label,
+            data: ds.data,
+            borderColor: baseColor,
+            backgroundColor: (context) => {
+                const chart = context.chart;
+                const { ctx, chartArea } = chart;
+                if (!chartArea) return baseColor;
+                const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                const rgb = hexToRgb(baseColor);
+                if (rgb) {
+                    gradient.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.35)`);
+                    gradient.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.0)`);
+                    return gradient;
+                }
+                return baseColor;
+            },
+            borderWidth: ds.label === 'Others' ? 2 : 2.5,
+            borderDash: ds.label === 'Others' ? [5, 5] : [],
+            tension: 0.4,
+            fill: true,
+            spanGaps: true,
+            pointRadius: 4,
+            pointHoverRadius: 8
+        };
+    });
+
+    enlargedChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: rawTrendData.labels || [],
+            datasets: domainDatasets
+        },
+        options: getEnlargedChartOptions(false)
+    });
+};
+
+window.renderEnlargedSevChart = function(ctx) {
+    if (!rawSevTrendData) return;
+
+    const checkboxes = Array.from(document.querySelectorAll('#sevTrendItems input[type="checkbox"]'));
+    const allCb = checkboxes.find(cb => cb.value === 'All');
+
+    let selectedSevs = [];
+    let allChecked = false;
+
+    if (allCb && allCb.checked) {
+        allChecked = true;
+    } else {
+        selectedSevs = checkboxes.filter(cb => cb.checked && cb.value !== 'All').map(cb => cb.value);
+        if (selectedSevs.length === 0) allChecked = true;
+    }
+
+    const sevColors = {
+        'Critical': '#8A2E2E',
+        'High': '#FF4A4A',
+        'Medium': '#FF9F2A',
+        'Low': '#4287F5',
+        'Info': '#00D182'
+    };
+
+    let baseDatasets = rawSevTrendData.datasets || [];
+    if (!allChecked && selectedSevs.length > 0) {
+        baseDatasets = baseDatasets.filter(ds => selectedSevs.includes(ds.label));
+    }
+
+    const sevDatasets = baseDatasets.map((ds) => {
+        const color = sevColors[ds.label] || '#9ca3af';
+        return {
+            label: ds.label,
+            data: ds.data,
+            domains: ds.domains || [],
+            borderColor: color,
+            backgroundColor: (context) => {
+                const chart = context.chart;
+                const { ctx, chartArea } = chart;
+                if (!chartArea) return color;
+                const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                const rgb = hexToRgb(color);
+                if (rgb) {
+                    gradient.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.35)`);
+                    gradient.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.0)`);
+                    return gradient;
+                }
+                return color;
+            },
+            borderWidth: 2.5,
+            tension: 0.4,
+            fill: true,
+            spanGaps: true,
+            pointRadius: 4,
+            pointHoverRadius: 8,
+            pointBackgroundColor: color,
+            pointHoverBackgroundColor: color
+        };
+    });
+
+    enlargedChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: rawSevTrendData.labels || [],
+            datasets: sevDatasets
+        },
+        options: getEnlargedChartOptions(true)
+    });
+};
+
+function getEnlargedChartOptions(isSeverity) {
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: { precision: 0, font: { size: 14 } },
+                grid: { color: '#e5e7eb', borderDash: [5, 5] },
+                border: { display: false }
+            },
+            x: {
+                ticks: { maxTicksLimit: 12, font: { size: 14 } },
+                grid: { display: false },
+                border: { display: false }
+            }
+        },
+        plugins: {
+            legend: {
+                display: true,
+                position: 'bottom',
+                labels: {
+                    usePointStyle: true,
+                    pointStyle: 'circle',
+                    font: { size: 15, weight: '500' },
+                    padding: 20,
+                    generateLabels: (chart) => {
+                        return chart.data.datasets.map((dataset, i) => ({
+                            text: dataset.label,
+                            fillStyle: dataset.borderColor,
+                            hidden: !chart.isDatasetVisible(i),
+                            strokeStyle: dataset.borderColor,
+                            pointStyle: 'circle',
+                            datasetIndex: i
+                        }));
+                    }
+                }
+            },
+            tooltip: {
+                backgroundColor: '#ffffff',
+                titleColor: '#1f2937',
+                bodyColor: '#374151',
+                borderColor: '#e5e7eb',
+                borderWidth: 1,
+                padding: 16,
+                boxPadding: 8,
+                usePointStyle: true,
+                titleFont: { size: 15, weight: '600' },
+                bodyFont: { size: 14 },
+                mode: 'index',
+                intersect: false,
+                filter: function (tooltipItem) {
+                    return tooltipItem.parsed.y > 0;
+                },
+                callbacks: {
+                    labelColor: function (context) {
+                        return {
+                            borderColor: context.dataset.borderColor,
+                            backgroundColor: context.dataset.borderColor
+                        };
+                    },
+                    label: function (context) {
+                        let label = context.dataset.label || '';
+                        let val = context.parsed.y;
+                        if (val !== null) {
+                            label += ` (${val})`;
+                        }
+
+                        if (isSeverity) {
+                            let domainsObj = context.dataset.domains ? context.dataset.domains[context.dataIndex] : null;
+                            if (val > 0 && domainsObj && typeof domainsObj === 'object') {
+                                let lines = [label];
+                                Object.entries(domainsObj).forEach(([d, count]) => {
+                                    lines.push(`   • ${d} (${count})`);
+                                });
+                                return lines;
+                            }
+                        }
+                        return label;
+                    }
+                }
+            }
+        }
+    };
+}
+
+window.closeChartModal = function() {
+    const overlay = document.getElementById('chartModalOverlay');
+    if (overlay) overlay.classList.remove('active');
+    if (enlargedChartInstance) {
+        enlargedChartInstance.destroy();
+        enlargedChartInstance = null;
+    }
+};
+
+window.toggleSidebar = function() {
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+        const isCollapsed = sidebar.classList.toggle('collapsed');
+        const tooltip = document.getElementById('sidebarTooltip');
+        const arrow = document.getElementById('sidebarToggleArrow');
+        
+        if (tooltip && arrow) {
+            if (isCollapsed) {
+                tooltip.textContent = 'Buka sidebar';
+                // Panah ke kanan
+                arrow.setAttribute('d', 'M10 16l4-4-4-4');
+            } else {
+                tooltip.textContent = 'Tutup sidebar';
+                // Panah ke kiri
+                arrow.setAttribute('d', 'M14 16l-4-4 4-4');
+            }
+        }
+    }
+};
+
+async 
+
+async 
