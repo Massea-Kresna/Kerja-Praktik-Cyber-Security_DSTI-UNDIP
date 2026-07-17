@@ -1643,6 +1643,73 @@ async def _generate_report_bytes(req: GenerateReportRequest) -> tuple[bytes, str
                     
         raise HTTPException(status_code=408, detail="Timeout saat menunggu pembuatan report selesai.")
 
+@app.post("/api/reports/generate")
+async def generate_report_endpoint(req: GenerateReportRequest, current_user = Depends(get_current_user)):
+    """Endpoint untuk mendownload PDF Report langsung"""
+    try:
+        # Panggil fungsi helper pembangun file bytes
+        file_data, filename = await _generate_report_bytes(req)
+        
+        # Kembalikan sebagai unduhan
+        return Response(
+            content=file_data,
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/reports/share")
+async def share_report_endpoint(req: ShareReportRequest, current_user = Depends(get_current_user)):
+    """Endpoint untuk mengirim PDF Report via Email"""
+    # Pastikan kredensial SMTP tersedia
+    if not config.SMTP_USERNAME or not config.SMTP_PASSWORD:
+        raise HTTPException(status_code=500, detail="SMTP server belum dikonfigurasi. Tidak dapat mengirim email.")
+        
+    try:
+        # Panggil fungsi helper pembangun file bytes
+        file_data, filename = await _generate_report_bytes(req)
+        
+        import smtplib
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        from email.mime.application import MIMEApplication
+        
+        # Siapkan email
+        msg = MIMEMultipart()
+        msg['From'] = f"UNDIP Security Dashboard <{config.SMTP_USERNAME}>"
+        msg['To'] = ", ".join(req.emails)
+        msg['Subject'] = f"Security Scan Report - UNDIP CSIRT"
+        
+        # Isi body email
+        body = "Halo,\n\nTerlampir adalah dokumen laporan hasil security scan otomatis (Pentest-Tools) yang di-generate dari UNDIP Security Dashboard.\n\nSalam,\nUNDIP CSIRT"
+        msg.attach(MIMEText(body, 'plain'))
+        
+        # Sisipkan file (PDF/HTML/CSV/dsb)
+        attachment = MIMEApplication(file_data, Name=filename)
+        attachment['Content-Disposition'] = f'attachment; filename="{filename}"'
+        msg.attach(attachment)
+        
+        # Kirim email
+        if config.SMTP_PORT == 465:
+            server = smtplib.SMTP_SSL(config.SMTP_SERVER, config.SMTP_PORT)
+        else:
+            server = smtplib.SMTP(config.SMTP_SERVER, config.SMTP_PORT)
+            server.starttls()
+            
+        server.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        
+        return {"status": "success", "message": f"Laporan berhasil dikirim ke {len(req.emails)} email."}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal mengirim email: {str(e)}")
+
 # ==============================================================================
 # NOTIFICATIONS ROUTES
 # ==============================================================================
