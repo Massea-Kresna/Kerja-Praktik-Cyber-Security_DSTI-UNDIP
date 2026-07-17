@@ -57,6 +57,36 @@ document.addEventListener('DOMContentLoaded', () => {
         if (label) label.textContent = '24 Jam';
     });
     
+    // Reset semua input dan form di seluruh halaman ke setelan awalnya
+    document.querySelectorAll('form').forEach(f => f.reset());
+    document.querySelectorAll('input, select, textarea').forEach(el => {
+        if (el.type === 'radio' || el.type === 'checkbox') {
+            el.checked = el.defaultChecked;
+        } else if (el.tagName === 'SELECT') {
+            let hasDefault = false;
+            for (let i = 0; i < el.options.length; i++) {
+                if (el.options[i].defaultSelected) {
+                    el.selectedIndex = i;
+                    hasDefault = true;
+                    break;
+                }
+            }
+            if (!hasDefault && el.options.length > 0) el.selectedIndex = 0;
+        } else if (!['button', 'submit', 'hidden'].includes(el.type)) {
+            el.value = el.defaultValue || '';
+        }
+    });
+    
+    // Reset khusus untuk daftar email di Report Action
+    const emailListWrapper = document.getElementById('emailListWrapper');
+    if (emailListWrapper) {
+        emailListWrapper.innerHTML = `
+            <div class="email-input-row" style="display: flex; gap: 8px;">
+                <input type="email" class="auth-input email-recipient-input" placeholder="contoh@undip.ac.id" style="flex: 1; padding: 8px 12px; margin-bottom: 0;" required>
+            </div>
+        `;
+    }
+    
     // -- (Taruh di dalam blok DOMContentLoaded) --
     const saveBtn = document.getElementById('saveTargetsBtn');
     if (saveBtn) {
