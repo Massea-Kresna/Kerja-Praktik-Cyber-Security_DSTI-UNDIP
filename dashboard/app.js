@@ -1,7 +1,3 @@
-/**
- * JAGAWEB — Security Dashboard App.js
- */
-
 const API_BASE = window.location.origin;
 // const API_BASE = "http://10.70.128.26:8000";
 // const API_BASE = "http://" + window.location.hostname + ":8000";
@@ -3437,6 +3433,7 @@ function connectLiveWebSocket(sessionId) {
 
     const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProto}//${window.location.host}/ws/live?session_id=${sessionId}`;
+    // const wsUrl = `ws://10.70.128.26:8000/ws/live?session_id=${sessionId}`;
 
     wsLive = new WebSocket(wsUrl);
 
@@ -3715,7 +3712,7 @@ document.getElementById('btnProcessReportAction')?.addEventListener('click', asy
 let activeScansInterval = null;
 
 function fetchActiveScans() {
-    fetch('/api/scans/active')
+    fetch(`${API_BASE}/api/scans/active`)
         .then(res => res.json())
         .then(data => {
             if (data.status === 'success') {
