@@ -320,19 +320,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const vulnTrendEnd = document.getElementById('vulnTrendEndDate');
     const vulnTrendResetBtn = document.getElementById('vulnTrendResetBtn');
     
-    if (vulnTrendStart && vulnTrendEnd) {
-        const triggerVulnLoad = async () => {
-            if (vulnTrendStart.value && vulnTrendEnd.value) {
-                await loadVulnTrendData();
-            }
-        };
-        vulnTrendStart.addEventListener('change', triggerVulnLoad);
-        vulnTrendEnd.addEventListener('change', triggerVulnLoad);
-    }
     if (vulnTrendResetBtn) {
         vulnTrendResetBtn.addEventListener('click', async () => {
             if (vulnTrendStart) vulnTrendStart.value = '';
             if (vulnTrendEnd) vulnTrendEnd.value = '';
+            const lbl = document.getElementById('vulnTrendDateLabel');
+            if (lbl) lbl.textContent = '24 Jam';
             await loadVulnTrendData();
         });
     }
@@ -342,19 +335,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const sevTrendEnd = document.getElementById('sevTrendEndDate');
     const sevTrendResetBtn = document.getElementById('sevTrendResetBtn');
 
-    if (sevTrendStart && sevTrendEnd) {
-        const triggerSevLoad = async () => {
-            if (sevTrendStart.value && sevTrendEnd.value) {
-                await loadSevTrendData();
-            }
-        };
-        sevTrendStart.addEventListener('change', triggerSevLoad);
-        sevTrendEnd.addEventListener('change', triggerSevLoad);
-    }
     if (sevTrendResetBtn) {
         sevTrendResetBtn.addEventListener('click', async () => {
             if (sevTrendStart) sevTrendStart.value = '';
             if (sevTrendEnd) sevTrendEnd.value = '';
+            const lbl = document.getElementById('sevTrendDateLabel');
+            if (lbl) lbl.textContent = '24 Jam';
             await loadSevTrendData();
         });
     }
@@ -553,6 +539,58 @@ function hexToRgb(hex) {
     if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
     const bigint = parseInt(hex, 16);
     return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+}
+
+// --- Date Dropdown Helpers ---
+async function setQuickDate(chartPrefix, days, dropdownId) {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - days);
+    
+    document.getElementById(`${chartPrefix}StartDate`).value = start.toISOString().split('T')[0];
+    document.getElementById(`${chartPrefix}EndDate`).value = end.toISOString().split('T')[0];
+    
+    let labelText = `${days} Hari`;
+    if (days === 1) labelText = '24 Jam';
+    
+    const labelEl = document.getElementById(`${chartPrefix}DateLabel`);
+    if (labelEl) labelEl.textContent = labelText;
+    
+    const dd = document.getElementById(dropdownId);
+    if (dd) dd.classList.remove('open');
+    
+    if (chartPrefix === 'vulnTrend') {
+        await loadVulnTrendData();
+    } else if (chartPrefix === 'sevTrend') {
+        await loadSevTrendData();
+    }
+}
+
+async function applyCustomDate(chartPrefix, dropdownId) {
+    const start = document.getElementById(`${chartPrefix}StartDate`).value;
+    const end = document.getElementById(`${chartPrefix}EndDate`).value;
+    
+    const labelEl = document.getElementById(`${chartPrefix}DateLabel`);
+    if (start && end) {
+        if (labelEl) {
+            const formatDt = (dStr) => {
+                const dt = new Date(dStr);
+                return dt.toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'});
+            };
+            labelEl.textContent = `${formatDt(start)} - ${formatDt(end)}`;
+        }
+    } else {
+        if (labelEl) labelEl.textContent = '24 Jam';
+    }
+    
+    const dd = document.getElementById(dropdownId);
+    if (dd) dd.classList.remove('open');
+    
+    if (chartPrefix === 'vulnTrend') {
+        await loadVulnTrendData();
+    } else if (chartPrefix === 'sevTrend') {
+        await loadSevTrendData();
+    }
 }
 
 // --- Multi-Select Dropdown Helpers ---
@@ -804,8 +842,9 @@ window.renderVulnTrendChart = function () {
             tension: 0.4,
             fill: true,
             spanGaps: true,
-            pointRadius: 0,
-            pointHoverRadius: 6
+            pointRadius: (ctx) => ctx.raw === 0 ? 0 : 4,
+            pointHoverRadius: (ctx) => ctx.raw === 0 ? 0 : 6,
+            pointBackgroundColor: baseColor
         };
     });
 
@@ -821,11 +860,47 @@ window.renderVulnTrendChart = function () {
                 datasets: domainDatasets
             },
             options: {
+                interaction: {
+                    mode: 'nearest',
+                    intersect: true
+                },
+                onClick: (event, activeElements) => {
+                    if (activeElements && activeElements.length > 0) {
+                        const index = activeElements[0].index;
+                        const datasetIndex = activeElements[0].datasetIndex;
+                        const clickedValue = vulnChartInstance.data.datasets[datasetIndex].data[index];
+                        
+                        if (rawTrendData && rawTrendData.raw_labels) {
+                            let activeCount = 0;
+                            let lastActiveLabel = null;
+                            vulnChartInstance.data.datasets.forEach(ds => {
+                                const val = ds.data[index] || 0;
+                                if (val === clickedValue && val > 0) {
+                                    activeCount++;
+                                    lastActiveLabel = ds.label;
+                                }
+                            });
+                            
+                            if (activeCount === 1) {
+                                jumpToScanDetail(rawTrendData.raw_labels[index], lastActiveLabel);
+                            } else if (activeCount > 1) {
+                                showChartDetailModal(vulnChartInstance, index, "Vulnerabilities", rawTrendData.raw_labels[index], false, clickedValue);
+                            }
+                        }
+                    }
+                },
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        top: 15,
+                        right: 15
+                    }
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
+                        grace: '5%',
                         ticks: { precision: 0 },
                         grid: { color: '#e5e7eb', borderDash: [5, 5] },
                         border: { display: false }
@@ -867,8 +942,6 @@ window.renderVulnTrendChart = function () {
                         usePointStyle: true,
                         titleFont: { size: 13, weight: '600' },
                         bodyFont: { size: 12 },
-                        mode: 'index',
-                        intersect: false,
                         filter: function (tooltipItem) {
                             return tooltipItem.parsed.y > 0;
                         },
@@ -953,8 +1026,8 @@ window.renderSevTrendChart = function () {
             tension: 0.4,
             fill: true,
             spanGaps: true,
-            pointRadius: 0,
-            pointHoverRadius: 6,
+            pointRadius: (ctx) => ctx.raw === 0 ? 0 : 4,
+            pointHoverRadius: (ctx) => ctx.raw === 0 ? 0 : 6,
             pointBackgroundColor: color,
             pointHoverBackgroundColor: color
         };
@@ -972,11 +1045,69 @@ window.renderSevTrendChart = function () {
                 datasets: sevDatasets
             },
             options: {
+                interaction: {
+                    mode: 'nearest',
+                    intersect: true
+                },
+                onClick: (event, activeElements) => {
+                    if (activeElements && activeElements.length > 0) {
+                        const index = activeElements[0].index;
+                        const datasetIndex = activeElements[0].datasetIndex;
+                        const clickedValue = sevChartInstance.data.datasets[datasetIndex].data[index];
+                        
+                        if (rawSevTrendData && rawSevTrendData.raw_labels) {
+                            let itemBreakdown = [];
+                            sevChartInstance.data.datasets.forEach(ds => {
+                                const val = ds.data[index] || 0;
+                                if (val === clickedValue && val > 0) {
+                                    if (ds.domains && ds.domains[index] && Object.keys(ds.domains[index]).length > 0) {
+                                        const domainsMap = ds.domains[index];
+                                        Object.keys(domainsMap).forEach(dName => {
+                                            if (domainsMap[dName] > 0) {
+                                                itemBreakdown.push({
+                                                    severity: ds.label,
+                                                    domain: dName,
+                                                    count: domainsMap[dName],
+                                                    color: ds.borderColor
+                                                });
+                                            }
+                                        });
+                                    } else {
+                                        itemBreakdown.push({
+                                            severity: ds.label,
+                                            domain: null,
+                                            count: val,
+                                            color: ds.borderColor
+                                        });
+                                    }
+                                }
+                            });
+                            
+                            if (itemBreakdown.length === 1) {
+                                const item = itemBreakdown[0];
+                                if (item.domain) {
+                                    jumpToScanDetail(rawSevTrendData.raw_labels[index], item.domain, false);
+                                } else {
+                                    jumpToScanDetail(rawSevTrendData.raw_labels[index], item.severity, true);
+                                }
+                            } else if (itemBreakdown.length > 1) {
+                                showSeverityDetailModal(itemBreakdown, sevChartInstance.data.labels[index], rawSevTrendData.raw_labels[index]);
+                            }
+                        }
+                    }
+                },
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        top: 15,
+                        right: 15
+                    }
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
+                        grace: '5%',
                         ticks: { precision: 0 },
                         grid: { color: '#e5e7eb', borderDash: [5, 5] },
                         border: { display: false }
@@ -1018,8 +1149,6 @@ window.renderSevTrendChart = function () {
                         usePointStyle: true,
                         titleFont: { size: 13, weight: '600' },
                         bodyFont: { size: 12 },
-                        mode: 'index',
-                        intersect: false,
                         filter: function (tooltipItem) {
                             return tooltipItem.parsed.y !== 0;
                         },
@@ -3725,9 +3854,237 @@ window.triggerSingleNetworkScan = async function(domainName) {
     }
 }
 
+function showSeverityDetailModal(items, timeLabel, rawIsoString) {
+    document.getElementById('chartDetailTitle').textContent = `Detail Analisis (${timeLabel})`;
+    
+    const listContainer = document.getElementById('chartDetailList');
+    listContainer.innerHTML = '';
+    
+    items.forEach(item => {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.justifyContent = 'space-between';
+        row.style.alignItems = 'center';
+        row.style.padding = '10px 14px';
+        row.style.background = '#f8fafc';
+        row.style.borderRadius = '6px';
+        row.style.border = '1px solid var(--color-border)';
+        row.style.cursor = 'pointer';
+        row.style.transition = 'background 0.2s, border-color 0.2s';
+        
+        row.onmouseover = () => {
+            row.style.background = '#f1f5f9';
+            row.style.borderColor = '#cbd5e1';
+        };
+        row.onmouseout = () => {
+            row.style.background = '#f8fafc';
+            row.style.borderColor = 'var(--color-border)';
+        };
+        
+        row.onclick = () => {
+            closeChartDetailModal();
+            if (item.domain) {
+                jumpToScanDetail(rawIsoString, item.domain, false);
+            } else {
+                jumpToScanDetail(rawIsoString, item.severity, true);
+            }
+        };
+        
+        const leftDiv = document.createElement('div');
+        leftDiv.style.display = 'flex';
+        leftDiv.style.alignItems = 'center';
+        leftDiv.style.gap = '8px';
+        
+        const dot = document.createElement('div');
+        dot.style.width = '10px';
+        dot.style.height = '10px';
+        dot.style.borderRadius = '50%';
+        dot.style.background = item.color || '#333';
+        
+        const label = document.createElement('span');
+        label.style.fontSize = '14px';
+        label.style.color = 'var(--color-ink)';
+        label.style.fontWeight = '500';
+        label.textContent = item.domain ? `${item.severity} - ${item.domain}` : item.severity;
+        
+        leftDiv.appendChild(dot);
+        leftDiv.appendChild(label);
+        
+        const rightDiv = document.createElement('div');
+        rightDiv.style.display = 'flex';
+        rightDiv.style.alignItems = 'center';
+        rightDiv.style.gap = '12px';
+        
+        const valSpan = document.createElement('span');
+        valSpan.style.fontSize = '14px';
+        valSpan.style.fontWeight = '600';
+        valSpan.style.color = 'var(--color-ink)';
+        valSpan.textContent = item.count;
+        
+        const chevron = document.createElement('span');
+        chevron.style.color = 'var(--color-ink-lighter)';
+        chevron.style.fontSize = '14px';
+        chevron.innerHTML = '›';
+        
+        rightDiv.appendChild(valSpan);
+        rightDiv.appendChild(chevron);
+        
+        row.appendChild(leftDiv);
+        row.appendChild(rightDiv);
+        listContainer.appendChild(row);
+    });
+    
+    document.getElementById('chartDetailModalOverlay').classList.add('active');
+}
+
+// --- Chart Click Details Modal ---
+function showChartDetailModal(chartInstance, index, titleSuffix, rawIsoString, isSeverity=false, targetValue=null) {
+    const timeLabel = chartInstance.data.labels[index];
+    const datasets = chartInstance.data.datasets;
+    
+    document.getElementById('chartDetailTitle').textContent = `Detail Analisis (${timeLabel})`;
+    
+    const listContainer = document.getElementById('chartDetailList');
+    listContainer.innerHTML = '';
+    
+    let total = 0;
+    
+    datasets.forEach(ds => {
+        const val = ds.data[index] || 0;
+        if (val > 0 && (targetValue === null || val === targetValue)) {
+            total += val;
+            
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.justifyContent = 'space-between';
+            row.style.alignItems = 'center';
+            row.style.padding = '10px 14px';
+            row.style.background = '#f8fafc';
+            row.style.borderRadius = '6px';
+            row.style.border = '1px solid var(--color-border)';
+            row.style.cursor = 'pointer';
+            row.style.transition = 'background 0.2s, border-color 0.2s';
+            
+            row.onmouseover = () => {
+                row.style.background = '#f1f5f9';
+                row.style.borderColor = '#cbd5e1';
+            };
+            row.onmouseout = () => {
+                row.style.background = '#f8fafc';
+                row.style.borderColor = 'var(--color-border)';
+            };
+            
+            row.onclick = () => {
+                closeChartDetailModal();
+                jumpToScanDetail(rawIsoString, ds.label, isSeverity);
+            };
+            
+            const leftDiv = document.createElement('div');
+            leftDiv.style.display = 'flex';
+            leftDiv.style.alignItems = 'center';
+            leftDiv.style.gap = '8px';
+            
+            const dot = document.createElement('div');
+            dot.style.width = '10px';
+            dot.style.height = '10px';
+            dot.style.borderRadius = '50%';
+            dot.style.background = ds.borderColor || '#333';
+            
+            const label = document.createElement('span');
+            label.style.fontSize = '14px';
+            label.style.color = 'var(--color-ink)';
+            label.style.fontWeight = '500';
+            label.textContent = ds.label;
+            
+            leftDiv.appendChild(dot);
+            leftDiv.appendChild(label);
+            
+            const rightDiv = document.createElement('div');
+            rightDiv.style.display = 'flex';
+            rightDiv.style.alignItems = 'center';
+            rightDiv.style.gap = '12px';
+            
+            const valSpan = document.createElement('span');
+            valSpan.style.fontSize = '14px';
+            valSpan.style.fontWeight = '600';
+            valSpan.style.color = 'var(--color-ink)';
+            valSpan.textContent = val;
+            
+            // Add a small chevron to indicate it's clickable
+            const chevron = document.createElement('span');
+            chevron.style.color = 'var(--color-ink-lighter)';
+            chevron.style.fontSize = '14px';
+            chevron.innerHTML = '›';
+            
+            rightDiv.appendChild(valSpan);
+            rightDiv.appendChild(chevron);
+            
+            row.appendChild(leftDiv);
+            row.appendChild(rightDiv);
+            listContainer.appendChild(row);
+        }
+    });
+    
+    if (total === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.style.fontSize = '13px';
+        emptyMsg.style.color = 'var(--color-ink-soft)';
+        emptyMsg.textContent = 'Tidak ada data kerentanan terdeteksi pada waktu ini.';
+        listContainer.appendChild(emptyMsg);
+    }
+    
+    document.getElementById('chartDetailModalOverlay').classList.add('active');
+}
+
+window.closeChartDetailModal = function() {
+    document.getElementById('chartDetailModalOverlay').classList.remove('active');
+};
+
+// --- Chart Click Detail Redirect ---
+function jumpToScanDetail(isoDateString, targetName, isSeverity=false) {
+    if (!isoDateString || typeof allVulns === 'undefined' || !allVulns) {
+        showToast("Info", "Data riwayat scan belum termuat.", "ℹ️");
+        return;
+    }
+    
+    const targetTime = new Date(isoDateString).getTime();
+    
+    let closestScan = null;
+    let minDiff = Infinity;
+    
+    allVulns.forEach(scan => {
+        if (!scan.scan_date) return;
+        
+        // Pastikan scan sesuai dengan kriteria yang diklik
+        if (isSeverity) {
+            let hasSeverity = false;
+            if (scan.vulnerabilities && scan.vulnerabilities.length > 0) {
+                hasSeverity = scan.vulnerabilities.some(v => (v.severity || '').toUpperCase() === targetName.toUpperCase());
+            }
+            if (!hasSeverity) return;
+        } else {
+            const domain = scan.domains?.domain_name || 'Unknown';
+            if (domain !== targetName && targetName !== 'Others' && targetName !== 'Semua Domain') return;
+        }
+        
+        const scanTime = new Date(scan.scan_date).getTime();
+        const diff = Math.abs(scanTime - targetTime);
+        if (diff < minDiff) {
+            minDiff = diff;
+            closestScan = scan;
+        }
+    });
+    
+    if (closestScan) {
+        openScanModal(closestScan);
+    } else {
+        showToast("Info", "Tidak ada detail scan spesifik yang ditemukan untuk titik ini.", "ℹ️");
+    }
+}
+
 // Global modal background click-to-close
 document.addEventListener('click', (e) => {
     if (e.target && e.target.classList && e.target.classList.contains('modal-overlay')) {
         e.target.classList.remove('active');
     }
-});;
+});

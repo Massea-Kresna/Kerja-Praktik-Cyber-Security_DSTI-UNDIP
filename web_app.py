@@ -598,24 +598,34 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
                 
                 if days_diff <= 1:
                     interval_minutes = 30
-                    num_buckets = 48
-                    minute_snapped = 30 if end_dt.minute >= 30 else 0
-                    end_snapped_wib = end_dt.replace(minute=minute_snapped, second=0, microsecond=0)
-                    start_snapped_wib = end_snapped_wib - timedelta(hours=24)
                     date_format = "%H:%M"
+                elif days_diff <= 3:
+                    interval_minutes = 60
+                    date_format = "%d %b %H:%M"
                 elif days_diff <= 7:
-                    interval_minutes = 6 * 60
-                    num_buckets = int((days_diff * 24) // 6)
-                    hour_snapped = (end_dt.hour // 6) * 6
-                    end_snapped_wib = end_dt.replace(hour=hour_snapped, minute=0, second=0, microsecond=0)
-                    start_snapped_wib = end_snapped_wib - timedelta(minutes=num_buckets * interval_minutes)
+                    interval_minutes = 4 * 60
+                    date_format = "%d %b %H:%M"
+                elif days_diff <= 14:
+                    interval_minutes = 12 * 60
                     date_format = "%d %b %H:%M"
                 else:
                     interval_minutes = 24 * 60
+                    date_format = "%d %b %Y"
+
+                if days_diff <= 14:
+                    num_buckets = int(math.ceil((days_diff * 24 * 60) / interval_minutes))
+                    if interval_minutes < 60:
+                        minute_snapped = 30 if end_dt.minute >= 30 else 0
+                        end_snapped_wib = end_dt.replace(minute=minute_snapped, second=0, microsecond=0)
+                    else:
+                        hour_interval = interval_minutes // 60
+                        hour_snapped = (end_dt.hour // hour_interval) * hour_interval
+                        end_snapped_wib = end_dt.replace(hour=hour_snapped, minute=0, second=0, microsecond=0)
+                    start_snapped_wib = end_snapped_wib - timedelta(minutes=num_buckets * interval_minutes)
+                else:
                     num_buckets = max(1, math.ceil(days_diff))
                     end_snapped_wib = end_dt.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
                     start_snapped_wib = end_snapped_wib - timedelta(days=num_buckets)
-                    date_format = "%d %b %Y"
             except ValueError:
                 raise HTTPException(status_code=400, detail="Format tanggal tidak valid. Gunakan YYYY-MM-DD.")
         
@@ -633,9 +643,11 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
         scans = resp.data
         
         labels = []
+        raw_labels = []
         for i in range(num_buckets + 1):
             bucket_time_wib = start_snapped_wib + timedelta(minutes=i*interval_minutes)
             labels.append(bucket_time_wib.strftime(date_format))
+            raw_labels.append(bucket_time_wib.isoformat())
             
         domains_resp = supabase.table("domains").select("domain_name").execute()
         all_domains = [d.get("domain_name") for d in domains_resp.data if d.get("domain_name")]
@@ -675,6 +687,7 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
         return {
             "source": "supabase",
             "labels": labels,
+            "raw_labels": raw_labels,
             "datasets": [
                 {
                     "label": domain,
@@ -724,24 +737,34 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
                 
                 if days_diff <= 1:
                     interval_minutes = 30
-                    num_buckets = 48
-                    minute_snapped = 30 if end_dt.minute >= 30 else 0
-                    end_snapped_wib = end_dt.replace(minute=minute_snapped, second=0, microsecond=0)
-                    start_snapped_wib = end_snapped_wib - timedelta(hours=24)
                     date_format = "%H:%M"
+                elif days_diff <= 3:
+                    interval_minutes = 60
+                    date_format = "%d %b %H:%M"
                 elif days_diff <= 7:
-                    interval_minutes = 6 * 60
-                    num_buckets = int((days_diff * 24) // 6)
-                    hour_snapped = (end_dt.hour // 6) * 6
-                    end_snapped_wib = end_dt.replace(hour=hour_snapped, minute=0, second=0, microsecond=0)
-                    start_snapped_wib = end_snapped_wib - timedelta(minutes=num_buckets * interval_minutes)
+                    interval_minutes = 4 * 60
+                    date_format = "%d %b %H:%M"
+                elif days_diff <= 14:
+                    interval_minutes = 12 * 60
                     date_format = "%d %b %H:%M"
                 else:
                     interval_minutes = 24 * 60
+                    date_format = "%d %b %Y"
+
+                if days_diff <= 14:
+                    num_buckets = int(math.ceil((days_diff * 24 * 60) / interval_minutes))
+                    if interval_minutes < 60:
+                        minute_snapped = 30 if end_dt.minute >= 30 else 0
+                        end_snapped_wib = end_dt.replace(minute=minute_snapped, second=0, microsecond=0)
+                    else:
+                        hour_interval = interval_minutes // 60
+                        hour_snapped = (end_dt.hour // hour_interval) * hour_interval
+                        end_snapped_wib = end_dt.replace(hour=hour_snapped, minute=0, second=0, microsecond=0)
+                    start_snapped_wib = end_snapped_wib - timedelta(minutes=num_buckets * interval_minutes)
+                else:
                     num_buckets = max(1, math.ceil(days_diff))
                     end_snapped_wib = end_dt.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
                     start_snapped_wib = end_snapped_wib - timedelta(days=num_buckets)
-                    date_format = "%d %b %Y"
             except ValueError:
                 raise HTTPException(status_code=400, detail="Format tanggal tidak valid. Gunakan YYYY-MM-DD.")
         
@@ -759,9 +782,11 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
         scans = resp.data
         
         labels = []
+        raw_labels = []
         for i in range(num_buckets + 1):
             bucket_time_wib = start_snapped_wib + timedelta(minutes=i*interval_minutes)
             labels.append(bucket_time_wib.strftime(date_format))
+            raw_labels.append(bucket_time_wib.isoformat())
             
         severities_data = {
             "CRITICAL": [0] * (num_buckets + 1),
@@ -820,6 +845,7 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
         return {
             "source": "supabase",
             "labels": labels,
+            "raw_labels": raw_labels,
             "datasets": [
                 {
                     "label": sev.capitalize(),
