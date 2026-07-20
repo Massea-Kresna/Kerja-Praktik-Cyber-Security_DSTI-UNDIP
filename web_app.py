@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import db_manager
 import config
+import telegram_notifier
 import asyncio
 import aiohttp
 import httpx
@@ -240,7 +241,7 @@ def register_user(user_data: UserRegister, admin_user = Depends(get_current_admi
         raise HTTPException(status_code=500, detail=f"Gagal melakukan registrasi: {str(e)}")
 
 @app.post("/api/auth/login")
-async def login(credentials: LoginRequest, response: Response):
+async def login(credentials: LoginRequest, request: Request, response: Response):
     # 1. Validasi reCAPTCHA ke Google
     secret_key = config.RECAPTCHA_SECRET_KEY
     verify_url = "https://www.google.com/recaptcha/api/siteverify"
@@ -264,6 +265,9 @@ async def login(credentials: LoginRequest, response: Response):
     
     # Cek apakah user ditemukan dan apakah password hash-nya cocok
     if not user or not db_manager.verify_password(credentials.password, user.get("password")):
+        # Kirim notifikasi login gagal ke Telegram (non-blocking)
+        client_ip = request.client.host if request.client else "N/A"
+        asyncio.create_task(telegram_notifier.notify_failed_login(credentials.username, client_ip))
         raise HTTPException(status_code=401, detail="Username atau password salah.")
         
     # 3. Cek timeout
@@ -317,6 +321,10 @@ async def login(credentials: LoginRequest, response: Response):
             max_age=cookie_max_age
         )
         
+        # Kirim notifikasi login ke Telegram (non-blocking)
+        client_ip = request.client.host if request.client else "N/A"
+        asyncio.create_task(telegram_notifier.notify_login(credentials.username, user["role"], client_ip))
+        
         return {
             "status": "success",
             "message": "Login berhasil",
@@ -328,7 +336,7 @@ async def login(credentials: LoginRequest, response: Response):
         }
 
 @app.post("/api/auth/verify_otp")
-async def verify_otp(req: VerifyOTPRequest, response: Response):
+async def verify_otp(req: VerifyOTPRequest, request: Request, response: Response):
     # Cek ketersediaan OTP
     if req.username not in OTP_STORE:
         raise HTTPException(status_code=400, detail="Sesi OTP tidak ditemukan atau sudah kadaluarsa. Silakan login kembali.")
@@ -374,13 +382,21 @@ async def verify_otp(req: VerifyOTPRequest, response: Response):
         "login_time": datetime.now(config.WIB).isoformat()
     })
     
+    # Kirim notifikasi login admin ke Telegram (non-blocking)
+    client_ip = request.client.host if request.client else "N/A"
+    asyncio.create_task(telegram_notifier.notify_login(req.username, role, client_ip))
+    
     return {"username": req.username, "role": role, "session_id": session_id}
 
 @app.post("/api/auth/logout")
-def logout_user(response: Response, current_user = Depends(get_current_user)):
+async def logout_user(response: Response, current_user = Depends(get_current_user)):
     """Mengakhiri session login user"""
     db_manager.update_user_session(current_user["username"], None, False)
     response.delete_cookie(key="session_id", path="/")
+    
+    # Kirim notifikasi logout ke Telegram (non-blocking)
+    asyncio.create_task(telegram_notifier.notify_logout(current_user["username"], "Logout mandiri"))
+    
     return {"status": "ok", "message": "Logout berhasil."}
 
 @app.get("/api/auth/me")
@@ -406,6 +422,10 @@ async def force_logout(target_username: str, admin_user = Depends(get_current_ad
     """Memaksa logout salah satu user"""
     db_manager.update_user_session(target_username, None, False)
     await manager.kick_user(target_username, "force_logout")
+    
+    # Kirim notifikasi force-logout ke Telegram (non-blocking)
+    asyncio.create_task(telegram_notifier.notify_logout(target_username, f"Force-logout oleh admin ({admin_user['username']})"))
+    
     return {"status": "ok", "message": f"User '{target_username}' berhasil di-force logout."}
 
 @app.post("/api/admin/users/{target_username}/timeout")
@@ -414,6 +434,10 @@ async def put_user_timeout(target_username: str, req: TimeoutRequest, admin_user
     timeout_time = (datetime.now(timezone.utc) + timedelta(minutes=req.minutes)).isoformat()
     db_manager.update_user_timeout(target_username, timeout_time)
     await manager.kick_user(target_username, "timeout")
+    
+    # Kirim notifikasi timeout ke Telegram (non-blocking)
+    asyncio.create_task(telegram_notifier.notify_logout(target_username, f"Timeout {req.minutes} menit oleh admin ({admin_user['username']})"))
+    
     return {"status": "ok", "message": f"User '{target_username}' ditangguhkan selama {req.minutes} menit."}
 
 @app.post("/api/admin/users/{target_username}/remove-timeout")
