@@ -652,6 +652,8 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
                 raw_json = scan.get("raw_json")
                 if isinstance(raw_json, list):
                     vuln_count += len(raw_json)
+                elif isinstance(raw_json, dict) and isinstance(raw_json.get("low_info_vulns"), list):
+                    vuln_count += len(raw_json["low_info_vulns"])
                 domains_data[domain_name][bucket_index] += vuln_count
 
         return {
@@ -787,12 +789,17 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
                         domains_by_sev[sev][bucket_index][domain_name] = domains_by_sev[sev][bucket_index].get(domain_name, 0) + 1
                         
                 raw_json = scan.get("raw_json")
+                low_info_list = []
                 if isinstance(raw_json, list):
-                    for v in raw_json:
-                        sev = (v.get("severity") or "").upper()
-                        if sev in severities_data:
-                            severities_data[sev][bucket_index] += 1
-                            domains_by_sev[sev][bucket_index][domain_name] = domains_by_sev[sev][bucket_index].get(domain_name, 0) + 1
+                    low_info_list = raw_json
+                elif isinstance(raw_json, dict) and isinstance(raw_json.get("low_info_vulns"), list):
+                    low_info_list = raw_json["low_info_vulns"]
+                    
+                for v in low_info_list:
+                    sev = (v.get("severity") or "").upper()
+                    if sev in severities_data:
+                        severities_data[sev][bucket_index] += 1
+                        domains_by_sev[sev][bucket_index][domain_name] = domains_by_sev[sev][bucket_index].get(domain_name, 0) + 1
 
         return {
             "source": "postgresql",
@@ -981,10 +988,23 @@ async def run_pentest_tools_background(domain_name: str):
     async with aiohttp.ClientSession() as session:
         await process_domain_scan(session, domain_name, semaphore)
     print(f"[+] [BACKGROUND] Scan Pentest-Tools selesai untuk: {domain_name}")
+    notif = {
+        "id": uuid.uuid4().hex,
+        "title": "Scan Selesai",
+        "message": f"Scan untuk {domain_name} telah selesai.",
+        "type": "scan_finished",
+        "domain": domain_name,
+        "time": datetime.now(config.WIB).isoformat(),
+        "created_at": datetime.now(config.WIB).isoformat()
+    }
     await manager.broadcast_to_admins({
         "event": "scan_finished",
         "domain": domain_name,
         "time": datetime.now(config.WIB).isoformat()
+    })
+    await manager.broadcast_to_admins({
+        "event": "new_notification",
+        "notification": notif
     })
 
 # ===================================================================
@@ -1049,12 +1069,24 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
             success_count = sum(1 for r in results if r)
             failed_count = len(results) - success_count
             print(f"[+] Network Scan Selesai: {success_count} sukses, {failed_count} gagal.")
-            await asyncio.gather(*tasks)
             for target in targets:
+                notif = {
+                    "id": uuid.uuid4().hex,
+                    "title": "Network Scan Selesai",
+                    "message": f"Network Scan untuk {target} telah selesai.",
+                    "type": "scan_finished",
+                    "domain": target,
+                    "time": datetime.now(config.WIB).isoformat(),
+                    "created_at": datetime.now(config.WIB).isoformat()
+                }
                 await manager.broadcast_to_admins({
                     "event": "scan_finished",
                     "domain": target,
                     "time": datetime.now(config.WIB).isoformat()
+                })
+                await manager.broadcast_to_admins({
+                    "event": "new_notification",
+                    "notification": notif
                 })
 
 async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
@@ -1067,12 +1099,24 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
             success_count = sum(1 for r in results if r)
             failed_count = len(results) - success_count
             print(f"[+] Web Scan Selesai: {success_count} sukses, {failed_count} gagal.")
-            await asyncio.gather(*tasks)
             for target in targets:
+                notif = {
+                    "id": uuid.uuid4().hex,
+                    "title": "Web Scan Selesai",
+                    "message": f"Web Scan untuk {target} telah selesai.",
+                    "type": "scan_finished",
+                    "domain": target,
+                    "time": datetime.now(config.WIB).isoformat(),
+                    "created_at": datetime.now(config.WIB).isoformat()
+                }
                 await manager.broadcast_to_admins({
                     "event": "scan_finished",
                     "domain": target,
                     "time": datetime.now(config.WIB).isoformat()
+                })
+                await manager.broadcast_to_admins({
+                    "event": "new_notification",
+                    "notification": notif
                 })
 
 class WebScanRequest(BaseModel):
@@ -1564,47 +1608,41 @@ async def share_report_endpoint(req: ShareReportRequest, current_user = Depends(
 # ==============================================================================
 @app.get("/api/notifications")
 async def api_get_notifications():
-    """Mengambil semua notifikasi lokal"""
+    """Mengambil riwayat scan terakhir sebagai notifikasi recap"""
     try:
-        notifs = db_manager.get_notifications()
+        recent_scans = db_manager.get_scan_history_list(limit=10)
+        notifs = []
+        for scan in recent_scans:
+            domain = scan.get("domains", {}).get("domain_name", "Unknown")
+            risk = scan.get("risk_level", "SAFE")
+            notifs.append({
+                "id": str(scan.get("id")),
+                "title": f"Scan Selesai: {domain}",
+                "message": f"Risk Level: {risk}",
+                "type": "scan_finished",
+                "created_at": scan.get("scan_date"),
+                "is_read": False,
+                "domain": domain,
+                "time": scan.get("scan_date")
+            })
         return {"status": "success", "data": notifs}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/api/notifications/{notif_id}/read")
 async def api_mark_notification_read(notif_id: str):
-    """Menandai satu notifikasi telah dibaca"""
-    try:
-        success = db_manager.mark_notification_as_read(notif_id)
-        if success:
-            return {"status": "success"}
-        raise HTTPException(status_code=404, detail="Notification not found")
-    except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=str(e))
+    """No-op: notifikasi sekarang statis dari scan history"""
+    return {"status": "success"}
 
 @app.put("/api/notifications/read-all")
 async def api_mark_all_notifications_read():
-    """Menandai semua notifikasi telah dibaca"""
-    try:
-        db_manager.mark_all_notifications_as_read()
-        return {"status": "success"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """No-op: notifikasi sekarang statis dari scan history"""
+    return {"status": "success"}
 
 @app.delete("/api/notifications/{notif_id}")
 async def api_delete_notification(notif_id: str):
-    """Menghapus satu notifikasi"""
-    try:
-        success = db_manager.delete_notification(notif_id)
-        if success:
-            return {"status": "success"}
-        raise HTTPException(status_code=404, detail="Notification not found")
-    except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=str(e))
+    """No-op: tidak bisa menghapus riwayat scan dari menu notifikasi"""
+    return {"status": "success"}
 
 class InternalNotifyRequest(BaseModel):
     title: str
@@ -1620,11 +1658,12 @@ async def webhook_notify(req: InternalNotifyRequest, request: Request):
         raise HTTPException(status_code=403, detail="Forbidden")
         
     try:
-        notif = db_manager.create_notification(
-            title=req.title,
-            message=req.message,
-            notif_type=req.notif_type
-        )
+        notif = {
+            "id": uuid.uuid4().hex,
+            "title": req.title,
+            "message": req.message,
+            "type": req.notif_type
+        }
         
         await manager.broadcast_to_admins({
             "event": "new_notification",
