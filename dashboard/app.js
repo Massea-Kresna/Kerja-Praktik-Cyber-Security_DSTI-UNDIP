@@ -4762,5 +4762,9 @@ window.toggleSidebar = function () {
                 arrow.setAttribute('d', 'M14 16l-4-4 4-4');
             }
         }
+
+        setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+        }, 300);
     }
 };

@@ -402,6 +402,7 @@ button, input, select, textarea {
     border-radius: 8px;
     padding: 24px;
     box-shadow: 0px 4px 12px rgba(13, 27, 42, 0.04);
+    min-width: 0;
 }
 
 .card-title {
