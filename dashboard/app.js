@@ -4261,6 +4261,7 @@ function showSeverityDetailModal(items, timeLabel, rawIsoString) {
 
         row.onclick = () => {
             closeChartDetailModal();
+            closeChartModal();
             if (item.domain) {
                 jumpToScanDetail(rawIsoString, item.domain, false);
             } else {
@@ -4354,6 +4355,7 @@ function showChartDetailModal(chartInstance, index, titleSuffix, rawIsoString, i
 
             row.onclick = () => {
                 closeChartDetailModal();
+                closeChartModal();
                 jumpToScanDetail(rawIsoString, ds.label, isSeverity);
             };
 
@@ -4564,10 +4566,39 @@ window.renderEnlargedVulnChart = function (ctx) {
             tension: 0.4,
             fill: true,
             spanGaps: true,
-            pointRadius: 4,
-            pointHoverRadius: 8
+            pointRadius: (ctx) => ctx.raw === 0 ? 0 : 4,
+            pointHoverRadius: (ctx) => ctx.raw === 0 ? 0 : 8,
+            pointBackgroundColor: baseColor
         };
     });
+
+    const options = getEnlargedChartOptions(false);
+    options.onClick = (event, activeElements) => {
+        if (activeElements && activeElements.length > 0) {
+            const index = activeElements[0].index;
+            const datasetIndex = activeElements[0].datasetIndex;
+            const clickedValue = enlargedChartInstance.data.datasets[datasetIndex].data[index];
+
+            if (rawTrendData && rawTrendData.raw_labels) {
+                let activeCount = 0;
+                let lastActiveLabel = null;
+                enlargedChartInstance.data.datasets.forEach(ds => {
+                    const val = ds.data[index] || 0;
+                    if (val === clickedValue && val > 0) {
+                        activeCount++;
+                        lastActiveLabel = ds.label;
+                    }
+                });
+
+                if (activeCount === 1) {
+                    closeChartModal();
+                    jumpToScanDetail(rawTrendData.raw_labels[index], lastActiveLabel);
+                } else if (activeCount > 1) {
+                    showChartDetailModal(enlargedChartInstance, index, "Vulnerabilities", rawTrendData.raw_labels[index], false, clickedValue);
+                }
+            }
+        }
+    };
 
     enlargedChartInstance = new Chart(ctx, {
         type: 'line',
@@ -4575,7 +4606,7 @@ window.renderEnlargedVulnChart = function (ctx) {
             labels: rawTrendData.labels || [],
             datasets: domainDatasets
         },
-        options: getEnlargedChartOptions(false)
+        options: options
     });
 };
 
@@ -4632,12 +4663,62 @@ window.renderEnlargedSevChart = function (ctx) {
             tension: 0.4,
             fill: true,
             spanGaps: true,
-            pointRadius: 4,
-            pointHoverRadius: 8,
+            pointRadius: (ctx) => ctx.raw === 0 ? 0 : 4,
+            pointHoverRadius: (ctx) => ctx.raw === 0 ? 0 : 8,
             pointBackgroundColor: color,
             pointHoverBackgroundColor: color
         };
     });
+
+    const options = getEnlargedChartOptions(true);
+    options.onClick = (event, activeElements) => {
+        if (activeElements && activeElements.length > 0) {
+            const index = activeElements[0].index;
+            const datasetIndex = activeElements[0].datasetIndex;
+            const clickedValue = enlargedChartInstance.data.datasets[datasetIndex].data[index];
+
+            if (rawSevTrendData && rawSevTrendData.raw_labels) {
+                let itemBreakdown = [];
+                enlargedChartInstance.data.datasets.forEach(ds => {
+                    const val = ds.data[index] || 0;
+                    if (val === clickedValue && val > 0) {
+                        if (ds.domains && ds.domains[index] && Object.keys(ds.domains[index]).length > 0) {
+                            const domainsMap = ds.domains[index];
+                            Object.keys(domainsMap).forEach(dName => {
+                                if (domainsMap[dName] > 0) {
+                                    itemBreakdown.push({
+                                        severity: ds.label,
+                                        domain: dName,
+                                        count: domainsMap[dName],
+                                        color: ds.borderColor
+                                    });
+                                }
+                            });
+                        } else {
+                            itemBreakdown.push({
+                                severity: ds.label,
+                                domain: null,
+                                count: val,
+                                color: ds.borderColor
+                            });
+                        }
+                    }
+                });
+
+                if (itemBreakdown.length === 1) {
+                    const item = itemBreakdown[0];
+                    closeChartModal();
+                    if (item.domain) {
+                        jumpToScanDetail(rawSevTrendData.raw_labels[index], item.domain, false);
+                    } else {
+                        jumpToScanDetail(rawSevTrendData.raw_labels[index], item.severity, true);
+                    }
+                } else if (itemBreakdown.length > 1) {
+                    showSeverityDetailModal(itemBreakdown, enlargedChartInstance.data.labels[index], rawSevTrendData.raw_labels[index]);
+                }
+            }
+        }
+    };
 
     enlargedChartInstance = new Chart(ctx, {
         type: 'line',
@@ -4645,7 +4726,7 @@ window.renderEnlargedSevChart = function (ctx) {
             labels: rawSevTrendData.labels || [],
             datasets: sevDatasets
         },
-        options: getEnlargedChartOptions(true)
+        options: options
     });
 };
 
@@ -4653,9 +4734,20 @@ function getEnlargedChartOptions(isSeverity) {
     return {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: {
+            mode: 'nearest',
+            intersect: true
+        },
+        layout: {
+            padding: {
+                top: 15,
+                right: 15
+            }
+        },
         scales: {
             y: {
                 beginAtZero: true,
+                grace: '5%',
                 ticks: { precision: 0, font: { size: 14 } },
                 grid: { color: '#e5e7eb', borderDash: [5, 5] },
                 border: { display: false }
@@ -4698,8 +4790,6 @@ function getEnlargedChartOptions(isSeverity) {
                 usePointStyle: true,
                 titleFont: { size: 15, weight: '600' },
                 bodyFont: { size: 14 },
-                mode: 'index',
-                intersect: false,
                 filter: function (tooltipItem) {
                     return tooltipItem.parsed.y > 0;
                 },
