@@ -1514,8 +1514,26 @@ async def share_report_endpoint(req: ShareReportRequest, current_user = Depends(
         msg['To'] = ", ".join(req.emails)
         msg['Subject'] = f"Security Scan Report - UNDIP CSIRT"
         
+        # Ambil nama domain dari database berdasarkan history_id
+        domain_name = "Target Domain"
+        conn = db_manager.get_db_connection()
+        if conn:
+            try:
+                with conn.cursor(cursor_factory=db_manager.RealDictCursor) as cur:
+                    cur.execute('''
+                        SELECT d.domain_name 
+                        FROM scan_history h
+                        JOIN domains d ON h.domain_id = d.id
+                        WHERE h.id = %s
+                    ''', (req.history_id,))
+                    res = cur.fetchone()
+                    if res:
+                        domain_name = res['domain_name']
+            finally:
+                conn.close()
+                
         # Isi body email
-        body = "Halo,\n\nTerlampir adalah dokumen laporan hasil security scan otomatis (Pentest-Tools) yang di-generate dari UNDIP Security Dashboard.\n\nSalam,\nUNDIP CSIRT"
+        body = f"Halo,\n\nTerlampir adalah dokumen laporan hasil scan pada domain {domain_name} yang di-generate dari Tim Keamanan Siber UNDIP\n\nSalam,\nUNDIP CSIRT"
         msg.attach(MIMEText(body, 'plain'))
         
         # Sisipkan file (PDF/HTML/CSV/dsb)
