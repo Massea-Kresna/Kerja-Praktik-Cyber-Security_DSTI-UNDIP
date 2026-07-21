@@ -994,25 +994,34 @@ class SchedulePayload(BaseModel):
     targets: List[str]
 
 @app.post("/api/schedule-scan")
-async def schedule_scan(payload: SchedulePayload):
-    """Memprioritaskan domain ke dalam antrean Supabase untuk dieksekusi Celery Beat"""
-    if not db_manager.check_db_connection():
-        raise HTTPException(status_code=503, detail="Database Supabase belum terkoneksi!")
+async def schedule_scan(payload: SchedulePayload, current_user = Depends(get_current_user)):
+    """Memprioritaskan domain ke dalam antrean database untuk dieksekusi Celery Beat"""
+    conn = db_manager.get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=503, detail="Database PostgreSQL belum terkoneksi!")
 
     try:
-        for domain in payload.targets:
-            dom = db_manager.get_domain_by_name(domain)
-            if dom:
-                db_manager.update_domain(dom['id'], dom['domain_name'], dom['ip_address'], True)
-            
-        print(f"[!] MARKAS: {len(payload.targets)} target dimasukkan ke radar aktif Celery.")
+        # Gunakan eksekusi SQL langsung agar jauh lebih cepat dan kebal error Tuple/Dict
+        with conn.cursor() as cur:
+            for domain in payload.targets:
+                cur.execute("UPDATE domains SET is_active = True WHERE domain_name = %s", (domain,))
+        
+        # Wajib di-commit agar perubahan tersimpan di database
+        conn.commit()
+        
+        print(f"[!] MARKAS: {len(payload.targets)} target dimasukkan ke radar aktif Celery oleh {current_user['username']}.")
         
         return {
             "status": "success", 
             "message": f"{len(payload.targets)} target disiapkan dalam antrean rotasi Celery."
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        if conn:
+            conn.rollback() # Batalkan jika ada error
+        raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
 
 @app.post("/api/trigger-pentest")
 async def trigger_pentest(domain_name: str, background_tasks: BackgroundTasks, current_user = Depends(get_current_user)):
