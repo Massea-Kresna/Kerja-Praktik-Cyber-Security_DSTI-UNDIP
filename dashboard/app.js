@@ -90,25 +90,22 @@ document.addEventListener('DOMContentLoaded', () => {
     if (saveBtn) {
         saveBtn.addEventListener('click', async () => {
             const domainsToSave = [...selectedDomains];
-            if (domainsToSave.length === 0) {
-                showToast('Peringatan', 'Pilih minimal satu domain untuk disimpan.', '⚠️');
-                return;
-            }
+            const inactiveDomains = allDomains.filter(d => !selectedDomains.has(d.domain_name)).map(d => d.domain_name);
 
             // Simpan di memori browser
             localStorage.setItem('dsti_saved_targets', JSON.stringify(domainsToSave));
 
             // Tembakkan API ke Backend
             try {
-                // Diubah ke endpoint /api/schedule-scan dan mengubah key "domains" menjadi "targets"
                 const resp = await fetch(`${API_BASE}/api/schedule-scan`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ targets: domainsToSave })
+                    body: JSON.stringify({ targets: domainsToSave, inactive_targets: inactiveDomains })
                 });
 
                 if (resp.status === 200) {
-                    showToast('Tersimpan', `${domainsToSave.length} domain berhasil disimpan untuk scan interval.`, '💾');
+                    showToast('Tersimpan', `Status berhasil diperbarui (Aktif: ${domainsToSave.length}, Tidak Aktif: ${inactiveDomains.length}).`, '💾');
+                    if (typeof loadDomains === 'function') loadDomains(true);
                 } else {
                     const data = await resp.json();
                     showToast('Gagal Menyimpan', data.detail || 'Terjadi kesalahan di server.', '❌');

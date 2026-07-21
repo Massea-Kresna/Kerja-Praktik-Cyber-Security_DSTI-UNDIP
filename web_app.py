@@ -1012,6 +1012,7 @@ async def run_pentest_tools_background(domain_name: str):
 # ===================================================================
 class SchedulePayload(BaseModel):
     targets: List[str]
+    inactive_targets: Optional[List[str]] = []
 
 @app.post("/api/schedule-scan")
 async def schedule_scan(payload: SchedulePayload):
@@ -1024,6 +1025,11 @@ async def schedule_scan(payload: SchedulePayload):
             dom = db_manager.get_domain_by_name(domain)
             if dom:
                 db_manager.update_domain(dom['id'], dom['domain_name'], dom['ip_address'], True)
+        
+        for domain in payload.inactive_targets:
+            dom = db_manager.get_domain_by_name(domain)
+            if dom:
+                db_manager.update_domain(dom['id'], dom['domain_name'], dom['ip_address'], False)
             
         print(f"[!] MARKAS: {len(payload.targets)} target dimasukkan ke radar aktif Celery.")
         

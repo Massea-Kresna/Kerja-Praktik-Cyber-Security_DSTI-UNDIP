@@ -603,7 +603,7 @@ def get_domain_by_name(domain_name):
     if not conn: return None
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute('SELECT id FROM domains WHERE domain_name = %s LIMIT 1', (domain_name,))
+            cur.execute('SELECT * FROM domains WHERE domain_name = %s LIMIT 1', (domain_name,))
             res = cur.fetchone()
             return dict(res) if res else None
     except Exception as e:
