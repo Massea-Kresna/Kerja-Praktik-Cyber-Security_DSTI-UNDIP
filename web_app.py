@@ -1377,8 +1377,7 @@ class GenerateReportRequest(BaseModel):
 class ShareReportRequest(GenerateReportRequest):
     emails: list[str]
 
-@app.post("/api/reports/generate")
-async def generate_report(req: GenerateReportRequest, current_user = Depends(get_current_user)):
+async def _generate_report_bytes(req: GenerateReportRequest, current_user = Depends(get_current_user)):
     """Generate on-demand Pentest-Tools report based on UI modal filters."""
     conn = db_manager.get_db_connection()
     if not conn:
@@ -1394,24 +1393,25 @@ async def generate_report(req: GenerateReportRequest, current_user = Depends(get
             raw_json = res['raw_json']
     finally:
         conn.close()
-        pt_scan_id = None
-        # Ensure raw_json is parsed if it's a string
-        if isinstance(raw_json, str):
-            import json
-            try:
-                raw_json = json.loads(raw_json)
-            except:
-                raw_json = None
-                
-        # Determine pt_scan_id based on raw_json structure
-        if isinstance(raw_json, dict) and "pt_scan_id" in raw_json:
-            pt_scan_id = raw_json["pt_scan_id"]
-        elif isinstance(raw_json, list):
-            # Fallback if somehow it's old structure, we can't generate it easily unless we parse it.
-            pass
+        
+    pt_scan_id = None
+    # Ensure raw_json is parsed if it's a string
+    if isinstance(raw_json, str):
+        import json
+        try:
+            raw_json = json.loads(raw_json)
+        except:
+            raw_json = None
             
-        if not pt_scan_id:
-            raise HTTPException(status_code=400, detail="Cannot generate report for this history because it does not contain a valid Pentest-Tools scan ID (pt_scan_id).")
+    # Determine pt_scan_id based on raw_json structure
+    if isinstance(raw_json, dict) and "pt_scan_id" in raw_json:
+        pt_scan_id = raw_json["pt_scan_id"]
+    elif isinstance(raw_json, list):
+        # Fallback if somehow it's old structure, we can't generate it easily unless we parse it.
+        pass
+        
+    if not pt_scan_id:
+        raise HTTPException(status_code=400, detail="Cannot generate report for this history because it does not contain a valid Pentest-Tools scan ID (pt_scan_id).")
         
     # 2. Call Pentest-Tools API to Generate Report
     url = f"{config.PENTEST_TOOLS_BASE_URL}/reports"
