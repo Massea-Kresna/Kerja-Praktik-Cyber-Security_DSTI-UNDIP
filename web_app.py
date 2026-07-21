@@ -1377,8 +1377,7 @@ class GenerateReportRequest(BaseModel):
 class ShareReportRequest(GenerateReportRequest):
     emails: list[str]
 
-@app.post("/api/reports/generate")
-async def generate_report(req: GenerateReportRequest, current_user = Depends(get_current_user)):
+async def _generate_report_bytes(req: GenerateReportRequest, current_user = Depends(get_current_user)):
     """Generate on-demand Pentest-Tools report based on UI modal filters."""
     conn = db_manager.get_db_connection()
     if not conn:
@@ -1394,24 +1393,25 @@ async def generate_report(req: GenerateReportRequest, current_user = Depends(get
             raw_json = res['raw_json']
     finally:
         conn.close()
-        pt_scan_id = None
-        # Ensure raw_json is parsed if it's a string
-        if isinstance(raw_json, str):
-            import json
-            try:
-                raw_json = json.loads(raw_json)
-            except:
-                raw_json = None
-                
-        # Determine pt_scan_id based on raw_json structure
-        if isinstance(raw_json, dict) and "pt_scan_id" in raw_json:
-            pt_scan_id = raw_json["pt_scan_id"]
-        elif isinstance(raw_json, list):
-            # Fallback if somehow it's old structure, we can't generate it easily unless we parse it.
-            pass
+        
+    pt_scan_id = None
+    # Ensure raw_json is parsed if it's a string
+    if isinstance(raw_json, str):
+        import json
+        try:
+            raw_json = json.loads(raw_json)
+        except:
+            raw_json = None
             
-        if not pt_scan_id:
-            raise HTTPException(status_code=400, detail="Cannot generate report for this history because it does not contain a valid Pentest-Tools scan ID (pt_scan_id).")
+    # Determine pt_scan_id based on raw_json structure
+    if isinstance(raw_json, dict) and "pt_scan_id" in raw_json:
+        pt_scan_id = raw_json["pt_scan_id"]
+    elif isinstance(raw_json, list):
+        # Fallback if somehow it's old structure, we can't generate it easily unless we parse it.
+        pass
+        
+    if not pt_scan_id:
+        raise HTTPException(status_code=400, detail="Cannot generate report for this history because it does not contain a valid Pentest-Tools scan ID (pt_scan_id).")
         
     # 2. Call Pentest-Tools API to Generate Report
     url = f"{config.PENTEST_TOOLS_BASE_URL}/reports"
@@ -1514,8 +1514,26 @@ async def share_report_endpoint(req: ShareReportRequest, current_user = Depends(
         msg['To'] = ", ".join(req.emails)
         msg['Subject'] = f"Security Scan Report - UNDIP CSIRT"
         
+        # Ambil nama domain dari database berdasarkan history_id
+        domain_name = "Target Domain"
+        conn = db_manager.get_db_connection()
+        if conn:
+            try:
+                with conn.cursor(cursor_factory=db_manager.RealDictCursor) as cur:
+                    cur.execute('''
+                        SELECT d.domain_name 
+                        FROM scan_history h
+                        JOIN domains d ON h.domain_id = d.id
+                        WHERE h.id = %s
+                    ''', (req.history_id,))
+                    res = cur.fetchone()
+                    if res:
+                        domain_name = res['domain_name']
+            finally:
+                conn.close()
+                
         # Isi body email
-        body = "Halo,\n\nTerlampir adalah dokumen laporan hasil security scan otomatis (Pentest-Tools) yang di-generate dari UNDIP Security Dashboard.\n\nSalam,\nUNDIP CSIRT"
+        body = f"Halo,\n\nTerlampir adalah dokumen laporan hasil scan pada domain {domain_name} yang di-generate dari Tim Keamanan Siber UNDIP\n\nSalam,\nUNDIP CSIRT"
         msg.attach(MIMEText(body, 'plain'))
         
         # Sisipkan file (PDF/HTML/CSV/dsb)
