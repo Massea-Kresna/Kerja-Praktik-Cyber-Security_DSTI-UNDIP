@@ -3284,7 +3284,7 @@ async function markAllNotificationsAsRead(e) {
     if (e) e.stopPropagation();
 
     if (allNotifications.length === 0) return;
-    
+
     if (!confirm("Apakah Anda yakin ingin menghapus semua notifikasi?")) {
         return;
     }
@@ -3295,7 +3295,7 @@ async function markAllNotificationsAsRead(e) {
             if (!deletedNotifs.includes(n.id)) deletedNotifs.push(n.id);
         });
         localStorage.setItem('dsti_deleted_notifs_v3', JSON.stringify(deletedNotifs));
-        
+
         allNotifications = [];
         renderNotificationList();
         showToast("Notifikasi", "Semua notifikasi dibersihkan.", "✔️");
@@ -3326,7 +3326,7 @@ async function fetchNotifications() {
             const allowedTypes = ['success', 'scan_complete', 'scan_finished'];
             const deletedNotifs = JSON.parse(localStorage.getItem('dsti_deleted_notifs_v3') || '[]');
             const readNotifs = JSON.parse(localStorage.getItem('dsti_read_notifs') || '[]');
-            
+
             allNotifications = data.data
                 .filter(n => allowedTypes.includes(n.type) && !deletedNotifs.includes(n.id))
                 .map(n => ({
@@ -3401,12 +3401,12 @@ function renderNotificationList() {
 async function markAsRead(notifId) {
     const notif = allNotifications.find(n => n.id === notifId);
     if (!notif) return;
-    
+
     // Tandai sebagai read, jangan dihapus
     const readNotifs = JSON.parse(localStorage.getItem('dsti_read_notifs') || '[]');
     if (!readNotifs.includes(notifId)) readNotifs.push(notifId);
     localStorage.setItem('dsti_read_notifs', JSON.stringify(readNotifs));
-    
+
     notif.unread = false;
     renderNotificationList();
 
@@ -4134,7 +4134,7 @@ function openNetworkScanModal() {
         return;
     }
 
-    select.innerHTML = '<option value="">-- Select a target --</option>' +
+    select.innerHTML = '<option value="">Select a domain</option>' +
         allDomains.filter(d => d.is_active).map(d => `<option value="${d.domain_name}">${d.domain_name}</option>`).join('');
 
     // Setup interaktivitas klik pada kotak radio button (Deep vs Light)
