@@ -355,31 +355,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const vulnTrendStart = document.getElementById('vulnTrendStartDate');
     const vulnTrendEnd = document.getElementById('vulnTrendEndDate');
     const vulnTrendResetBtn = document.getElementById('vulnTrendResetBtn');
+    const vulnTrendResetIconBtn = document.getElementById('vulnTrendResetIconBtn'); // Tambahan
+    
+    const resetVulnTrend = async () => {
+        if (vulnTrendStart) vulnTrendStart.value = '';
+        if (vulnTrendEnd) vulnTrendEnd.value = '';
+        const lbl = document.getElementById('vulnTrendDateLabel');
+        if (lbl) lbl.textContent = '24 Jam';
+        await loadVulnTrendData();
+    };
 
-    if (vulnTrendResetBtn) {
-        vulnTrendResetBtn.addEventListener('click', async () => {
-            if (vulnTrendStart) vulnTrendStart.value = '';
-            if (vulnTrendEnd) vulnTrendEnd.value = '';
-            const lbl = document.getElementById('vulnTrendDateLabel');
-            if (lbl) lbl.textContent = '24 Jam';
-            await loadVulnTrendData();
-        });
-    }
+    if (vulnTrendResetBtn) vulnTrendResetBtn.addEventListener('click', resetVulnTrend);
+    if (vulnTrendResetIconBtn) vulnTrendResetIconBtn.addEventListener('click', resetVulnTrend); // Tambahan
 
     // Sev Trend Date Range Logic
     const sevTrendStart = document.getElementById('sevTrendStartDate');
     const sevTrendEnd = document.getElementById('sevTrendEndDate');
     const sevTrendResetBtn = document.getElementById('sevTrendResetBtn');
+    const sevTrendResetIconBtn = document.getElementById('sevTrendResetIconBtn'); // Tambahan
 
-    if (sevTrendResetBtn) {
-        sevTrendResetBtn.addEventListener('click', async () => {
-            if (sevTrendStart) sevTrendStart.value = '';
-            if (sevTrendEnd) sevTrendEnd.value = '';
-            const lbl = document.getElementById('sevTrendDateLabel');
-            if (lbl) lbl.textContent = '24 Jam';
-            await loadSevTrendData();
-        });
-    }
+    const resetSevTrend = async () => {
+        if (sevTrendStart) sevTrendStart.value = '';
+        if (sevTrendEnd) sevTrendEnd.value = '';
+        const lbl = document.getElementById('sevTrendDateLabel');
+        if (lbl) lbl.textContent = '24 Jam';
+        await loadSevTrendData();
+    };
+
+    if (sevTrendResetBtn) sevTrendResetBtn.addEventListener('click', resetSevTrend);
+    if (sevTrendResetIconBtn) sevTrendResetIconBtn.addEventListener('click', resetSevTrend); // Tambahan
 
     // Removed old exportDomainsBtn listener since it's now handled by global exportDomains function.
 
