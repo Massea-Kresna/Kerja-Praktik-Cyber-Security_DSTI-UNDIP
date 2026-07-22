@@ -131,6 +131,7 @@ class ConnectionManager:
             if info and info.get("username") == username:
                 try:
                     await conn.send_json({"event": reason})
+                    await asyncio.sleep(0.2) # Beri waktu agar pesan sampai ke client
                     await conn.close(code=4000)
                 except Exception:
                     pass
@@ -168,12 +169,16 @@ def get_current_user(request: Request):
         raise HTTPException(status_code=401, detail="Session tidak valid atau telah berakhir. Silakan login kembali.")
         
     # Cek apakah user sedang dalam timeout
-    timeout_until_str = user.get("timeout_until")
-    if timeout_until_str:
+    timeout_until_val = user.get("timeout_until")
+    if timeout_until_val:
         try:
             # Menggunakan timezone-aware datetime parsing
-            # Python 3.11+ mendukung format ISO dengan offset Z/+07:00 via fromisoformat
-            timeout_until = datetime.fromisoformat(timeout_until_str.replace('Z', '+00:00'))
+            if isinstance(timeout_until_val, datetime):
+                timeout_until = timeout_until_val
+                if timeout_until.tzinfo is None:
+                    timeout_until = timeout_until.replace(tzinfo=timezone.utc)
+            else:
+                timeout_until = datetime.fromisoformat(str(timeout_until_val).replace('Z', '+00:00'))
             now = datetime.now(timezone.utc)
             if timeout_until > now:
                 # Force logout
@@ -271,10 +276,15 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
         raise HTTPException(status_code=401, detail="Username atau password salah.")
         
     # 3. Cek timeout
-    timeout_until_str = user.get("timeout_until")
-    if timeout_until_str:
+    timeout_until_val = user.get("timeout_until")
+    if timeout_until_val:
         try:
-            timeout_until = datetime.fromisoformat(timeout_until_str.replace('Z', '+00:00'))
+            if isinstance(timeout_until_val, datetime):
+                timeout_until = timeout_until_val
+                if timeout_until.tzinfo is None:
+                    timeout_until = timeout_until.replace(tzinfo=timezone.utc)
+            else:
+                timeout_until = datetime.fromisoformat(str(timeout_until_val).replace('Z', '+00:00'))
             now = datetime.now(timezone.utc)
             if timeout_until > now:
                 sisa_detik = int((timeout_until - now).total_seconds())
