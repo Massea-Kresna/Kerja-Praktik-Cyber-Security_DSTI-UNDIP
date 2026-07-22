@@ -3557,7 +3557,7 @@ async function deleteNotification(notifId, e) {
 
 async function fetchNotifications() {
     try {
-        const res = await fetch('/api/notifications');
+        const res = await fetch(`${API_BASE}/api/notifications`);
         const data = await res.json();
         if (data.status === 'success') {
             const allowedTypes = ['success', 'scan_complete', 'scan_finished'];
