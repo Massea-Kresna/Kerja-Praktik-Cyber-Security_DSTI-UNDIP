@@ -628,10 +628,12 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
                     if interval_minutes < 60:
                         minute_snapped = 30 if end_dt.minute >= 30 else 0
                         end_snapped_wib = end_dt.replace(minute=minute_snapped, second=0, microsecond=0)
+                        end_snapped_wib += timedelta(minutes=interval_minutes)
                     else:
                         hour_interval = interval_minutes // 60
                         hour_snapped = (end_dt.hour // hour_interval) * hour_interval
                         end_snapped_wib = end_dt.replace(hour=hour_snapped, minute=0, second=0, microsecond=0)
+                        end_snapped_wib += timedelta(hours=hour_interval)
                     start_snapped_wib = end_snapped_wib - timedelta(minutes=num_buckets * interval_minutes)
                 else:
                     num_buckets = max(1, math.ceil(days_diff))
@@ -752,10 +754,12 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
                     if interval_minutes < 60:
                         minute_snapped = 30 if end_dt.minute >= 30 else 0
                         end_snapped_wib = end_dt.replace(minute=minute_snapped, second=0, microsecond=0)
+                        end_snapped_wib += timedelta(minutes=interval_minutes)
                     else:
                         hour_interval = interval_minutes // 60
                         hour_snapped = (end_dt.hour // hour_interval) * hour_interval
                         end_snapped_wib = end_dt.replace(hour=hour_snapped, minute=0, second=0, microsecond=0)
+                        end_snapped_wib += timedelta(hours=hour_interval)
                     start_snapped_wib = end_snapped_wib - timedelta(minutes=num_buckets * interval_minutes)
                 else:
                     num_buckets = max(1, math.ceil(days_diff))
