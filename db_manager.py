@@ -583,15 +583,24 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type='Web Scanne
             
             if isinstance(instances, list) and instances:
                 evidence_val = json.dumps({"type": "instances", "data": instances})
+            elif 'vuln_evidence' in f:
+                evidence_val = json.dumps({"type": "vuln_evidence", "data": f['vuln_evidence']})
             else:
-                fallback_txt = f.get('output', '')
-                if not fallback_txt:
-                    fallback_txt = f.get('details', '')
-                
-                if fallback_txt:
-                    evidence_val = json.dumps({"type": "text", "data": fallback_txt})
+                req = f.get('request', f.get('http_request', f.get('raw_request', '')))
+                res = f.get('response', f.get('http_response', f.get('raw_response', '')))
+                if req or res:
+                    evidence_val = json.dumps({"type": "instances", "data": [{"request": req, "response": res}]})
                 else:
-                    evidence_val = ''
+                    fallback_txt = f.get('output', '')
+                    if not fallback_txt:
+                        fallback_txt = f.get('details', '')
+                    if not fallback_txt:
+                        fallback_txt = f.get('proof', '')
+                    
+                    if fallback_txt:
+                        evidence_val = json.dumps({"type": "text", "data": fallback_txt})
+                    else:
+                        evidence_val = ''
             
             vuln_obj = {
                 'severity': severity,
@@ -608,23 +617,8 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type='Web Scanne
                 'evidence': evidence_val
             }
             
-            if severity in ['MEDIUM', 'HIGH', 'CRITICAL']:
-                scan_result.append(vuln_obj)
-            else:
-                low_info_vulns.append({
-                    'severity': severity,
-                    'check_type': scanner_type,
-                    'title': title,
-                    'description': desc,
-                    'recommendation': recom,
-                    'epss_score': epss_score,
-                    'epss_percentile': epss_percentile,
-                    'cisa_kev': cisa_kev,
-                    'cve': cve_val,
-                    'cvss_v3': cvss_v3,
-                    'cwe': cwe_val,
-                    'evidence': evidence_val
-                })
+            # Masukkan SEMUA kerentanan (termasuk LOW dan INFO) ke dalam scan_result
+            scan_result.append(vuln_obj)
             
             if severity in ['HIGH', 'CRITICAL']:
                 risk_score += 3.0

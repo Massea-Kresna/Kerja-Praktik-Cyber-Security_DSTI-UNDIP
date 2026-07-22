@@ -2381,8 +2381,8 @@ function openThreatModal(vuln) {
         document.getElementById('class_cwe_container').style.display = 'none';
     }
 
-    // Only display the Classification section if there is a valid CVE
-    document.getElementById('modalClassificationSection').style.display = validCve ? 'block' : 'none';
+    // Display the Classification section if there is at least one classification item (CWE, CVE, CVSS, etc.)
+    document.getElementById('modalClassificationSection').style.display = hasClassification ? 'block' : 'none';
 
     // ==========================================
     // LOGIKA PENGKATEGORIAN OTOMATIS (ULTIMATE VERSION)
@@ -2485,18 +2485,57 @@ function openThreatModal(vuln) {
                         evidenceContainer.appendChild(createEvidenceCard(inst));
                     });
                 } else if (evJson.type === 'text') {
-                    evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="white-space: pre-wrap;">${escapeHtml(evJson.data)}</div></div>`;
+                    evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="white-space: pre-wrap;">${linkify(escapeHtml(evJson.data))}</div></div>`;
+                } else if (evJson.type === 'vuln_evidence' && evJson.data && evJson.data.type === 'table') {
+                    const tableData = evJson.data.data;
+                    if (tableData && tableData.headers && tableData.rows) {
+                        let html = '<div class="evidence-card" style="padding: 0; overflow: hidden; border: 1px solid #d1d5db; border-radius: 8px;"><div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 0.9em; text-align: left;">';
+                        
+                        html += '<thead style="background-color: #374151; color: #ffffff;"><tr>';
+                        tableData.headers.forEach(h => {
+                            html += `<th style="padding: 10px 15px; border-bottom: 2px solid #1f2937; font-weight: 600;">${escapeHtml(h)}</th>`;
+                        });
+                        html += '</tr></thead><tbody>';
+                        
+                        tableData.rows.forEach((r, rowIdx) => {
+                            const rowBg = rowIdx % 2 === 0 ? '#ffffff' : '#f9fafb';
+                            html += `<tr style="border-bottom: 1px solid #e5e7eb; background-color: ${rowBg};">`;
+                            r.forEach((c, idx) => {
+                                let cellContent = escapeHtml(c);
+                                if (typeof c === 'string' && c.endsWith(' Request / Response')) {
+                                    cellContent = escapeHtml(c.replace(' Request / Response', ''));
+                                }
+                                cellContent = linkify(cellContent);
+                                html += `<td style="padding: 10px 15px; color: #1f2937; word-break: break-word;">${cellContent}</td>`;
+                            });
+                            html += '</tr>';
+                        });
+                        
+                        html += '</tbody></table></div></div>';
+                        evidenceContainer.innerHTML = html;
+                    } else {
+                        evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="color: #6b7280; font-style: italic;">No specific HTTP trace/evidence attached for this vulnerability by the scanner. \n(Signature: ${escapeHtml(vuln.title)})</div></div>`;
+                    }
                 } else {
-                    evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="white-space: pre-wrap;">${escapeHtml(vuln.evidence)}</div></div>`;
+                    // Jika ada format JSON lain, fallback
+                    evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="white-space: pre-wrap;">${linkify(escapeHtml(JSON.stringify(evJson)))}</div></div>`;
                 }
             } catch (e) {
                 // Fallback for old data or plain text
-                evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="white-space: pre-wrap;">${escapeHtml(vuln.evidence)}</div></div>`;
+                evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="white-space: pre-wrap;">${linkify(escapeHtml(vuln.evidence))}</div></div>`;
             }
         } else {
-            evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc">No specific evidence provided by the scanner. \n(Signature: ${escapeHtml(vuln.title)})</div></div>`;
+            evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="color: #6b7280; font-style: italic;">No specific HTTP trace/evidence attached for this vulnerability by the scanner. \n(Signature: ${escapeHtml(vuln.title)})</div></div>`;
         }
     }
+}
+
+function linkify(text) {
+    if (!text) return text;
+    var urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, function(url) {
+        return `<a href="${url}" target="_blank" style="color: #2563eb; text-decoration: underline;">${url}</a>`;
+    });
 }
 
 function escapeHtml(unsafe) {
@@ -2544,11 +2583,15 @@ function createEvidenceCard(inst) {
     
     // Request / Response Terminal
     let traceText = '';
-    if (inst.request_response) {
-        traceText = inst.request_response;
-    } else if (inst.request || inst.response) {
-        if (inst.request) traceText += '--- REQUEST ---\n' + inst.request + '\n\n';
-        if (inst.response) traceText += '--- RESPONSE ---\n' + inst.response;
+    const req = inst.request_response || inst.request || inst.http_request || inst.raw_request;
+    const res = inst.response || inst.http_response || inst.raw_response;
+    
+    if (req && res && !inst.request_response) {
+        traceText = '--- REQUEST ---\n' + req + '\n\n--- RESPONSE ---\n' + res;
+    } else if (req) {
+        traceText = inst.request_response ? req : ('--- REQUEST ---\n' + req);
+    } else if (res) {
+        traceText = '--- RESPONSE ---\n' + res;
     } else if (inst.output) {
         traceText = inst.output;
     }
