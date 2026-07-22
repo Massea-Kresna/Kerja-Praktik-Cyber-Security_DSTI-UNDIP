@@ -1,6 +1,6 @@
-const API_BASE = window.location.origin;
-// const API_BASE = "http://10.70.128.26:8000";
-// const API_BASE = "http://" + window.location.hostname + ":8000";
+//const API_BASE = window.location.origin;
+//const API_BASE = "http://10.69.15.200:8000";
+const API_BASE = "http://" + window.location.hostname + ":8000";
 
 // State
 let allDomains = [];
