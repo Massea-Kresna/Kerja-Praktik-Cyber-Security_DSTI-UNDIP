@@ -3312,7 +3312,6 @@ async function deleteNotification(notifId, e) {
     }
 }
 
-
 async function fetchNotifications() {
     try {
         const res = await fetch('/api/notifications');
@@ -3344,40 +3343,31 @@ function renderNotificationList() {
         return;
     }
 
-    
     listContainer.innerHTML = allNotifications.map(n => {
         const unreadClass = n.unread ? 'unread' : '';
         const relativeTime = formatRelativeTime(n.timestamp);
+        
+        // 1. Tentukan Icon
         let icon = '🔔';
-        if (n.type === 'scan_complete') icon = '✅';
+        if (n.type === 'scan_complete' || n.type === 'scan_finished') icon = '✅';
         else if (n.type === 'scan_failed') icon = '❌';
         else if (n.type === 'user_login') icon = '👤';
         
-        let notifText = '';
-        let avatarIcon = '';
-        let initials = '';
+        // 2. Fallback Judul & Pesan (Agar aman dari undefined/websocket legacy)
+        const safeTitle = n.title ? escapeHtml(n.title) : 'Notifikasi Sistem';
+        const safeMessage = n.message ? escapeHtml(n.message) : (n.domain ? `Scan untuk ${escapeHtml(n.domain)} telah selesai.` : 'Pesan sistem terbaru.');
 
-        if (n.type === 'scan_finished') {
-            avatarIcon = '🚀';
-            notifText = `Scan untuk <strong>${escapeHtml(n.domain || '')}</strong> telah selesai.`;
-        } else {
-            // Legacy / user_login
-            initials = (n.username || 'U').substring(0, 2).toUpperCase();
-            const roleText = n.role === 'admin' ? 'Admin' : 'User';
-            notifText = `👤 <strong>${escapeHtml(n.username || '')}</strong> (${roleText}) masuk ke sistem.`;
-        }
-
+        // HTML Template yang sudah di-fix (Tidak ada div tumpang tindih)
         return `
             <div class="notif-item ${unreadClass}" onclick="markAsRead('${n.id}')">
                 <div class="notif-unread-dot"></div>
                 <div class="notif-avatar" style="background: transparent; font-size: 20px;">${icon}</div>
                 <div class="notif-content">
-                    <div class="notif-text" style="line-height: 1.4;"><strong>${escapeHtml(n.title)}</strong><br>${escapeHtml(n.message)}</div>
+                    <div class="notif-text" style="line-height: 1.4;">
+                        <strong>${safeTitle}</strong><br>
+                        <span style="color: #64748b; font-size: 13px;">${safeMessage}</span>
+                    </div>
                     <div class="notif-time" style="margin-top: 4px;">${relativeTime}</div>
-                <div class="notif-avatar">${initials || avatarIcon}</div>
-                <div class="notif-content">
-                    <div class="notif-text">${notifText}</div>
-                    <div class="notif-time">${relativeTime}</div>
                 </div>
                 <div class="notif-actions">
                     <button class="notif-action-btn" onclick="deleteNotification('${n.id}', event)" title="Hapus notifikasi">✕</button>
@@ -3385,7 +3375,6 @@ function renderNotificationList() {
             </div>
         `;
     }).join('');
-
 }
 
 async function markAsRead(notifId) {
