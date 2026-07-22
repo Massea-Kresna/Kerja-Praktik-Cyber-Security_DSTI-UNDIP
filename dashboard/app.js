@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     checkAuth();
     setupTabs();
-    
+
     // Pastikan filter tanggal tren di-reset pada saat dimuat (refresh)
     ['vulnTrend', 'sevTrend'].forEach(prefix => {
         const startInput = document.getElementById(`${prefix}StartDate`);
@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (endInput) endInput.value = '';
         if (label) label.textContent = '24 Jam';
     });
-    
+
     // Reset semua input dan form di seluruh halaman ke setelan awalnya
     document.querySelectorAll('form').forEach(f => f.reset());
     document.querySelectorAll('input, select, textarea').forEach(el => {
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
             el.value = el.defaultValue || '';
         }
     });
-    
+
     // Reset khusus untuk daftar email di Report Action
     const emailListWrapper = document.getElementById('emailListWrapper');
     if (emailListWrapper) {
@@ -84,31 +84,28 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
     }
-    
+
     // -- (Taruh di dalam blok DOMContentLoaded) --
     const saveBtn = document.getElementById('saveTargetsBtn');
     if (saveBtn) {
         saveBtn.addEventListener('click', async () => {
             const domainsToSave = [...selectedDomains];
-            if (domainsToSave.length === 0) {
-                showToast('Peringatan', 'Pilih minimal satu domain untuk disimpan.', '⚠️');
-                return;
-            }
+            const inactiveDomains = allDomains.filter(d => !selectedDomains.has(d.domain_name)).map(d => d.domain_name);
 
             // Simpan di memori browser
             localStorage.setItem('dsti_saved_targets', JSON.stringify(domainsToSave));
 
             // Tembakkan API ke Backend
             try {
-                // Diubah ke endpoint /api/schedule-scan dan mengubah key "domains" menjadi "targets"
                 const resp = await fetch(`${API_BASE}/api/schedule-scan`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ targets: domainsToSave })
+                    body: JSON.stringify({ targets: domainsToSave, inactive_targets: inactiveDomains })
                 });
 
                 if (resp.status === 200) {
-                    showToast('Tersimpan', `${domainsToSave.length} domain berhasil disimpan untuk scan interval.`, '💾');
+                    showToast('Tersimpan', `Status berhasil diperbarui (Aktif: ${domainsToSave.length}, Tidak Aktif: ${inactiveDomains.length}).`, '💾');
+                    if (typeof loadDomains === 'function') loadDomains(true);
                 } else {
                     const data = await resp.json();
                     showToast('Gagal Menyimpan', data.detail || 'Terjadi kesalahan di server.', '❌');
@@ -358,7 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const vulnTrendStart = document.getElementById('vulnTrendStartDate');
     const vulnTrendEnd = document.getElementById('vulnTrendEndDate');
     const vulnTrendResetBtn = document.getElementById('vulnTrendResetBtn');
-    
+
     if (vulnTrendResetBtn) {
         vulnTrendResetBtn.addEventListener('click', async () => {
             if (vulnTrendStart) vulnTrendStart.value = '';
@@ -383,7 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadSevTrendData();
         });
     }
-    
+
     // Removed old exportDomainsBtn listener since it's now handled by global exportDomains function.
 
     const importBtn = document.getElementById('importDomainsBtn');
@@ -392,16 +389,16 @@ document.addEventListener('DOMContentLoaded', () => {
         importBtn.addEventListener('click', () => {
             importInput.click();
         });
-        
+
         importInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            
+
             const reader = new FileReader();
             reader.onload = async (e) => {
                 const content = e.target.result;
                 let importedData = [];
-                
+
                 if (file.name.endsWith('.json')) {
                     try {
                         const data = JSON.parse(content);
@@ -425,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         };
                     }).filter(d => d.domain_name);
                 }
-                
+
                 if (importedData.length > 0) {
                     showToast('Info', `Mengimpor ${importedData.length} domain...`, 'ℹ️');
                     let addedCount = 0;
@@ -441,11 +438,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             console.error('Error importing', item.domain_name, err);
                         }
                     }
-                    
+
                     showToast('Import Selesai', `Berhasil menambahkan ${addedCount} dari ${importedData.length} domain.`, '✅');
                     loadDomains();
                 }
-                
+
                 importInput.value = '';
             };
             reader.readAsText(file);
@@ -497,7 +494,7 @@ function switchView(viewId) {
     // Load admin data if switching to admin page
     if (viewId === 'admin') {
         loadAdminUsers();
-                fetchNotifications();
+        fetchNotifications();
     }
 
     // Web Scanner & Network Scanner: start/stop polling for active scans
@@ -524,7 +521,7 @@ async function refreshData(preservePage = true) {
             loadVulnerabilities(preservePage),
             loadDomains(preservePage)
         ]);
-        
+
         // Memanggil fungsi render tabel network khusus
         if (typeof processNetworkScans === 'function') processNetworkScans(preservePage);
         if (typeof processWebScans === 'function') processWebScans(preservePage);
@@ -586,19 +583,19 @@ async function setQuickDate(chartPrefix, days, dropdownId) {
     const end = new Date();
     const start = new Date();
     start.setDate(end.getDate() - days);
-    
+
     document.getElementById(`${chartPrefix}StartDate`).value = start.toISOString().split('T')[0];
     document.getElementById(`${chartPrefix}EndDate`).value = end.toISOString().split('T')[0];
-    
+
     let labelText = `${days} Hari`;
     if (days === 1) labelText = '24 Jam';
-    
+
     const labelEl = document.getElementById(`${chartPrefix}DateLabel`);
     if (labelEl) labelEl.textContent = labelText;
-    
+
     const dd = document.getElementById(dropdownId);
     if (dd) dd.classList.remove('open');
-    
+
     if (chartPrefix === 'vulnTrend') {
         await loadVulnTrendData();
     } else if (chartPrefix === 'sevTrend') {
@@ -609,20 +606,20 @@ async function setQuickDate(chartPrefix, days, dropdownId) {
 async function applyCustomDate(chartPrefix, dropdownId) {
     const start = document.getElementById(`${chartPrefix}StartDate`).value;
     const end = document.getElementById(`${chartPrefix}EndDate`).value;
-    
+
     const labelEl = document.getElementById(`${chartPrefix}DateLabel`);
     if (start && end) {
         if (labelEl) {
             const formatDt = (dStr) => {
                 const dt = new Date(dStr);
-                return dt.toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'});
+                return dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
             };
             labelEl.textContent = `${formatDt(start)} - ${formatDt(end)}`;
         }
     } else {
         if (labelEl) labelEl.textContent = '24 Jam';
     }
-    
+
     if (chartPrefix === 'vulnTrend') {
         await loadVulnTrendData();
     } else if (chartPrefix === 'sevTrend') {
@@ -654,7 +651,7 @@ function updateDropdownLabel(dropdownId, allLabel) {
     const label = container.querySelector('.multi-select-label');
     const checkboxes = Array.from(container.querySelectorAll('input[type="checkbox"]'));
     const checked = checkboxes.filter(cb => cb.checked);
-    
+
     const isAllChecked = checked.length === 1 && checked[0].value === 'All';
 
     if (checked.length === 0 || checked.length === checkboxes.length || isAllChecked) {
@@ -698,7 +695,7 @@ async function loadVulnTrendData() {
         const params = new URLSearchParams();
         if (startDate) params.append('start_date', startDate);
         if (endDate) params.append('end_date', endDate);
-        
+
         const trendResp = await fetch(`${API_BASE}/api/trend-stats?${params.toString()}`);
         rawTrendData = await trendResp.json();
 
@@ -757,7 +754,7 @@ async function loadSevTrendData() {
         const params = new URLSearchParams();
         if (startDate) params.append('start_date', startDate);
         if (endDate) params.append('end_date', endDate);
-        
+
         const sevTrendResp = await fetch(`${API_BASE}/api/severity-trend-stats?${params.toString()}`);
         rawSevTrendData = await sevTrendResp.json();
 
@@ -831,10 +828,10 @@ window.renderVulnTrendChart = function () {
     }
 
     let allDatasets = [...(rawTrendData.datasets || [])];
-    
+
     // Remove 0 count trend chart datasets
     allDatasets = allDatasets.filter(ds => Math.max(...ds.data) > 0);
-    
+
     let finalDatasets = [];
 
     if (!allChecked && selectedDomains.length > 0) {
@@ -906,7 +903,7 @@ window.renderVulnTrendChart = function () {
                         const index = activeElements[0].index;
                         const datasetIndex = activeElements[0].datasetIndex;
                         const clickedValue = vulnChartInstance.data.datasets[datasetIndex].data[index];
-                        
+
                         if (rawTrendData && rawTrendData.raw_labels) {
                             let activeCount = 0;
                             let lastActiveLabel = null;
@@ -917,7 +914,7 @@ window.renderVulnTrendChart = function () {
                                     lastActiveLabel = ds.label;
                                 }
                             });
-                            
+
                             if (activeCount === 1) {
                                 jumpToScanDetail(rawTrendData.raw_labels[index], lastActiveLabel);
                             } else if (activeCount > 1) {
@@ -1091,7 +1088,7 @@ window.renderSevTrendChart = function () {
                         const index = activeElements[0].index;
                         const datasetIndex = activeElements[0].datasetIndex;
                         const clickedValue = sevChartInstance.data.datasets[datasetIndex].data[index];
-                        
+
                         if (rawSevTrendData && rawSevTrendData.raw_labels) {
                             let itemBreakdown = [];
                             sevChartInstance.data.datasets.forEach(ds => {
@@ -1119,7 +1116,7 @@ window.renderSevTrendChart = function () {
                                     }
                                 }
                             });
-                            
+
                             if (itemBreakdown.length === 1) {
                                 const item = itemBreakdown[0];
                                 if (item.domain) {
@@ -1241,10 +1238,10 @@ function updateSortIcons() {
         const icon = th.querySelector('.sort-icon');
         if (icon) icon.innerHTML = '';
     });
-    
+
     const activeMapping = { 'date': 0, 'domain': 1, 'type': 2, 'vulns': 3, 'severity': 4 };
     const activeIndex = activeMapping[vulnSortCol];
-    
+
     if (activeIndex !== undefined) {
         const activeTh = document.querySelectorAll('#scanHistoryHeaders th')[activeIndex];
         if (activeTh) {
@@ -1333,7 +1330,7 @@ function applyVulnFilters(preservePage = false) {
             valA = weights[(a.risk_level || 'SAFE').toUpperCase()] || 0;
             valB = weights[(b.risk_level || 'SAFE').toUpperCase()] || 0;
         }
-        
+
         if (valA < valB) return vulnSortDesc ? 1 : -1;
         if (valA > valB) return vulnSortDesc ? -1 : 1;
         return 0;
@@ -1458,14 +1455,14 @@ function processNetworkScans(preservePage = false) {
             return scanType.toLowerCase().includes("network");
         }
         return false;
-    }); 
-    
+    });
+
     applyNetworkFilters(preservePage);
 }
 
 function applyNetworkFilters(preservePage = false) {
     const searchInput = document.getElementById('netSearchInput')?.value.toLowerCase() || '';
-    
+
     let dbFiltered = networkScans.filter(scan => {
         const domainName = (scan.domains?.domain_name || '').toLowerCase();
         const ip = (scan.domains?.ip_address || '').toLowerCase();
@@ -1491,7 +1488,7 @@ function renderNetworkScans() {
     const tbody = document.getElementById('networkScansTableBody');
     const paginationContainer = document.getElementById('networkPaginationControls');
     const thCount = document.getElementById('thNetworkScansCount');
-    
+
     if (!filteredNetworkScans || filteredNetworkScans.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="padding: 24px; text-align: center;">No network scans found.</td></tr>`;
         if (paginationContainer) paginationContainer.innerHTML = '';
@@ -1504,17 +1501,17 @@ function renderNetworkScans() {
 
     const totalPages = Math.ceil(totalItems / netRowsPerPage) || 1;
     if (netCurrentPage > totalPages) netCurrentPage = totalPages;
-    
+
     const startIdx = (netCurrentPage - 1) * netRowsPerPage;
     const endIdx = Math.min(startIdx + netRowsPerPage, totalItems);
     const paginatedScans = filteredNetworkScans.slice(startIdx, endIdx);
 
-tbody.innerHTML = paginatedScans.map((scan, mapIndex) => {
+    tbody.innerHTML = paginatedScans.map((scan, mapIndex) => {
         const isLive = scan.live_status !== undefined;
 
         let domainName = '';
         let targetSubtitle = '';
-        let dateStr = '-'; 
+        let dateStr = '-';
         let statusHtml = '';
         let summaryHtml = '';
         let actionBtn = '';
@@ -1530,7 +1527,7 @@ tbody.innerHTML = paginatedScans.map((scan, mapIndex) => {
             targetSubtitle = scan.target || "Scan in progress...";
             scanIdLabel = scan.type || `Pentest Tool ${scan.scan_id}`;
             const progressVal = scan.progress || 0;
-            
+
             // Konversi Waktu (EEST ke WIB)
             if (scan.start_time) {
                 let rawTime = scan.start_time;
@@ -1538,15 +1535,15 @@ tbody.innerHTML = paginatedScans.map((scan, mapIndex) => {
                 if (!rawTime.includes('+') && !rawTime.includes('Z')) {
                     rawTime += '+03:00';
                 }
-                const d = new Date(rawTime); 
+                const d = new Date(rawTime);
                 if (!isNaN(d.getTime())) {
                     const year = d.getFullYear();
                     const month = String(d.getMonth() + 1).padStart(2, '0');
                     const day = String(d.getDate()).padStart(2, '0');
-                    const time = d.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', second:'2-digit' });
+                    const time = d.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                     dateStr = `${year}-${month}-${day} ${time}`;
                 } else {
-                    dateStr = scan.start_time; 
+                    dateStr = scan.start_time;
                 }
             }
 
@@ -1564,7 +1561,7 @@ tbody.innerHTML = paginatedScans.map((scan, mapIndex) => {
                 </div>
             `;
             summaryHtml = `<span style="color: #64748b; font-size: 13px;">${scan.live_status || 'running'}...</span>`;
-            
+
             actionBtn = `<button class="btn btn-outline" onclick="stopActiveScan(${scan.scan_id})" style="border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, 0.03);" onmouseover="this.style.background='#ef4444'; this.style.color='#ffffff';" onmouseout="this.style.background='rgba(239, 68, 68, 0.03)'; this.style.color='#ef4444';">Stop Scan</button>`;
 
             // STRUKTUR HTML LIVE ROW YANG SUDAH DIRAPIKAN
@@ -1595,11 +1592,11 @@ tbody.innerHTML = paginatedScans.map((scan, mapIndex) => {
             domainName = scan.domains?.domain_name || 'Unknown Target';
             targetSubtitle = scan.domains?.ip_address || '-';
             scanIdLabel = 'Network Scanner';
-            
+
             if (scan.scan_date) {
                 const d = new Date(scan.scan_date);
                 if (!isNaN(d.getTime())) {
-                    dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${d.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', second:'2-digit' })}`;
+                    dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${d.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
                 }
             }
 
@@ -1627,7 +1624,7 @@ tbody.innerHTML = paginatedScans.map((scan, mapIndex) => {
                     <span style="background:var(--sev-low); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${low}</span>
                 </div>
             `;
-            
+
             actionBtn = `<button class="btn btn-outline" onclick="openScanModalIndex(${actualIndex}); event.stopPropagation();">View Report</button>`;
 
             // STRUKTUR HTML DATABASE ROW YANG SUDAH DIRAPIKAN
@@ -1657,10 +1654,10 @@ tbody.innerHTML = paginatedScans.map((scan, mapIndex) => {
         }
     }).join('');
 
-if (paginationContainer) {
+    if (paginationContainer) {
         // Berikan padding agar serasi dengan card tabel
-        paginationContainer.style.padding = '16px 24px'; 
-        
+        paginationContainer.style.padding = '16px 24px';
+
         paginationContainer.innerHTML = `
             <div class="pagination-left" style="display: flex; align-items: center;">
                 <span style="font-size: 13px; color: #64748b;">Tampilkan per halaman:</span>
@@ -1689,7 +1686,7 @@ if (paginationContainer) {
 }
 
 // Fungsi untuk mengganti halaman
-window.changeNetPage = function(newPage) {
+window.changeNetPage = function (newPage) {
     const parsedPage = parseInt(newPage);
     if (!isNaN(parsedPage) && parsedPage >= 1) {
         netCurrentPage = parsedPage;
@@ -1698,7 +1695,7 @@ window.changeNetPage = function(newPage) {
 };
 
 // Fungsi untuk mengubah jumlah baris
-window.changeNetRows = function(newRows) {
+window.changeNetRows = function (newRows) {
     netRowsPerPage = parseInt(newRows);
     netCurrentPage = 1; // Kembalikan ke halaman 1 saat jumlah baris diubah
     renderNetworkScans();
@@ -1710,7 +1707,7 @@ window.changeNetRows = function(newRows) {
 window.selectedNetworkScans = new Set();
 
 // 1. Fungsi saat klik checkbox satu per satu di baris
-window.toggleNetworkCheckbox = function(e, scanId) {
+window.toggleNetworkCheckbox = function (e, scanId) {
     e.stopPropagation(); // Mencegah bentrok klik
     if (e.target.checked) {
         window.selectedNetworkScans.add(scanId); // Ingat
@@ -1721,7 +1718,7 @@ window.toggleNetworkCheckbox = function(e, scanId) {
 };
 
 // 2. Fungsi saat klik "Select All" di kepala tabel
-window.toggleAllNetworkScans = function(headerCb) {
+window.toggleAllNetworkScans = function (headerCb) {
     // Ambil semua kotak centang yang sedang tampil di layar
     const rowCbs = document.querySelectorAll('#networkScansTableBody input[type="checkbox"]');
     const isChecked = headerCb.checked;
@@ -1737,10 +1734,10 @@ window.toggleAllNetworkScans = function(headerCb) {
 };
 
 // 3. Fungsi untuk menyinkronkan status visual "Select All"
-window.syncNetworkSelectAll = function() {
+window.syncNetworkSelectAll = function () {
     const selectAllCb = document.getElementById('selectAllNetworkScans');
     const rowCbs = document.querySelectorAll('#networkScansTableBody input[type="checkbox"]');
-    
+
     if (selectAllCb && rowCbs.length > 0) {
         // Jika SEMUA baris tercentang, maka Select All otomatis tercentang
         const allChecked = Array.from(rowCbs).every(cb => cb.checked);
@@ -1970,7 +1967,7 @@ if (domainForm) {
             domain_name: domainNameInput.value,
             ip_address: domainIpInput.value
         };
-        
+
         try {
             const url = id ? `${API_BASE}/api/domains/${id}` : `${API_BASE}/api/domains`;
             const method = id ? 'PUT' : 'POST';
@@ -1980,7 +1977,7 @@ if (domainForm) {
                 body: JSON.stringify(payload)
             });
             const data = await resp.json();
-            
+
             if (resp.ok) {
                 showToast('Sukses', data.message || 'Domain berhasil disimpan', '✅');
                 domainModalOverlay.classList.remove('active');
@@ -1998,7 +1995,7 @@ if (domainForm) {
 
 async function deleteDomain(id) {
     if (!confirm('Yakin ingin menghapus domain ini?')) return;
-    
+
     try {
         const resp = await fetch(`${API_BASE}/api/domains/${id}`, { method: 'DELETE' });
         const data = await resp.json();
@@ -2013,23 +2010,23 @@ async function deleteDomain(id) {
     }
 }
 
-window.exportDomains = function(format) {
+window.exportDomains = function (format) {
     if (!allDomains || allDomains.length === 0) {
         showToast('Info', 'Tidak ada domain untuk diekspor', 'ℹ️');
         return;
     }
-    
+
     let content = '';
     let mimeType = '';
     let filename = '';
-    
+
     const exportData = allDomains.map(d => ({
         domain_name: d.domain_name,
         ip_address: d.ip_address || ''
     }));
-    
+
     content = JSON.stringify(exportData, null, 2);
-    
+
     if (format === 'txt') {
         mimeType = 'text/plain';
         filename = 'domains_export.txt';
@@ -2037,7 +2034,7 @@ window.exportDomains = function(format) {
         mimeType = 'application/json';
         filename = 'domains_export.json';
     }
-    
+
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -2310,10 +2307,82 @@ function openThreatModal(vuln) {
     // Mengisi data inti
     document.getElementById('modalTitle').textContent = vuln.title || 'Vulnerability Alert';
     document.getElementById('modalRuleId').textContent = vuln.check_type || 'Unknown Scanner';
-    document.getElementById('modalSeverity').textContent = vuln.severity || 'LOW';
-    document.getElementById('modalSeverity').className = `meta-value text-${getSeverityClass(vuln.severity)}`;
+
     document.getElementById('modalDesc').textContent = vuln.description || 'No description available.';
     document.getElementById('modalRecommendation').textContent = vuln.recommendation || 'No recommendation provided.';
+
+    // Menangani Classification Section
+    let hasClassification = false;
+    
+    if (vuln.epss_score) {
+        document.getElementById('class_epss_score_container').style.display = 'block';
+        document.getElementById('modalEpssScore').textContent = vuln.epss_score;
+        hasClassification = true;
+    } else {
+        document.getElementById('class_epss_score_container').style.display = 'none';
+    }
+
+    if (vuln.epss_percentile) {
+        document.getElementById('class_epss_percentile_container').style.display = 'block';
+        document.getElementById('modalEpssPercentile').textContent = vuln.epss_percentile;
+        hasClassification = true;
+    } else {
+        document.getElementById('class_epss_percentile_container').style.display = 'none';
+    }
+
+    if (vuln.cisa_kev !== undefined && vuln.cisa_kev !== null) {
+        document.getElementById('class_cisa_kev_container').style.display = 'block';
+        document.getElementById('modalCisaKev').textContent = vuln.cisa_kev ? 'True' : 'False';
+        hasClassification = true;
+    } else {
+        document.getElementById('class_cisa_kev_container').style.display = 'none';
+    }
+
+    let validCve = vuln.cve && vuln.cve.trim() !== '' && vuln.cve.trim() !== '{}';
+
+    if (validCve) {
+        document.getElementById('class_cve_container').style.display = 'block';
+        
+        // Parse and generate hyperlinks for CVEs
+        const cves = vuln.cve.split(',').map(c => c.trim()).filter(c => c && c !== '{}');
+        const cveHtml = cves.map(c => `<a href="https://nvd.nist.gov/vuln/detail/${c}" target="_blank" style="color: #0d6efd; text-decoration: underline;">${c}</a>`).join(', ');
+        
+        document.getElementById('modalCve').innerHTML = cveHtml;
+        hasClassification = true;
+    } else {
+        document.getElementById('class_cve_container').style.display = 'none';
+    }
+
+    if (vuln.cvss_v3) {
+        document.getElementById('class_cvss_v3_container').style.display = 'block';
+        document.getElementById('modalCvssV3').textContent = vuln.cvss_v3;
+        hasClassification = true;
+    } else {
+        document.getElementById('class_cvss_v3_container').style.display = 'none';
+    }
+
+    if (vuln.cwe) {
+        document.getElementById('class_cwe_container').style.display = 'block';
+        
+        // Parse and generate hyperlinks for CWEs
+        const cwes = vuln.cwe.split(',').map(c => c.trim()).filter(c => c);
+        const cweHtml = cwes.map(c => {
+            // Extract the number from CWE-XXX
+            const match = c.match(/CWE-(\d+)/i);
+            if (match) {
+                return `<a href="https://cwe.mitre.org/data/definitions/${match[1]}.html" target="_blank" style="color: #0d6efd; text-decoration: underline;">${c}</a>`;
+            }
+            return c; // fallback if regex fails
+        }).join(', ');
+        
+        document.getElementById('modalCwe').innerHTML = cweHtml;
+        hasClassification = true;
+    } else {
+        document.getElementById('class_cwe_container').style.display = 'none';
+    }
+
+    // Display the Classification section if there is at least one classification item (CWE, CVE, CVSS, etc.)
+    document.getElementById('modalClassificationSection').style.display = hasClassification ? 'block' : 'none';
 
     // ==========================================
     // LOGIKA PENGKATEGORIAN OTOMATIS (ULTIMATE VERSION)
@@ -2321,7 +2390,7 @@ function openThreatModal(vuln) {
     const checkType = (vuln.check_type || '').toLowerCase();
     const titleLower = (vuln.title || '').toLowerCase();
     const threatSignature = checkType + " " + titleLower;
-    
+
     const categoryBadge = document.getElementById('modalThreatCategory');
     if (categoryBadge) {
         let badgeText = 'Anomaly Detection';
@@ -2331,61 +2400,61 @@ function openThreatModal(vuln) {
         if (threatSignature.includes('sql') || threatSignature.includes('injection') || threatSignature.includes('xss') || threatSignature.includes('cross-site scripting') || threatSignature.includes('rce') || threatSignature.includes('ssrf') || threatSignature.includes('xxe') || threatSignature.includes('command execution')) {
             badgeText = 'Critical Web Exploit';
             badgeClass = 'badge badge-critical'; // Merah gelap
-            
-        // 2. BROKEN ACCESS CONTROL & AUTHENTICATION
+
+            // 2. BROKEN ACCESS CONTROL & AUTHENTICATION
         } else if (threatSignature.includes('auth') || threatSignature.includes('credential') || threatSignature.includes('bypass') || threatSignature.includes('brute force') || threatSignature.includes('traversal') || threatSignature.includes('idor') || threatSignature.includes('default password')) {
             badgeText = 'Access Control Flaw';
             badgeClass = 'badge badge-high'; // Merah
-            
-        // 3. CROSS-SITE REQUEST FORGERY
+
+            // 3. CROSS-SITE REQUEST FORGERY
         } else if (threatSignature.includes('csrf') || threatSignature.includes('cross-site request forgery')) {
             badgeText = 'CSRF Vulnerability';
-            badgeClass = 'badge badge-high'; 
+            badgeClass = 'badge badge-high';
 
-        // 4. VULNERABLE & OUTDATED COMPONENTS (CVEs)
+            // 4. VULNERABLE & OUTDATED COMPONENTS (CVEs)
         } else if (threatSignature.includes('cve-') || threatSignature.includes('outdated') || threatSignature.includes('vulnerabilities found for') || threatSignature.includes('deprecated') || threatSignature.includes('end-of-life') || threatSignature.includes('version')) {
             badgeText = 'Vulnerable Component';
-            badgeClass = 'badge badge-high'; 
+            badgeClass = 'badge badge-high';
 
-        // 5. SSL / TLS / CRYPTOGRAPHY FAILURES
+            // 5. SSL / TLS / CRYPTOGRAPHY FAILURES
         } else if (threatSignature.includes('ssl') || threatSignature.includes('tls') || threatSignature.includes('certificate') || threatSignature.includes('cipher') || threatSignature.includes('poodle') || threatSignature.includes('heartbleed') || threatSignature.includes('weak encryption')) {
             badgeText = 'Crypto & SSL Flaw';
             badgeClass = 'badge badge-medium'; // Oranye
-            
-        // 6. CMS SPECIFIC (WordPress, Joomla, Plugins)
+
+            // 6. CMS SPECIFIC (WordPress, Joomla, Plugins)
         } else if (threatSignature.includes('wordpress') || threatSignature.includes('joomla') || threatSignature.includes('drupal') || threatSignature.includes('plugin') || threatSignature.includes('theme')) {
             badgeText = 'CMS Vulnerability';
-            badgeClass = 'badge badge-medium'; 
-            
-        // 7. COOKIE & SESSION MANAGEMENT
+            badgeClass = 'badge badge-medium';
+
+            // 7. COOKIE & SESSION MANAGEMENT
         } else if (threatSignature.includes('cookie') || threatSignature.includes('httponly') || threatSignature.includes('secure flag') || threatSignature.includes('samesite') || threatSignature.includes('session')) {
             badgeText = 'Insecure Session/Cookie';
             badgeClass = 'badge badge-medium';
 
-        // 8. SECURITY MISCONFIGURATION (Headers)
+            // 8. SECURITY MISCONFIGURATION (Headers)
         } else if (threatSignature.includes('header') || threatSignature.includes('hsts') || threatSignature.includes('csp') || threatSignature.includes('clickjacking') || threatSignature.includes('cors') || threatSignature.includes('mime-sniffing')) {
             badgeText = 'Security Header Missing';
             badgeClass = 'badge badge-low'; // Biru muda
-            
-        // 9. INFORMATION DISCLOSURE
+
+            // 9. INFORMATION DISCLOSURE
         } else if (threatSignature.includes('information') || threatSignature.includes('disclosure') || threatSignature.includes('leak') || threatSignature.includes('directory') || threatSignature.includes('error message') || threatSignature.includes('stack trace') || threatSignature.includes('phpinfo')) {
             badgeText = 'Information Disclosure';
-            badgeClass = 'badge badge-low'; 
-            
-        // 10. DNS, MAIL, & INFRASTRUCTURE
+            badgeClass = 'badge badge-low';
+
+            // 10. DNS, MAIL, & INFRASTRUCTURE
         } else if (threatSignature.includes('dns') || threatSignature.includes('spf') || threatSignature.includes('dkim') || threatSignature.includes('dmarc') || threatSignature.includes('zone transfer') || threatSignature.includes('smtp') || threatSignature.includes('relay')) {
             badgeText = 'DNS/Mail Misconfig';
             badgeClass = 'badge badge-info'; // Hijau/Biru Info
-            
-        // 11. NETWORK VULNERABILITY (Pastikan di bawah, menggunakan \b agar akurat)
+
+            // 11. NETWORK VULNERABILITY (Pastikan di bawah, menggunakan \b agar akurat)
         } else if (threatSignature.includes('network ') || /\bport\b/.test(threatSignature) || threatSignature.includes('tcp') || threatSignature.includes('udp') || threatSignature.includes('ftp') || threatSignature.includes('ssh')) {
             badgeText = 'Network Vulnerability';
-            badgeClass = 'badge badge-high'; 
+            badgeClass = 'badge badge-high';
 
-        // 12. DEFAULT FALLBACK
+            // 12. DEFAULT FALLBACK
         } else {
-            badgeText = 'Web Vulnerability'; 
-            badgeClass = 'badge badge-medium'; 
+            badgeText = 'Web Vulnerability';
+            badgeClass = 'badge badge-medium';
         }
 
         categoryBadge.textContent = badgeText;
@@ -2403,14 +2472,162 @@ function openThreatModal(vuln) {
     const progBadge = document.getElementById('modalProgramName');
     if (progBadge) progBadge.textContent = programName;
 
-    // Mock data for evidence logs
-    const now = new Date().toISOString();
-    document.getElementById('modalFirstSeen').textContent = formatDate(now);
-    document.getElementById('modalLastSeen').textContent = formatDate(now);
+    // Render Evidence
+    const evidenceContainer = document.getElementById('evidenceContainer');
+    if (evidenceContainer) {
+        evidenceContainer.innerHTML = ''; // clear
 
-    document.getElementById('modalLogTime').textContent = formatDate(now);
-    document.getElementById('modalLogHost').textContent = currentDomainData?.domain?.domain_name || 'host';
-    document.getElementById('modalLogMsg').textContent = `Matched signature: ${vuln.title}`;
+        if (vuln.evidence && vuln.evidence.trim() !== '') {
+            try {
+                const evJson = JSON.parse(vuln.evidence);
+                if (evJson.type === 'instances' && Array.isArray(evJson.data)) {
+                    evJson.data.forEach((inst) => {
+                        evidenceContainer.appendChild(createEvidenceCard(inst));
+                    });
+                } else if (evJson.type === 'text') {
+                    evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="white-space: pre-wrap;">${linkify(escapeHtml(evJson.data))}</div></div>`;
+                } else if (evJson.type === 'vuln_evidence' && evJson.data && evJson.data.type === 'table') {
+                    const tableData = evJson.data.data;
+                    if (tableData && tableData.headers && tableData.rows) {
+                        let html = '<div class="evidence-card" style="padding: 0; overflow: hidden; border: 1px solid #d1d5db; border-radius: 8px;"><div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 0.9em; text-align: left;">';
+                        
+                        html += '<thead style="background-color: #374151; color: #ffffff;"><tr>';
+                        tableData.headers.forEach(h => {
+                            html += `<th style="padding: 10px 15px; border-bottom: 2px solid #1f2937; font-weight: 600;">${escapeHtml(h)}</th>`;
+                        });
+                        html += '</tr></thead><tbody>';
+                        
+                        tableData.rows.forEach((r, rowIdx) => {
+                            const rowBg = rowIdx % 2 === 0 ? '#ffffff' : '#f9fafb';
+                            html += `<tr style="border-bottom: 1px solid #e5e7eb; background-color: ${rowBg};">`;
+                            r.forEach((c, idx) => {
+                                let cellContent = escapeHtml(c);
+                                if (typeof c === 'string' && c.endsWith(' Request / Response')) {
+                                    cellContent = escapeHtml(c.replace(' Request / Response', ''));
+                                }
+                                cellContent = linkify(cellContent);
+                                html += `<td style="padding: 10px 15px; color: #1f2937; word-break: break-word;">${cellContent}</td>`;
+                            });
+                            html += '</tr>';
+                        });
+                        
+                        html += '</tbody></table></div></div>';
+                        evidenceContainer.innerHTML = html;
+                    } else {
+                        evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="color: #6b7280; font-style: italic;">No specific HTTP trace/evidence attached for this vulnerability by the scanner. \n(Signature: ${escapeHtml(vuln.title)})</div></div>`;
+                    }
+                } else {
+                    // Jika ada format JSON lain, fallback
+                    evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="white-space: pre-wrap;">${linkify(escapeHtml(JSON.stringify(evJson)))}</div></div>`;
+                }
+            } catch (e) {
+                // Fallback for old data or plain text
+                evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="white-space: pre-wrap;">${linkify(escapeHtml(vuln.evidence))}</div></div>`;
+            }
+        } else {
+            evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="color: #6b7280; font-style: italic;">No specific HTTP trace/evidence attached for this vulnerability by the scanner. \n(Signature: ${escapeHtml(vuln.title)})</div></div>`;
+        }
+    }
+}
+
+function linkify(text) {
+    if (!text) return text;
+    var urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, function(url) {
+        return `<a href="${url}" target="_blank" style="color: #2563eb; text-decoration: underline;">${url}</a>`;
+    });
+}
+
+function escapeHtml(unsafe) {
+    if (!unsafe) return '';
+    return unsafe.toString()
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+}
+
+function createEvidenceCard(inst) {
+    const card = document.createElement('div');
+    card.className = 'evidence-card';
+    
+    let html = '';
+    
+    // URL Box
+    if (inst.uri) {
+        let paramStr = '';
+        if (inst.parameter) {
+            paramStr = `
+            <div class="evidence-param-box">
+                <div class="evidence-url-label">Cookie / Parameter</div>
+                <div style="font-size:0.9rem; color:var(--color-text);">${escapeHtml(inst.parameter)}</div>
+            </div>`;
+        }
+        
+        html += `
+        <div class="evidence-url-box">
+            <div>
+                <div class="evidence-url-label">URL</div>
+                <a href="${escapeHtml(inst.uri)}" target="_blank" class="evidence-url-link">${escapeHtml(inst.uri)}</a>
+            </div>
+            ${paramStr}
+        </div>`;
+    }
+    
+    // Description/Evidence string
+    if (inst.evidence || inst.details) {
+        const desc = inst.evidence || inst.details;
+        html += `<div class="evidence-desc">${escapeHtml(desc)}</div>`;
+    }
+    
+    // Request / Response Terminal
+    let traceText = '';
+    const req = inst.request_response || inst.request || inst.http_request || inst.raw_request;
+    const res = inst.response || inst.http_response || inst.raw_response;
+    
+    if (req && res && !inst.request_response) {
+        traceText = '--- REQUEST ---\n' + req + '\n\n--- RESPONSE ---\n' + res;
+    } else if (req) {
+        traceText = inst.request_response ? req : ('--- REQUEST ---\n' + req);
+    } else if (res) {
+        traceText = '--- RESPONSE ---\n' + res;
+    } else if (inst.output) {
+        traceText = inst.output;
+    }
+    
+    if (traceText) {
+        const lines = escapeHtml(traceText).trim().split('\n');
+        let linesHtml = '';
+        let contentHtml = '';
+        lines.forEach((l, i) => {
+            linesHtml += `<div>${i+1}</div>`;
+            contentHtml += `<div>> ${l || ' '}</div>`;
+        });
+        
+        html += `
+        <div class="evidence-terminal">
+            <div class="evidence-terminal-header">
+                <span>Request / Response</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            </div>
+            <div class="evidence-terminal-body">
+                <div class="evidence-terminal-lines">${linesHtml}</div>
+                <div class="evidence-terminal-content">${contentHtml}</div>
+            </div>
+            <div class="evidence-terminal-footer" onclick="this.previousElementSibling.style.maxHeight = this.previousElementSibling.style.maxHeight === 'none' ? '250px' : 'none'; this.textContent = this.previousElementSibling.style.maxHeight === 'none' ? 'Collapse' : 'Expand';">
+                Expand
+            </div>
+        </div>`;
+    }
+    
+    // Fallback if neither URL nor trace was rendered, just dump JSON
+    if (!html) {
+        html = `<div class="evidence-desc" style="white-space: pre-wrap; font-family: monospace;">${escapeHtml(JSON.stringify(inst, null, 2))}</div>`;
+    }
+    
+    card.innerHTML = html;
+    return card;
 }
 
 function closeThreatModal() {
@@ -2439,7 +2656,7 @@ function openScanModal(scan) {
     document.getElementById('scanModalDate').textContent = formatDate(scan.scan_date);
     document.getElementById('scanModalRisk').textContent = scan.risk_level || 'SAFE';
     document.getElementById('scanModalRisk').className = `meta-value text-${getSeverityClass(scan.risk_level)}`;
-    
+
     let scanType = "Unknown Scan";
     if (scan.vulnerabilities && scan.vulnerabilities.length > 0) {
         scanType = scan.vulnerabilities[0].check_type || "Unknown Scan";
@@ -2620,7 +2837,7 @@ function showLoginOverlay() {
     document.getElementById('nav-admin').style.display = 'none';
     document.getElementById('mainHeader').style.display = 'none';
     document.getElementById('notifWrapper').style.display = 'none';
-    
+
     // Reset form login & OTP
     document.getElementById('authForm').style.display = 'block';
     document.getElementById('otpForm').style.display = 'none';
@@ -2665,7 +2882,7 @@ function handleSuccessfulLogin(user) {
         document.getElementById('sidebar-user-role').innerHTML = `<span class="badge-admin-role">Admin</span>`;
         document.getElementById('nav-admin').style.display = 'flex';
         document.getElementById('notifWrapper').style.display = 'block';
-        
+
         // Tampilkan menu khusus admin
         const navInventory = document.querySelector('[onclick="switchView(\'inventory\')"]');
         const navWebScanner = document.querySelector('[onclick="switchView(\'web-scanner\')"]');
@@ -2674,12 +2891,12 @@ function handleSuccessfulLogin(user) {
         if (navWebScanner) navWebScanner.style.display = 'flex';
         if (navNetworkScanner) navNetworkScanner.style.display = 'flex';
 
-        renderNotificationList();
+        fetchNotifications();
     } else {
         roleEl.innerHTML = `<span class="badge-user-role">User</span>`;
         document.getElementById('nav-admin').style.display = 'none';
         document.getElementById('notifWrapper').style.display = 'none';
-        
+
         // Sembunyikan menu dari user biasa
         const navInventory = document.querySelector('[onclick="switchView(\'inventory\')"]');
         const navWebScanner = document.querySelector('[onclick="switchView(\'web-scanner\')"]');
@@ -2724,11 +2941,11 @@ async function handleAuthSubmit(e) {
 
     // === AMBIL TOKEN RECAPTCHA ===
     const recaptchaToken = grecaptcha.getResponse();
-    
+
     if (!recaptchaToken) {
         errMsg.innerText = "Harap selesaikan verifikasi reCAPTCHA.";
         errMsg.style.display = 'block';
-        return; 
+        return;
     }
 
     errMsg.style.display = 'none';
@@ -2743,9 +2960,9 @@ async function handleAuthSubmit(e) {
         const resp = await fetch(`${API_BASE}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                username: username, 
-                password: password, 
+            body: JSON.stringify({
+                username: username,
+                password: password,
                 recaptcha_token: recaptchaToken,
                 remember_me: rememberMe // Kirim data remember me ke backend
             })
@@ -2788,7 +3005,7 @@ async function handleOtpSubmit(e) {
     const errMsg = document.getElementById('authErrorMsg');
 
     errMsg.style.display = 'none';
-    
+
     // Username dan rememberMe diambil dari form sebelumnya
     const username = document.getElementById('authUsername').value.trim();
     const rememberMe = document.getElementById('rememberMe').checked;
@@ -2801,8 +3018,8 @@ async function handleOtpSubmit(e) {
         const resp = await fetch(`${API_BASE}/api/auth/verify_otp`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                username: username, 
+            body: JSON.stringify({
+                username: username,
                 otp: otpInput,
                 remember_me: rememberMe
             })
@@ -2812,11 +3029,11 @@ async function handleOtpSubmit(e) {
         if (resp.status === 200) {
             // Sembunyikan pesan sukses
             showToast("Sukses", "Verifikasi berhasil.", "✅");
-            
+
             // Lakukan login
             document.getElementById('otpForm').style.display = 'none';
             document.getElementById('authForm').style.display = 'block';
-            
+
             handleSuccessfulLogin(data);
         } else {
             errMsg.innerText = data.detail || "Kode OTP salah.";
@@ -2916,7 +3133,7 @@ async function handleCreateUserSubmit(e) {
             showToast("Sukses", `User baru '${username}' berhasil didaftarkan.`, "✨");
             closeCreateUserModal();
             loadAdminUsers();
-                fetchNotifications(); // Refresh daftar user
+            fetchNotifications(); // Refresh daftar user
         } else {
             errMsg.textContent = data.detail || "Gagal membuat user baru.";
             errMsg.style.display = 'block';
@@ -2952,15 +3169,15 @@ async function loadAdminUsers() {
     }
 }
 
-window.applyUserFilters = function(preservePage = false) {
+window.applyUserFilters = function (preservePage = false) {
     const searchVal = (document.getElementById('userSearchInput')?.value || '').toLowerCase();
-    
+
     filteredAdminUsers = allAdminUsers.filter(u => {
         if (!searchVal) return true;
-        return (u.username && u.username.toLowerCase().includes(searchVal)) || 
-               (u.role && u.role.toLowerCase().includes(searchVal));
+        return (u.username && u.username.toLowerCase().includes(searchVal)) ||
+            (u.role && u.role.toLowerCase().includes(searchVal));
     });
-    
+
     // Sort logic: 
     // 1. Role: 'admin' > 'user'
     // 2. Status: online > offline
@@ -2969,27 +3186,27 @@ window.applyUserFilters = function(preservePage = false) {
     filteredAdminUsers.sort((a, b) => {
         if (a.role === 'admin' && b.role !== 'admin') return -1;
         if (a.role !== 'admin' && b.role === 'admin') return 1;
-        
+
         const aOnline = a.is_online ? 1 : 0;
         const bOnline = b.is_online ? 1 : 0;
         if (aOnline !== bOnline) return bOnline - aOnline;
-        
+
         const timeA = new Date(a.last_online || 0).getTime();
         const timeB = new Date(b.last_online || 0).getTime();
         if (timeA !== timeB) return timeB - timeA;
-        
+
         const nameA = (a.username || '').toLowerCase();
         const nameB = (b.username || '').toLowerCase();
         return nameA.localeCompare(nameB);
     });
-    
+
     if (!preservePage) {
         userCurrentPage = 1;
     }
     renderUserTable();
 };
 
-window.changeUserPage = function(delta) {
+window.changeUserPage = function (delta) {
     const totalPages = Math.ceil(filteredAdminUsers.length / userRowsPerPage) || 1;
     let newPage = userCurrentPage + delta;
     if (newPage < 1) newPage = 1;
@@ -3000,7 +3217,7 @@ window.changeUserPage = function(delta) {
     }
 };
 
-window.changeUserRowsPerPage = function() {
+window.changeUserRowsPerPage = function () {
     const select = document.getElementById('userRowsSelect');
     if (!select) return;
     userRowsPerPage = parseInt(select.value, 10);
@@ -3008,7 +3225,7 @@ window.changeUserRowsPerPage = function() {
     renderUserTable();
 };
 
-window.jumpUserPage = function() {
+window.jumpUserPage = function () {
     const input = document.getElementById('userPageInput');
     if (!input) return;
     let page = parseInt(input.value, 10);
@@ -3022,20 +3239,20 @@ window.jumpUserPage = function() {
 function renderUserPagination(totalItems) {
     const container = document.getElementById('userPaginationControls');
     if (!container) return;
-    
+
     if (totalItems === 0) {
         container.style.display = 'none';
         return;
     }
-    
+
     container.style.display = 'flex';
     const totalPages = Math.ceil(totalItems / userRowsPerPage) || 1;
-    
+
     const prevBtn = document.getElementById('userPrevPageBtn');
     const nextBtn = document.getElementById('userNextPageBtn');
     const pageInput = document.getElementById('userPageInput');
     const totalPagesSpan = document.getElementById('userTotalPages');
-    
+
     if (prevBtn) prevBtn.disabled = (userCurrentPage === 1);
     if (nextBtn) nextBtn.disabled = (userCurrentPage === totalPages);
     if (pageInput) {
@@ -3056,7 +3273,7 @@ function renderUserTable() {
     const totalItems = filteredAdminUsers.length;
     const totalPages = Math.ceil(totalItems / userRowsPerPage) || 1;
     if (userCurrentPage > totalPages) userCurrentPage = totalPages;
-    
+
     const startIdx = (userCurrentPage - 1) * userRowsPerPage;
     const endIdx = Math.min(startIdx + userRowsPerPage, totalItems);
     const paginatedUsers = filteredAdminUsers.slice(startIdx, endIdx);
@@ -3068,19 +3285,30 @@ function renderUserTable() {
             : `<span class="badge-user-role">User</span>`;
 
         const isOnline = u.is_online;
-        const statusBadge = isOnline
-            ? `<span class="status-indicator status-online">Online</span>`
-            : `<span class="status-indicator status-offline">Offline</span>`;
-
-        const lastActiveText = u.is_online ? "Baru saja aktif" : formatRelativeTime(u.last_online);
+        const lastActiveText = u.is_online ? "Baru saja" : formatRelativeTime(u.last_online);
 
         // Logika check timeout
         let isTimedOut = false;
+        let timeoutText = '';
         if (u.timeout_until) {
             const timeoutDate = new Date(u.timeout_until);
-            if (timeoutDate > new Date()) {
+            const now = new Date();
+            if (timeoutDate > now) {
                 isTimedOut = true;
+                const diffSecs = Math.floor((timeoutDate - now) / 1000);
+                const mins = Math.floor(diffSecs / 60);
+                const secs = diffSecs % 60;
+                timeoutText = ` (Sisa ${mins}m ${secs}s)`;
             }
+        }
+
+        let statusBadge = '';
+        if (isOnline) {
+            statusBadge = `<span class="status-indicator status-online">Online</span>`;
+        } else if (isTimedOut) {
+            statusBadge = `<span class="status-indicator status-timeout">Timeout</span>`;
+        } else {
+            statusBadge = `<span class="status-indicator status-offline">Offline</span>`;
         }
 
         let actionButtons = '';
@@ -3088,9 +3316,12 @@ function renderUserTable() {
             actionButtons = `<span style="color:var(--text-tertiary); font-style:italic;">Akun Anda</span>`;
         } else if (isTimedOut) {
             actionButtons = `
-                <div style="display: flex; gap: 8px; align-items: center;">
-                    <button class="btn-timeout" style="border-color:#22c55e; color:#22c55e; margin: 0;" onclick="triggerRemoveTimeout('${u.username}')">Cabut Timeout</button>
-                    <button class="btn-delete-user" style="margin: 0;" onclick="triggerDeleteUser('${u.username}')">Hapus</button>
+                <div style="display: flex; flex-direction: column; gap: 4px; justify-content: center;">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="btn-timeout" style="border-color:#22c55e; color:#22c55e; margin: 0;" onclick="triggerRemoveTimeout('${u.username}')">Cabut Timeout</button>
+                        <button class="btn-delete-user" style="margin: 0;" onclick="triggerDeleteUser('${u.username}')">Hapus</button>
+                    </div>
+                    <span style="font-size: 11px; color: #ef4444; font-weight: 500; margin-left: 2px;">${timeoutText.trim()}</span>
                 </div>
             `;
         } else {
@@ -3116,7 +3347,7 @@ function renderUserTable() {
             </tr>
         `;
     }).join('');
-    
+
     renderUserPagination(totalItems);
 }
 
@@ -3130,7 +3361,7 @@ async function triggerForceLogout(username) {
         if (resp.status === 200) {
             showToast("Force Logout", `User '${username}' telah berhasil dikeluarkan dari sistem.`, "🔴");
             loadAdminUsers();
-                fetchNotifications();
+            fetchNotifications();
         } else {
             alert(data.detail || "Gagal melakukan force logout.");
         }
@@ -3139,29 +3370,29 @@ async function triggerForceLogout(username) {
     }
 }
 
-window.openTimeoutModal = function(username) {
+window.openTimeoutModal = function (username) {
     currentTimeoutUser = username;
     document.getElementById('timeoutMinutesInput').value = 30; // default 30 menit
     const modal = document.getElementById('timeoutActionModalOverlay');
     if (modal) modal.classList.add('active');
 };
 
-window.closeTimeoutModal = function() {
+window.closeTimeoutModal = function () {
     currentTimeoutUser = null;
     const modal = document.getElementById('timeoutActionModalOverlay');
     if (modal) modal.classList.remove('active');
 };
 
-window.submitTimeout = async function() {
+window.submitTimeout = async function () {
     if (!currentTimeoutUser) return;
     const minutesVal = document.getElementById('timeoutMinutesInput').value;
     const minutes = parseInt(minutesVal, 10);
-    
+
     if (isNaN(minutes) || minutes < 1) {
         alert("Masukkan durasi menit yang valid (minimal 1).");
         return;
     }
-    
+
     try {
         const resp = await fetch(`${API_BASE}/api/admin/users/${currentTimeoutUser}/timeout`, {
             method: 'POST',
@@ -3169,11 +3400,11 @@ window.submitTimeout = async function() {
             body: JSON.stringify({ minutes: minutes })
         });
         const data = await resp.json();
-        
+
         if (resp.status === 200) {
             showToast("User Ditangguhkan", `User '${currentTimeoutUser}' ditangguhkan selama ${minutes} menit.`, "⏳");
             loadAdminUsers();
-                fetchNotifications();
+            fetchNotifications();
         } else {
             alert(data.detail || "Gagal melakukan penangguhan.");
         }
@@ -3192,7 +3423,7 @@ async function triggerRemoveTimeout(username) {
         if (resp.status === 200) {
             showToast("Timeout Dicabut", `Penangguhan untuk user '${username}' berhasil dicabut!`, "💚");
             loadAdminUsers();
-                fetchNotifications();
+            fetchNotifications();
         } else {
             alert(data.detail || "Gagal mencabut status timeout.");
         }
@@ -3211,7 +3442,7 @@ async function triggerDeleteUser(username) {
         if (resp.status === 200) {
             showToast("Hapus User", `User '${username}' berhasil dihapus dari sistem.`, "🗑️");
             loadAdminUsers();
-                fetchNotifications();
+            fetchNotifications();
         } else {
             alert(data.detail || "Gagal menghapus user.");
         }
@@ -3229,7 +3460,7 @@ function formatRelativeTime(dateStr) {
         const diffMs = now - d;
         const diffMins = Math.floor(diffMs / 60000);
 
-        if (diffMins < 1) return 'Baru saja aktif';
+        if (diffMins < 1) return 'Baru saja';
         if (diffMins < 60) return `${diffMins} menit yang lalu`;
 
         const diffHours = Math.floor(diffMins / 60);
@@ -3285,28 +3516,36 @@ function clearBadge() {
 
 async function markAllNotificationsAsRead(e) {
     if (e) e.stopPropagation();
-    try {
-        await fetch('/api/notifications/read-all', { method: 'PUT' });
-        allNotifications.forEach(n => n.unread = false);
-        renderNotificationList();
-        showToast("Notifikasi", "Semua notifikasi ditandai telah dibaca.", "✔️");
-    } catch (e) {}
-}
 
+    if (allNotifications.length === 0) return;
+
+    if (!confirm("Apakah Anda yakin ingin menghapus semua notifikasi?")) {
+        return;
+    }
+
+    try {
+        const deletedNotifs = JSON.parse(localStorage.getItem('dsti_deleted_notifs_v3') || '[]');
+        allNotifications.forEach(n => {
+            if (!deletedNotifs.includes(n.id)) deletedNotifs.push(n.id);
+        });
+        localStorage.setItem('dsti_deleted_notifs_v3', JSON.stringify(deletedNotifs));
+
+        allNotifications = [];
+        renderNotificationList();
+        showToast("Notifikasi", "Semua notifikasi dibersihkan.", "✔️");
+    } catch (e) { }
+}
 
 async function deleteNotification(notifId, e) {
     if (e) e.stopPropagation();
-    
+
     try {
-        const res = await fetch(`/api/notifications/${notifId}`, {
-            method: 'DELETE'
-        });
-        const data = await res.json();
-        
-        if (data.status === 'success') {
-            allNotifications = allNotifications.filter(n => n.id !== notifId);
-            renderNotificationList();
-        }
+        const deletedNotifs = JSON.parse(localStorage.getItem('dsti_deleted_notifs_v3') || '[]');
+        if (!deletedNotifs.includes(notifId)) deletedNotifs.push(notifId);
+        localStorage.setItem('dsti_deleted_notifs_v3', JSON.stringify(deletedNotifs));
+
+        allNotifications = allNotifications.filter(n => n.id !== notifId);
+        renderNotificationList();
     } catch (err) {
         console.error("Gagal menghapus notifikasi:", err);
     }
@@ -3317,14 +3556,22 @@ async function fetchNotifications() {
         const res = await fetch('/api/notifications');
         const data = await res.json();
         if (data.status === 'success') {
-            allNotifications = data.data.map(n => ({
-                id: n.id,
-                title: n.title,
-                message: n.message,
-                type: n.type,
-                timestamp: n.created_at,
-                unread: !n.is_read
-            }));
+            const allowedTypes = ['success', 'scan_complete', 'scan_finished'];
+            const deletedNotifs = JSON.parse(localStorage.getItem('dsti_deleted_notifs_v3') || '[]');
+            const readNotifs = JSON.parse(localStorage.getItem('dsti_read_notifs') || '[]');
+
+            allNotifications = data.data
+                .filter(n => allowedTypes.includes(n.type) && !deletedNotifs.includes(n.id))
+                .map(n => ({
+                    id: n.id,
+                    title: n.title,
+                    message: n.message,
+                    type: n.type,
+                    timestamp: n.created_at,
+                    unread: !n.is_read && !readNotifs.includes(n.id),
+                    domain: n.domain,
+                    time: n.time || n.created_at
+                }));
             renderNotificationList();
         }
     } catch (e) {
@@ -3349,15 +3596,25 @@ function renderNotificationList() {
         
         // 1. Tentukan Icon
         let icon = '🔔';
-        if (n.type === 'scan_complete' || n.type === 'scan_finished') icon = '✅';
+        if (n.type === 'scan_complete' || n.type === 'success') icon = '✅';
         else if (n.type === 'scan_failed') icon = '❌';
         else if (n.type === 'user_login') icon = '👤';
-        
-        // 2. Fallback Judul & Pesan (Agar aman dari undefined/websocket legacy)
+        else if (n.type === 'scan_finished') icon = '🚀';
+
+        let absoluteTime = '';
+        if (n.timestamp) {
+            const dateObj = new Date(n.timestamp);
+            if (!isNaN(dateObj)) {
+                const dateOpts = { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+                absoluteTime = dateObj.toLocaleString('id-ID', dateOpts);
+            }
+        }
+
+        // 2. Fallback Judul & Pesan
         const safeTitle = n.title ? escapeHtml(n.title) : 'Notifikasi Sistem';
         const safeMessage = n.message ? escapeHtml(n.message) : (n.domain ? `Scan untuk ${escapeHtml(n.domain)} telah selesai.` : 'Pesan sistem terbaru.');
 
-        // HTML Template yang sudah di-fix (Tidak ada div tumpang tindih)
+        // HTML Template yang sudah di-fix
         return `
             <div class="notif-item ${unreadClass}" onclick="markAsRead('${n.id}')">
                 <div class="notif-unread-dot"></div>
@@ -3367,10 +3624,15 @@ function renderNotificationList() {
                         <strong>${safeTitle}</strong><br>
                         <span style="color: #64748b; font-size: 13px;">${safeMessage}</span>
                     </div>
-                    <div class="notif-time" style="margin-top: 4px;">${relativeTime}</div>
+                    <div class="notif-time" style="margin-top: 4px;">${relativeTime} ${absoluteTime ? `(${absoluteTime})` : ''}</div>
                 </div>
                 <div class="notif-actions">
-                    <button class="notif-action-btn" onclick="deleteNotification('${n.id}', event)" title="Hapus notifikasi">✕</button>
+                    <button class="notif-action-btn" onclick="deleteNotification('${n.id}', event)" title="Hapus notifikasi">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>
                 </div>
             </div>
         `;
@@ -3379,32 +3641,26 @@ function renderNotificationList() {
 
 async function markAsRead(notifId) {
     const notif = allNotifications.find(n => n.id === notifId);
-    if (notif && notif.unread) {
-        try {
-            const res = await fetch(`/api/notifications/${notifId}/read`, {
-                method: 'PUT'
-            });
-            const data = await res.json();
-            
-            if (data.status === 'success') {
-                notif.unread = false;
-                renderNotificationList();
-            }
-        } catch (err) {
-            console.error("Gagal menandai notifikasi telah dibaca:", err);
-        }
-    }
-    
+    if (!notif) return;
+
+    // Tandai sebagai read, jangan dihapus
+    const readNotifs = JSON.parse(localStorage.getItem('dsti_read_notifs') || '[]');
+    if (!readNotifs.includes(notifId)) readNotifs.push(notifId);
+    localStorage.setItem('dsti_read_notifs', JSON.stringify(readNotifs));
+
+    notif.unread = false;
+    renderNotificationList();
+
     // Tindakan spesifik ketika notifikasi diklik
     if (notif) {
         if (notif.type === 'scan_finished') {
             // Tutup dropdown notifikasi (jika terbuka)
             const dropdown = document.getElementById('notificationDropdown');
             if (dropdown) dropdown.style.display = 'none';
-            
+
             // Refresh data dari backend agar scan terbaru termuat ke memori (allVulns)
             await loadVulnerabilities(true);
-            
+
             // Cari dan buka detail
             jumpToScanDetail(notif.time, notif.domain, false);
         } else {
@@ -3434,7 +3690,7 @@ function connectLiveWebSocket(sessionId) {
         try {
             const data = JSON.parse(event.data);
 
-            
+
             if (data.event === 'new_notification') {
                 if (currentUser && currentUser.role === 'admin') {
                     showToast(
@@ -3449,28 +3705,13 @@ function connectLiveWebSocket(sessionId) {
                     const activeNav = document.querySelector('.sidebar-nav .nav-item.active');
                     if (activeNav && activeNav.getAttribute('onclick').includes('admin')) {
                         loadAdminUsers();
-                fetchNotifications();
+                        fetchNotifications();
                     }
                 }
             } else if (data.event === 'scan_finished') {
-                if (currentUser && currentUser.role === 'admin') {
-                    showToast(
-                        "Scan Selesai",
-                        `🚀 Scan untuk domain <b>${escapeHtml(data.domain)}</b> telah selesai dijalankan.`,
-                        "✅"
-                    );
-                    const notif = {
-                        id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                        type: 'scan_finished',
-                        domain: data.domain,
-                        time: data.time,
-                        timestamp: new Date().toISOString(),
-                        unread: true
-                    };
-                    allNotifications.unshift(notif);
-                    localStorage.setItem('dsti_notifs', JSON.stringify(allNotifications));
-                    renderNotificationList();
-                }
+                // Refresh data if needed, but new_notification already handles the toast and notification list.
+                if (typeof fetchActiveScans === 'function') fetchActiveScans();
+                if (typeof refreshData === 'function') refreshData(true);
             } else if (data.event === 'force_logout') {
                 window.kickedReason = 'force_logout';
                 showToast("Sesi Diakhiri", "Anda telah dipaksa keluar oleh Administrator.", "⚠️");
@@ -3554,9 +3795,9 @@ document.getElementById('generateReportForm')?.addEventListener('submit', (e) =>
     e.preventDefault();
     const historyId = document.getElementById('reportHistoryId').value;
     if (!historyId) return;
-    
+
     const form = e.target;
-    
+
     currentReportPayload = {
         history_id: parseInt(historyId),
         report_type: form.report_type.value,
@@ -3570,9 +3811,9 @@ document.getElementById('generateReportForm')?.addEventListener('submit', (e) =>
         include_accepted: form.filter_accepted.checked,
         include_fixed: form.filter_fixed.checked
     };
-    
+
     document.getElementById('generateReportModalOverlay').classList.remove('active');
-    
+
     // Reset state & show report action modal
     setReportAction('download');
     document.getElementById('reportActionModalOverlay').classList.add('active');
@@ -3584,27 +3825,27 @@ function setReportAction(action) {
     const cardShare = document.getElementById('cardShareOption');
     const emailContainer = document.getElementById('emailInputsContainer');
     const btnProcess = document.getElementById('btnProcessReportAction');
-    
+
     if (action === 'download') {
         cardDownload.style.borderColor = 'var(--primary)';
         cardDownload.style.background = '#f8fafc';
         cardDownload.querySelector('svg').style.color = 'var(--primary)';
-        
+
         cardShare.style.borderColor = 'var(--color-border)';
         cardShare.style.background = '#ffffff';
         cardShare.querySelector('svg').style.color = 'var(--color-muted)';
-        
+
         emailContainer.style.display = 'none';
         btnProcess.textContent = 'Download';
     } else {
         cardShare.style.borderColor = 'var(--primary)';
         cardShare.style.background = '#f8fafc';
         cardShare.querySelector('svg').style.color = 'var(--primary)';
-        
+
         cardDownload.style.borderColor = 'var(--color-border)';
         cardDownload.style.background = '#ffffff';
         cardDownload.querySelector('svg').style.color = 'var(--color-muted)';
-        
+
         emailContainer.style.display = 'block';
         btnProcess.textContent = 'Kirim Email';
     }
@@ -3634,13 +3875,13 @@ function addEmailInputRow() {
 
 document.getElementById('btnProcessReportAction')?.addEventListener('click', async () => {
     if (!currentReportPayload) return;
-    
+
     const btnSubmit = document.getElementById('btnProcessReportAction');
     const originalText = btnSubmit.textContent;
     btnSubmit.innerHTML = 'Memproses...</span>';
     btnSubmit.disabled = true;
     btnSubmit.style.opacity = '0.7';
-    
+
     try {
         if (currentReportAction === 'download') {
             const resp = await fetch(`${API_BASE}/api/reports/generate`, {
@@ -3648,16 +3889,16 @@ document.getElementById('btnProcessReportAction')?.addEventListener('click', asy
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(currentReportPayload)
             });
-            
+
             if (!resp.ok) {
                 const errData = await resp.json();
                 throw new Error(errData.detail || 'Gagal generate report');
             }
-            
-            const blob = await resp.blob(); 
+
+            const blob = await resp.blob();
             document.getElementById('reportActionModalOverlay').classList.remove('active');
             showToast('Success', 'Report successfully downloaded!', '✅');
-            
+
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -3667,33 +3908,33 @@ document.getElementById('btnProcessReportAction')?.addEventListener('click', asy
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-            
+
         } else {
             // Share via Email
             const emailInputs = document.querySelectorAll('.email-recipient-input');
             const emails = Array.from(emailInputs).map(inp => inp.value.trim()).filter(v => v);
-            
+
             if (emails.length === 0) {
                 throw new Error("Masukkan setidaknya satu alamat email");
             }
-            
+
             for (const email of emails) {
                 if (!email.includes('@')) throw new Error(`Email tidak valid: ${email}`);
             }
-            
+
             const sharePayload = { ...currentReportPayload, emails };
-            
+
             const resp = await fetch(`${API_BASE}/api/reports/share`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(sharePayload)
             });
-            
+
             if (!resp.ok) {
                 const errData = await resp.json();
                 throw new Error(errData.detail || 'Gagal mengirim email');
             }
-            
+
             const data = await resp.json();
             document.getElementById('reportActionModalOverlay').classList.remove('active');
             showToast('Success', data.message, '✅');
@@ -3717,14 +3958,14 @@ function fetchActiveScans() {
         .then(data => {
             if (data.status === 'success') {
                 const allLive = data.data || [];
-                
+
                 // Filter cerdas: ID 350 atau 385 adalah Network Scanner. Sisanya lempar ke Web Scanner.
                 liveNetworkScans = allLive.filter(s => s.type.includes('350') || s.type.includes('385') || s.type.toLowerCase().includes('network'));
                 liveWebScans = allLive.filter(s => !liveNetworkScans.includes(s));
 
                 // Perbarui tabel Web Scans
                 if (typeof applyWebFilters === 'function') applyWebFilters(true);
-                
+
                 // Panggil render Network Scans agar memunculkan progress Live
                 if (typeof applyNetworkFilters === 'function') applyNetworkFilters(true);
 
@@ -3749,14 +3990,14 @@ function processWebScans(preservePage = false) {
             return !scanType.toLowerCase().includes("network");
         }
         return false;
-    }); 
-    
+    });
+
     applyWebFilters(preservePage);
 }
 
 function applyWebFilters(preservePage = false) {
     const searchInput = document.getElementById('webScannerSearch')?.value.toLowerCase() || '';
-    
+
     let dbFiltered = webScans.filter(scan => {
         const domainName = (scan.domains?.domain_name || '').toLowerCase();
         const ip = (scan.domains?.ip_address || '').toLowerCase();
@@ -3782,7 +4023,7 @@ function renderWebScannerTable() {
     const tbody = document.getElementById('webScannerTableBody');
     const paginationContainer = document.getElementById('webPaginationControls');
     const thCount = document.getElementById('thWebScansCount');
-    
+
     if (!tbody) return;
 
     if (!filteredWebScans || filteredWebScans.length === 0) {
@@ -3797,7 +4038,7 @@ function renderWebScannerTable() {
 
     const totalPages = Math.ceil(totalItems / webRowsPerPage) || 1;
     if (webCurrentPage > totalPages) webCurrentPage = totalPages;
-    
+
     const startIdx = (webCurrentPage - 1) * webRowsPerPage;
     const endIdx = Math.min(startIdx + webRowsPerPage, totalItems);
     const paginatedScans = filteredWebScans.slice(startIdx, endIdx);
@@ -3807,7 +4048,7 @@ function renderWebScannerTable() {
 
         let domainName = '';
         let targetSubtitle = '';
-        let dateStr = '-'; 
+        let dateStr = '-';
         let statusHtml = '';
         let summaryHtml = '';
         let actionBtn = '';
@@ -3823,7 +4064,7 @@ function renderWebScannerTable() {
             targetSubtitle = scan.target || "Scan in progress...";
             scanIdLabel = scan.type || `Website Scanner ${scan.scan_id}`;
             const progressVal = scan.progress || 0;
-            
+
             // Konversi Waktu (EEST ke WIB)
             if (scan.start_time) {
                 let rawTime = scan.start_time;
@@ -3831,15 +4072,15 @@ function renderWebScannerTable() {
                 if (!rawTime.includes('+') && !rawTime.includes('Z')) {
                     rawTime += '+03:00';
                 }
-                const d = new Date(rawTime); 
+                const d = new Date(rawTime);
                 if (!isNaN(d.getTime())) {
                     const year = d.getFullYear();
                     const month = String(d.getMonth() + 1).padStart(2, '0');
                     const day = String(d.getDate()).padStart(2, '0');
-                    const time = d.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', second:'2-digit' });
+                    const time = d.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                     dateStr = `${year}-${month}-${day} ${time}`;
                 } else {
-                    dateStr = scan.start_time; 
+                    dateStr = scan.start_time;
                 }
             }
 
@@ -3857,7 +4098,7 @@ function renderWebScannerTable() {
                 </div>
             `;
             summaryHtml = `<span style="color: #64748b; font-size: 13px;">${scan.live_status || 'running'}...</span>`;
-            
+
             actionBtn = `<button class="btn btn-outline" onclick="stopActiveScan(${scan.scan_id})" style="border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, 0.03);" onmouseover="this.style.background='#ef4444'; this.style.color='#ffffff';" onmouseout="this.style.background='rgba(239, 68, 68, 0.03)'; this.style.color='#ef4444';">Stop Scan</button>`;
 
             return `
@@ -3887,11 +4128,11 @@ function renderWebScannerTable() {
             domainName = scan.domains?.domain_name || 'Unknown Target';
             targetSubtitle = scan.domains?.ip_address || '-';
             scanIdLabel = scan.vulnerabilities && scan.vulnerabilities.length > 0 ? scan.vulnerabilities[0].check_type : 'Website Scanner';
-            
+
             if (scan.scan_date) {
                 const d = new Date(scan.scan_date);
                 if (!isNaN(d.getTime())) {
-                    dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${d.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', second:'2-digit' })}`;
+                    dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${d.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
                 }
             }
 
@@ -3919,7 +4160,7 @@ function renderWebScannerTable() {
                     <span style="background:var(--sev-low); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${low}</span>
                 </div>
             `;
-            
+
             actionBtn = `<button class="btn btn-outline" onclick="openScanModalIndex(${actualIndex}); event.stopPropagation();">View Report</button>`;
 
             return `
@@ -3949,8 +4190,8 @@ function renderWebScannerTable() {
     }).join('');
 
     if (paginationContainer) {
-        paginationContainer.style.padding = '16px 24px'; 
-        
+        paginationContainer.style.padding = '16px 24px';
+
         paginationContainer.innerHTML = `
             <div class="pagination-left" style="display: flex; align-items: center;">
                 <span style="font-size: 13px; color: #64748b;">Tampilkan per halaman:</span>
@@ -3978,7 +4219,7 @@ function renderWebScannerTable() {
     window.syncWebSelectAll();
 }
 
-window.changeWebPage = function(newPage) {
+window.changeWebPage = function (newPage) {
     const parsedPage = parseInt(newPage);
     if (!isNaN(parsedPage) && parsedPage >= 1) {
         webCurrentPage = parsedPage;
@@ -3986,7 +4227,7 @@ window.changeWebPage = function(newPage) {
     }
 };
 
-window.changeWebRows = function(newRows) {
+window.changeWebRows = function (newRows) {
     webRowsPerPage = parseInt(newRows);
     webCurrentPage = 1;
     renderWebScannerTable();
@@ -3994,7 +4235,7 @@ window.changeWebRows = function(newRows) {
 
 window.selectedWebScans = new Set();
 
-window.toggleWebCheckbox = function(e, scanId) {
+window.toggleWebCheckbox = function (e, scanId) {
     e.stopPropagation();
     if (e.target.checked) {
         window.selectedWebScans.add(scanId);
@@ -4004,7 +4245,7 @@ window.toggleWebCheckbox = function(e, scanId) {
     window.syncWebSelectAll();
 };
 
-window.toggleAllWebScans = function(headerCb) {
+window.toggleAllWebScans = function (headerCb) {
     const rowCbs = document.querySelectorAll('#webScannerTableBody input[type="checkbox"]');
     const isChecked = headerCb.checked;
 
@@ -4018,10 +4259,10 @@ window.toggleAllWebScans = function(headerCb) {
     });
 };
 
-window.syncWebSelectAll = function() {
+window.syncWebSelectAll = function () {
     const selectAllCb = document.getElementById('selectAllWebScans');
     const rowCbs = document.querySelectorAll('#webScannerTableBody input[type="checkbox"]');
-    
+
     if (selectAllCb && rowCbs.length > 0) {
         const allChecked = Array.from(rowCbs).every(cb => cb.checked);
         selectAllCb.checked = allChecked;
@@ -4031,26 +4272,26 @@ window.syncWebSelectAll = function() {
 };
 
 function stopActiveScan(scanId) {
-    if(!confirm('Are you sure you want to stop this scan?')) return;
-    
+    if (!confirm('Are you sure you want to stop this scan?')) return;
+
     fetch(`${API_BASE}/api/scans/stop`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scan_id: scanId })
     })
-    .then(res => res.json())
-    .then(data => {
-        if (data.status === 'success') {
-            showToast('Success', data.message, '✅');
-            fetchActiveScans();
-        } else {
-            showToast('Error', data.detail || data.message, '❌');
-        }
-    })
-    .catch(err => {
-        console.error('Error stopping scan:', err);
-        showToast('Error', 'An error occurred while stopping the scan.', '❌');
-    });
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showToast('Success', data.message, '✅');
+                fetchActiveScans();
+            } else {
+                showToast('Error', data.detail || data.message, '❌');
+            }
+        })
+        .catch(err => {
+            console.error('Error stopping scan:', err);
+            showToast('Error', 'An error occurred while stopping the scan.', '❌');
+        });
 }
 
 // (Web Scanner polling is handled inside switchView directly)
@@ -4058,19 +4299,19 @@ function stopActiveScan(scanId) {
 function openWebScanModal() {
     document.getElementById('webScanModalOverlay').classList.add('active');
     const select = document.getElementById('webScanTargetSelect');
-    
+
     if (!allDomains || allDomains.length === 0) {
         select.innerHTML = '<option value="">No domains available</option>';
         return;
     }
-    
-    select.innerHTML = '<option value="">-- Select a domain --</option>' + 
+
+    select.innerHTML = '<option value="">Select a domain</option>' +
         allDomains.filter(d => d.is_active).map(d => `<option value="${d.domain_name}">${d.domain_name}</option>`).join('');
 
     // Setup scan type radio card interactivity
     const radios = document.querySelectorAll('input[name="webScanType"]');
     radios.forEach(radio => {
-        radio.addEventListener('change', function() {
+        radio.addEventListener('change', function () {
             radios.forEach(r => {
                 const card = r.closest('label');
                 if (r.checked) {
@@ -4088,15 +4329,15 @@ function openWebScanModal() {
 function submitWebScan() {
     const select = document.getElementById('webScanTargetSelect');
     const domain = select.value;
-    
+
     const scanTypeElement = document.querySelector('input[name="webScanType"]:checked');
     const selectedScanType = scanTypeElement ? scanTypeElement.value : 'deep';
-    
+
     if (!domain) {
         showToast('Error', 'Please select a domain to scan.', '❌');
         return;
     }
-    
+
     const btnSubmit = document.getElementById('btnSubmitWebScan');
     btnSubmit.disabled = true;
     btnSubmit.style.opacity = '0.5';
@@ -4104,34 +4345,34 @@ function submitWebScan() {
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation: spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="8"></circle></svg>
         Launching...
     `;
-    
+
     fetch(`${API_BASE}/api/web-scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targets: [domain], scan_type: selectedScanType })
     })
-    .then(res => res.json())
-    .then(data => {
-        if (data.status === 'success') {
-            showToast('Success', data.message, '✅');
-            document.getElementById('webScanModalOverlay').classList.remove('active');
-            fetchActiveScans();
-        } else {
-            showToast('Error', data.detail || data.message, '❌');
-        }
-    })
-    .catch(err => {
-        console.error('Error starting web scan:', err);
-        showToast('Error', 'An error occurred while starting the web scan.', '❌');
-    })
-    .finally(() => {
-        btnSubmit.disabled = false;
-        btnSubmit.style.opacity = '1';
-        btnSubmit.innerHTML = `
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showToast('Success', data.message, '✅');
+                document.getElementById('webScanModalOverlay').classList.remove('active');
+                fetchActiveScans();
+            } else {
+                showToast('Error', data.detail || data.message, '❌');
+            }
+        })
+        .catch(err => {
+            console.error('Error starting web scan:', err);
+            showToast('Error', 'An error occurred while starting the web scan.', '❌');
+        })
+        .finally(() => {
+            btnSubmit.disabled = false;
+            btnSubmit.style.opacity = '1';
+            btnSubmit.innerHTML = `
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             Launch Scan
         `;
-    });
+        });
 }
 
 // Network Scanner
@@ -4139,19 +4380,19 @@ function submitWebScan() {
 function openNetworkScanModal() {
     document.getElementById('networkScanModalOverlay').classList.add('active');
     const select = document.getElementById('networkScanTargetSelect');
-    
+
     if (!allDomains || allDomains.length === 0) {
         select.innerHTML = '<option value="">No domains available</option>';
         return;
     }
-    
-    select.innerHTML = '<option value="">-- Select a target --</option>' + 
+
+    select.innerHTML = '<option value="">Select a domain</option>' +
         allDomains.filter(d => d.is_active).map(d => `<option value="${d.domain_name}">${d.domain_name}</option>`).join('');
 
     // Setup interaktivitas klik pada kotak radio button (Deep vs Light)
     const radios = document.querySelectorAll('input[name="networkScanType"]');
     radios.forEach(radio => {
-        radio.addEventListener('change', function() {
+        radio.addEventListener('change', function () {
             radios.forEach(r => {
                 const card = r.closest('label');
                 if (r.checked) {
@@ -4169,56 +4410,56 @@ function openNetworkScanModal() {
 function submitNetworkScan() {
     const select = document.getElementById('networkScanTargetSelect');
     const domain = select.value;
-    
+
     // ✅ TAMBAHKAN KODE INI: Tangkap radio button yang sedang tercentang
     const scanTypeElement = document.querySelector('input[name="networkScanType"]:checked');
     const selectedScanType = scanTypeElement ? scanTypeElement.value : 'deep';
-    
+
     if (!domain) {
         showToast('Error', 'Please select a target to scan.', '❌');
         return;
     }
-    
+
     const btnSubmit = document.getElementById('btnSubmitNetworkScan');
     btnSubmit.disabled = true;
     btnSubmit.style.opacity = '0.5';
     btnSubmit.innerHTML = `...`; // (biarkan kode animasi loading tetap sama)
-    
-    fetch(`${API_BASE}/api/network-scan`, { 
+
+    fetch(`${API_BASE}/api/network-scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // ✅ UBAH BODY INI: Sisipkan scan_type agar dikirim ke server
-        body: JSON.stringify({ 
+        body: JSON.stringify({
             targets: [domain],
-            scan_type: selectedScanType 
+            scan_type: selectedScanType
         })
     })
-    .then(res => res.json())
-    .then(data => {
-        if (data.status === 'success') {
-            showToast('Success', data.message, '✅');
-            document.getElementById('networkScanModalOverlay').classList.remove('active');
-            refreshData(true); // Segarkan tabel di belakang layar
-        } else {
-            showToast('Error', data.detail || data.message, '❌');
-        }
-    })
-    .catch(err => {
-        console.error('Error starting network scan:', err);
-        showToast('Error', 'An error occurred while starting the network scan.', '❌');
-    })
-    .finally(() => {
-        btnSubmit.disabled = false;
-        btnSubmit.style.opacity = '1';
-        btnSubmit.innerHTML = `
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showToast('Success', data.message, '✅');
+                document.getElementById('networkScanModalOverlay').classList.remove('active');
+                refreshData(true); // Segarkan tabel di belakang layar
+            } else {
+                showToast('Error', data.detail || data.message, '❌');
+            }
+        })
+        .catch(err => {
+            console.error('Error starting network scan:', err);
+            showToast('Error', 'An error occurred while starting the network scan.', '❌');
+        })
+        .finally(() => {
+            btnSubmit.disabled = false;
+            btnSubmit.style.opacity = '1';
+            btnSubmit.innerHTML = `
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             Launch Scan
         `;
-    });
+        });
 }
 
 
-window.triggerSingleNetworkScan = async function(domainName) {
+window.triggerSingleNetworkScan = async function (domainName) {
     showToast('Scan Jaringan', `Memulai network scan untuk ${domainName}...`, '🚀');
     try {
         const resp = await fetch(`${API_BASE}/api/network-scan`, {
@@ -4226,11 +4467,11 @@ window.triggerSingleNetworkScan = async function(domainName) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ targets: [domainName] })
         });
-        
+
         if (resp.status === 200 || resp.status === 201 || resp.status === 202) {
             showToast('Scan Diantrekan', `Scan untuk ${domainName} sedang berjalan di server.`, '✅');
             // Minta tabel diperbarui sesaat lagi
-            setTimeout(() => refreshData(true), 2000); 
+            setTimeout(() => refreshData(true), 2000);
         } else {
             const data = await resp.json();
             showToast('Gagal', data.detail || 'Gagal memulai scan jaringan.', '❌');
@@ -4242,10 +4483,10 @@ window.triggerSingleNetworkScan = async function(domainName) {
 
 function showSeverityDetailModal(items, timeLabel, rawIsoString) {
     document.getElementById('chartDetailTitle').textContent = `Detail Analisis (${timeLabel})`;
-    
+
     const listContainer = document.getElementById('chartDetailList');
     listContainer.innerHTML = '';
-    
+
     items.forEach(item => {
         const row = document.createElement('div');
         row.style.display = 'flex';
@@ -4257,7 +4498,7 @@ function showSeverityDetailModal(items, timeLabel, rawIsoString) {
         row.style.border = '1px solid var(--color-border)';
         row.style.cursor = 'pointer';
         row.style.transition = 'background 0.2s, border-color 0.2s';
-        
+
         row.onmouseover = () => {
             row.style.background = '#f1f5f9';
             row.style.borderColor = '#cbd5e1';
@@ -4266,80 +4507,81 @@ function showSeverityDetailModal(items, timeLabel, rawIsoString) {
             row.style.background = '#f8fafc';
             row.style.borderColor = 'var(--color-border)';
         };
-        
+
         row.onclick = () => {
             closeChartDetailModal();
+            closeChartModal();
             if (item.domain) {
                 jumpToScanDetail(rawIsoString, item.domain, false);
             } else {
                 jumpToScanDetail(rawIsoString, item.severity, true);
             }
         };
-        
+
         const leftDiv = document.createElement('div');
         leftDiv.style.display = 'flex';
         leftDiv.style.alignItems = 'center';
         leftDiv.style.gap = '8px';
-        
+
         const dot = document.createElement('div');
         dot.style.width = '10px';
         dot.style.height = '10px';
         dot.style.borderRadius = '50%';
         dot.style.background = item.color || '#333';
-        
+
         const label = document.createElement('span');
         label.style.fontSize = '14px';
         label.style.color = 'var(--color-ink)';
         label.style.fontWeight = '500';
         label.textContent = item.domain ? `${item.severity} - ${item.domain}` : item.severity;
-        
+
         leftDiv.appendChild(dot);
         leftDiv.appendChild(label);
-        
+
         const rightDiv = document.createElement('div');
         rightDiv.style.display = 'flex';
         rightDiv.style.alignItems = 'center';
         rightDiv.style.gap = '12px';
-        
+
         const valSpan = document.createElement('span');
         valSpan.style.fontSize = '14px';
         valSpan.style.fontWeight = '600';
         valSpan.style.color = 'var(--color-ink)';
         valSpan.textContent = item.count;
-        
+
         const chevron = document.createElement('span');
         chevron.style.color = 'var(--color-ink-lighter)';
         chevron.style.fontSize = '14px';
         chevron.innerHTML = '›';
-        
+
         rightDiv.appendChild(valSpan);
         rightDiv.appendChild(chevron);
-        
+
         row.appendChild(leftDiv);
         row.appendChild(rightDiv);
         listContainer.appendChild(row);
     });
-    
+
     document.getElementById('chartDetailModalOverlay').classList.add('active');
 }
 
 // --- Chart Click Details Modal ---
-function showChartDetailModal(chartInstance, index, titleSuffix, rawIsoString, isSeverity=false, targetValue=null) {
+function showChartDetailModal(chartInstance, index, titleSuffix, rawIsoString, isSeverity = false, targetValue = null) {
     const timeLabel = chartInstance.data.labels[index];
     const datasets = chartInstance.data.datasets;
-    
+
     document.getElementById('chartDetailTitle').textContent = `Detail Analisis (${timeLabel})`;
-    
+
     const listContainer = document.getElementById('chartDetailList');
     listContainer.innerHTML = '';
-    
+
     let total = 0;
-    
+
     datasets.forEach(ds => {
         const val = ds.data[index] || 0;
         if (val > 0 && (targetValue === null || val === targetValue)) {
             total += val;
-            
+
             const row = document.createElement('div');
             row.style.display = 'flex';
             row.style.justifyContent = 'space-between';
@@ -4350,7 +4592,7 @@ function showChartDetailModal(chartInstance, index, titleSuffix, rawIsoString, i
             row.style.border = '1px solid var(--color-border)';
             row.style.cursor = 'pointer';
             row.style.transition = 'background 0.2s, border-color 0.2s';
-            
+
             row.onmouseover = () => {
                 row.style.background = '#f1f5f9';
                 row.style.borderColor = '#cbd5e1';
@@ -4359,58 +4601,59 @@ function showChartDetailModal(chartInstance, index, titleSuffix, rawIsoString, i
                 row.style.background = '#f8fafc';
                 row.style.borderColor = 'var(--color-border)';
             };
-            
+
             row.onclick = () => {
                 closeChartDetailModal();
+                closeChartModal();
                 jumpToScanDetail(rawIsoString, ds.label, isSeverity);
             };
-            
+
             const leftDiv = document.createElement('div');
             leftDiv.style.display = 'flex';
             leftDiv.style.alignItems = 'center';
             leftDiv.style.gap = '8px';
-            
+
             const dot = document.createElement('div');
             dot.style.width = '10px';
             dot.style.height = '10px';
             dot.style.borderRadius = '50%';
             dot.style.background = ds.borderColor || '#333';
-            
+
             const label = document.createElement('span');
             label.style.fontSize = '14px';
             label.style.color = 'var(--color-ink)';
             label.style.fontWeight = '500';
             label.textContent = ds.label;
-            
+
             leftDiv.appendChild(dot);
             leftDiv.appendChild(label);
-            
+
             const rightDiv = document.createElement('div');
             rightDiv.style.display = 'flex';
             rightDiv.style.alignItems = 'center';
             rightDiv.style.gap = '12px';
-            
+
             const valSpan = document.createElement('span');
             valSpan.style.fontSize = '14px';
             valSpan.style.fontWeight = '600';
             valSpan.style.color = 'var(--color-ink)';
             valSpan.textContent = val;
-            
+
             // Add a small chevron to indicate it's clickable
             const chevron = document.createElement('span');
             chevron.style.color = 'var(--color-ink-lighter)';
             chevron.style.fontSize = '14px';
             chevron.innerHTML = '›';
-            
+
             rightDiv.appendChild(valSpan);
             rightDiv.appendChild(chevron);
-            
+
             row.appendChild(leftDiv);
             row.appendChild(rightDiv);
             listContainer.appendChild(row);
         }
     });
-    
+
     if (total === 0) {
         const emptyMsg = document.createElement('div');
         emptyMsg.style.fontSize = '13px';
@@ -4418,29 +4661,29 @@ function showChartDetailModal(chartInstance, index, titleSuffix, rawIsoString, i
         emptyMsg.textContent = 'Tidak ada data kerentanan terdeteksi pada waktu ini.';
         listContainer.appendChild(emptyMsg);
     }
-    
+
     document.getElementById('chartDetailModalOverlay').classList.add('active');
 }
 
-window.closeChartDetailModal = function() {
+window.closeChartDetailModal = function () {
     document.getElementById('chartDetailModalOverlay').classList.remove('active');
 };
 
 // --- Chart Click Detail Redirect ---
-function jumpToScanDetail(isoDateString, targetName, isSeverity=false) {
+function jumpToScanDetail(isoDateString, targetName, isSeverity = false) {
     if (!isoDateString || typeof allVulns === 'undefined' || !allVulns) {
         showToast("Info", "Data riwayat scan belum termuat.", "ℹ️");
         return;
     }
-    
+
     const targetTime = new Date(isoDateString).getTime();
-    
+
     let closestScan = null;
     let minDiff = Infinity;
-    
+
     allVulns.forEach(scan => {
         if (!scan.scan_date) return;
-        
+
         // Pastikan scan sesuai dengan kriteria yang diklik
         if (isSeverity) {
             let hasSeverity = false;
@@ -4452,7 +4695,7 @@ function jumpToScanDetail(isoDateString, targetName, isSeverity=false) {
             const domain = scan.domains?.domain_name || 'Unknown';
             if (domain !== targetName && targetName !== 'Others' && targetName !== 'Semua Domain') return;
         }
-        
+
         const scanTime = new Date(scan.scan_date).getTime();
         const diff = Math.abs(scanTime - targetTime);
         if (diff < minDiff) {
@@ -4460,7 +4703,7 @@ function jumpToScanDetail(isoDateString, targetName, isSeverity=false) {
             closestScan = scan;
         }
     });
-    
+
     if (closestScan) {
         openScanModal(closestScan);
     } else {
@@ -4482,13 +4725,13 @@ document.addEventListener('click', (e) => {
 // Chart Enlarge Logic
 let enlargedChartInstance = null;
 
-window.openChartModal = function(sourceChartId, title) {
+window.openChartModal = function (sourceChartId, title) {
     const overlay = document.getElementById('chartModalOverlay');
     const titleEl = document.getElementById('chartModalTitle');
-    
+
     if (overlay) overlay.classList.add('active');
     if (titleEl) titleEl.textContent = title || 'Grafik';
-    
+
     // Hapus instance sebelumnya jika ada
     if (enlargedChartInstance) {
         enlargedChartInstance.destroy();
@@ -4501,7 +4744,7 @@ window.openChartModal = function(sourceChartId, title) {
         if (modalBody) {
             modalBody.innerHTML = '<canvas id="enlargedChartCanvas"></canvas>';
             const ctx = document.getElementById('enlargedChartCanvas').getContext('2d');
-            
+
             if (sourceChartId === 'vulnBarChart') {
                 renderEnlargedVulnChart(ctx);
             } else if (sourceChartId === 'sevTrendChart') {
@@ -4511,9 +4754,9 @@ window.openChartModal = function(sourceChartId, title) {
     }, 150);
 };
 
-window.renderEnlargedVulnChart = function(ctx) {
+window.renderEnlargedVulnChart = function (ctx) {
     if (!rawTrendData) return;
-    
+
     const checkboxes = Array.from(document.querySelectorAll('#vulnTrendItems input[type="checkbox"]'));
     const allCb = checkboxes.find(cb => cb.value === 'All');
 
@@ -4572,10 +4815,39 @@ window.renderEnlargedVulnChart = function(ctx) {
             tension: 0.4,
             fill: true,
             spanGaps: true,
-            pointRadius: 4,
-            pointHoverRadius: 8
+            pointRadius: (ctx) => ctx.raw === 0 ? 0 : 4,
+            pointHoverRadius: (ctx) => ctx.raw === 0 ? 0 : 8,
+            pointBackgroundColor: baseColor
         };
     });
+
+    const options = getEnlargedChartOptions(false);
+    options.onClick = (event, activeElements) => {
+        if (activeElements && activeElements.length > 0) {
+            const index = activeElements[0].index;
+            const datasetIndex = activeElements[0].datasetIndex;
+            const clickedValue = enlargedChartInstance.data.datasets[datasetIndex].data[index];
+
+            if (rawTrendData && rawTrendData.raw_labels) {
+                let activeCount = 0;
+                let lastActiveLabel = null;
+                enlargedChartInstance.data.datasets.forEach(ds => {
+                    const val = ds.data[index] || 0;
+                    if (val === clickedValue && val > 0) {
+                        activeCount++;
+                        lastActiveLabel = ds.label;
+                    }
+                });
+
+                if (activeCount === 1) {
+                    closeChartModal();
+                    jumpToScanDetail(rawTrendData.raw_labels[index], lastActiveLabel);
+                } else if (activeCount > 1) {
+                    showChartDetailModal(enlargedChartInstance, index, "Vulnerabilities", rawTrendData.raw_labels[index], false, clickedValue);
+                }
+            }
+        }
+    };
 
     enlargedChartInstance = new Chart(ctx, {
         type: 'line',
@@ -4583,11 +4855,11 @@ window.renderEnlargedVulnChart = function(ctx) {
             labels: rawTrendData.labels || [],
             datasets: domainDatasets
         },
-        options: getEnlargedChartOptions(false)
+        options: options
     });
 };
 
-window.renderEnlargedSevChart = function(ctx) {
+window.renderEnlargedSevChart = function (ctx) {
     if (!rawSevTrendData) return;
 
     const checkboxes = Array.from(document.querySelectorAll('#sevTrendItems input[type="checkbox"]'));
@@ -4640,12 +4912,62 @@ window.renderEnlargedSevChart = function(ctx) {
             tension: 0.4,
             fill: true,
             spanGaps: true,
-            pointRadius: 4,
-            pointHoverRadius: 8,
+            pointRadius: (ctx) => ctx.raw === 0 ? 0 : 4,
+            pointHoverRadius: (ctx) => ctx.raw === 0 ? 0 : 8,
             pointBackgroundColor: color,
             pointHoverBackgroundColor: color
         };
     });
+
+    const options = getEnlargedChartOptions(true);
+    options.onClick = (event, activeElements) => {
+        if (activeElements && activeElements.length > 0) {
+            const index = activeElements[0].index;
+            const datasetIndex = activeElements[0].datasetIndex;
+            const clickedValue = enlargedChartInstance.data.datasets[datasetIndex].data[index];
+
+            if (rawSevTrendData && rawSevTrendData.raw_labels) {
+                let itemBreakdown = [];
+                enlargedChartInstance.data.datasets.forEach(ds => {
+                    const val = ds.data[index] || 0;
+                    if (val === clickedValue && val > 0) {
+                        if (ds.domains && ds.domains[index] && Object.keys(ds.domains[index]).length > 0) {
+                            const domainsMap = ds.domains[index];
+                            Object.keys(domainsMap).forEach(dName => {
+                                if (domainsMap[dName] > 0) {
+                                    itemBreakdown.push({
+                                        severity: ds.label,
+                                        domain: dName,
+                                        count: domainsMap[dName],
+                                        color: ds.borderColor
+                                    });
+                                }
+                            });
+                        } else {
+                            itemBreakdown.push({
+                                severity: ds.label,
+                                domain: null,
+                                count: val,
+                                color: ds.borderColor
+                            });
+                        }
+                    }
+                });
+
+                if (itemBreakdown.length === 1) {
+                    const item = itemBreakdown[0];
+                    closeChartModal();
+                    if (item.domain) {
+                        jumpToScanDetail(rawSevTrendData.raw_labels[index], item.domain, false);
+                    } else {
+                        jumpToScanDetail(rawSevTrendData.raw_labels[index], item.severity, true);
+                    }
+                } else if (itemBreakdown.length > 1) {
+                    showSeverityDetailModal(itemBreakdown, enlargedChartInstance.data.labels[index], rawSevTrendData.raw_labels[index]);
+                }
+            }
+        }
+    };
 
     enlargedChartInstance = new Chart(ctx, {
         type: 'line',
@@ -4653,7 +4975,7 @@ window.renderEnlargedSevChart = function(ctx) {
             labels: rawSevTrendData.labels || [],
             datasets: sevDatasets
         },
-        options: getEnlargedChartOptions(true)
+        options: options
     });
 };
 
@@ -4661,9 +4983,20 @@ function getEnlargedChartOptions(isSeverity) {
     return {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: {
+            mode: 'nearest',
+            intersect: true
+        },
+        layout: {
+            padding: {
+                top: 15,
+                right: 15
+            }
+        },
         scales: {
             y: {
                 beginAtZero: true,
+                grace: '5%',
                 ticks: { precision: 0, font: { size: 14 } },
                 grid: { color: '#e5e7eb', borderDash: [5, 5] },
                 border: { display: false }
@@ -4706,8 +5039,6 @@ function getEnlargedChartOptions(isSeverity) {
                 usePointStyle: true,
                 titleFont: { size: 15, weight: '600' },
                 bodyFont: { size: 14 },
-                mode: 'index',
-                intersect: false,
                 filter: function (tooltipItem) {
                     return tooltipItem.parsed.y > 0;
                 },
@@ -4743,7 +5074,7 @@ function getEnlargedChartOptions(isSeverity) {
     };
 }
 
-window.closeChartModal = function() {
+window.closeChartModal = function () {
     const overlay = document.getElementById('chartModalOverlay');
     if (overlay) overlay.classList.remove('active');
     if (enlargedChartInstance) {
@@ -4752,13 +5083,13 @@ window.closeChartModal = function() {
     }
 };
 
-window.toggleSidebar = function() {
+window.toggleSidebar = function () {
     const sidebar = document.querySelector('.sidebar');
     if (sidebar) {
         const isCollapsed = sidebar.classList.toggle('collapsed');
         const tooltip = document.getElementById('sidebarTooltip');
         const arrow = document.getElementById('sidebarToggleArrow');
-        
+
         if (tooltip && arrow) {
             if (isCollapsed) {
                 tooltip.textContent = 'Buka sidebar';
@@ -4770,9 +5101,9 @@ window.toggleSidebar = function() {
                 arrow.setAttribute('d', 'M14 16l-4-4 4-4');
             }
         }
+
+        setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+        }, 300);
     }
 };
-
-async 
-
-async 

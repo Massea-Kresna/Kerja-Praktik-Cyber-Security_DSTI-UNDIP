@@ -172,6 +172,43 @@ def update_user_session(username: str, session_id: str or None, is_online: bool)
             return u
     return None
 
+def update_user_online_status(username: str, is_online: bool):
+    now_iso = datetime.now(timezone.utc).isoformat()
+    conn = get_db_connection()
+    if conn:
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                if is_online:
+                    cur.execute(
+                        'UPDATE users SET is_online = %s, last_online = %s WHERE username = %s RETURNING *',
+                        (is_online, now_iso, username)
+                    )
+                else:
+                    cur.execute(
+                        'UPDATE users SET is_online = %s WHERE username = %s RETURNING *',
+                        (is_online, username)
+                    )
+                res = cur.fetchone()
+                conn.commit()
+                if res:
+                    return dict(res)
+        except Exception as e:
+            print(f'[-] Postgres update_user_online_status error, fallback ke lokal: {e}')
+            if conn:
+                conn.rollback()
+        finally:
+            conn.close()
+            
+    users = _read_local_users()
+    for u in users:
+        if u['username'] == username:
+            u['is_online'] = is_online
+            if is_online:
+                u['last_online'] = now_iso
+            _write_local_users(users)
+            return u
+    return None
+
 def update_user_timeout(username: str, timeout_until: str or None):
     conn = get_db_connection()
     if conn:
@@ -392,10 +429,17 @@ def insert_scan_result(history_id, scan_result):
                 v.get('check', 'UNKNOWN'),
                 v.get('title', ''),
                 v.get('detail', ''),
-                v.get('recommendation', '')
+                v.get('recommendation', ''),
+                v.get('epss_score'),
+                v.get('epss_percentile'),
+                v.get('cisa_kev'),
+                v.get('cve'),
+                v.get('cvss_v3'),
+                v.get('cwe'),
+                v.get('evidence')
             ) for v in scan_result]
             cur.executemany(
-                'INSERT INTO scan_result (history_id, severity, check_type, title, description, recommendation) VALUES (%s, %s, %s, %s, %s, %s)',
+                'INSERT INTO scan_result (history_id, severity, check_type, title, description, recommendation, epss_score, epss_percentile, cisa_kev, cve, cvss_v3, cwe, evidence) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
                 data
             )
             conn.commit()
@@ -504,26 +548,77 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type='Web Scanne
                 
             title = f.get('title', f.get('name', 'Unknown Vulnerability'))
             desc = f.get('description', '')
+            if not desc:
+                desc = f.get('risk_description', '')
+            if not desc:
+                desc = f.get('output', '')
+            if not desc:
+                desc = f.get('details', '')
             recom = f.get('remediation', f.get('recommendation', ''))
+            
+            # Ekstraksi atribut klasifikasi baru
+            epss_score = f.get('epss_score')
+            epss_percentile = f.get('epss_percentile')
+            cisa_kev = f.get('cisa_kev')
+            
+            cve_val = f.get('cve', '')
+            if not cve_val:
+                cves = f.get('cves', [])
+                if isinstance(cves, list) and cves:
+                    cve_val = ', '.join(str(c) for c in cves)
+            
+            cvss_v3 = f.get('cvss_v3')
+            if not cvss_v3:
+                cvss_v3 = f.get('cvss3_score')
+            
+            cwe_val = f.get('cwe', '')
+            if not cwe_val:
+                cwes = f.get('cwes', [])
+                if isinstance(cwes, list) and cwes:
+                    cwe_val = ', '.join(str(c) for c in cwes)
+            
+            # Ekstraksi Evidence (Simpan sebagai JSON agar UI baru dapat melakukan render komponen card)
+            evidence_val = ''
+            instances = f.get('instances', [])
+            
+            if isinstance(instances, list) and instances:
+                evidence_val = json.dumps({"type": "instances", "data": instances})
+            elif 'vuln_evidence' in f:
+                evidence_val = json.dumps({"type": "vuln_evidence", "data": f['vuln_evidence']})
+            else:
+                req = f.get('request', f.get('http_request', f.get('raw_request', '')))
+                res = f.get('response', f.get('http_response', f.get('raw_response', '')))
+                if req or res:
+                    evidence_val = json.dumps({"type": "instances", "data": [{"request": req, "response": res}]})
+                else:
+                    fallback_txt = f.get('output', '')
+                    if not fallback_txt:
+                        fallback_txt = f.get('details', '')
+                    if not fallback_txt:
+                        fallback_txt = f.get('proof', '')
+                    
+                    if fallback_txt:
+                        evidence_val = json.dumps({"type": "text", "data": fallback_txt})
+                    else:
+                        evidence_val = ''
             
             vuln_obj = {
                 'severity': severity,
                 'check': scanner_type,
                 'title': title,
                 'detail': desc,
-                'recommendation': recom
+                'recommendation': recom,
+                'epss_score': epss_score,
+                'epss_percentile': epss_percentile,
+                'cisa_kev': cisa_kev,
+                'cve': cve_val,
+                'cvss_v3': cvss_v3,
+                'cwe': cwe_val,
+                'evidence': evidence_val
             }
             
-            if severity in ['MEDIUM', 'HIGH', 'CRITICAL']:
-                scan_result.append(vuln_obj)
-            else:
-                low_info_vulns.append({
-                    'severity': severity,
-                    'check_type': scanner_type,
-                    'title': title,
-                    'description': desc,
-                    'recommendation': recom
-                })
+            # Masukkan SEMUA kerentanan (termasuk LOW dan INFO) ke dalam scan_result
+            scan_result.append(vuln_obj)
             
             if severity in ['HIGH', 'CRITICAL']:
                 risk_score += 3.0
@@ -603,7 +698,7 @@ def get_domain_by_name(domain_name):
     if not conn: return None
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute('SELECT id FROM domains WHERE domain_name = %s LIMIT 1', (domain_name,))
+            cur.execute('SELECT * FROM domains WHERE domain_name = %s LIMIT 1', (domain_name,))
             res = cur.fetchone()
             return dict(res) if res else None
     except Exception as e:
@@ -840,7 +935,7 @@ def get_scan_results_for_history(history_id):
     if not conn: return []
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute('SELECT severity, check_type, title, description, recommendation FROM scan_result WHERE history_id = %s', (history_id,))
+            cur.execute('SELECT severity, check_type, title, description, recommendation, epss_score, epss_percentile, cisa_kev, cve, cvss_v3, cwe, evidence FROM scan_result WHERE history_id = %s', (history_id,))
             res = cur.fetchall()
             return [dict(r) for r in res]
     except Exception as e:
@@ -913,7 +1008,7 @@ def get_scan_history_list(limit=20):
             if not h_res: return []
             
             h_ids = tuple([h['id'] for h in h_res])
-            cur.execute('SELECT history_id, title, severity, check_type, description, recommendation FROM scan_result WHERE history_id IN %s', (h_ids,))
+            cur.execute('SELECT history_id, title, severity, check_type, description, recommendation, epss_score, epss_percentile, cisa_kev, cve, cvss_v3, cwe, evidence FROM scan_result WHERE history_id IN %s', (h_ids,))
             sr_res = cur.fetchall()
             
             sr_map = {}
@@ -953,6 +1048,7 @@ def get_vulnerabilities_list(severity=None, limit=50):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             query = """
                 SELECT sr.id, sr.severity, sr.check_type, sr.title, sr.description, sr.recommendation, 
+                       sr.epss_score, sr.epss_percentile, sr.cisa_kev, sr.cve, sr.cvss_v3, sr.cwe, sr.evidence,
                        sr.history_id, sh.scan_date, sh.domain_id, d.domain_name
                 FROM scan_result sr
                 JOIN scan_history sh ON sr.history_id = sh.id
@@ -984,71 +1080,5 @@ def get_vulnerabilities_list(severity=None, limit=50):
         conn.close()
 
 # ==============================================================================
-# NOTIFICATIONS MANAGEMENT (LOCAL JSON) DARI CABANG MAIN
+# NOTIFICATIONS MANAGEMENT (LOCAL JSON) - Dihapus karena menggunakan riwayat scan
 # ==============================================================================
-
-LOCAL_NOTIFICATIONS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'notifications_db.json')
-
-def _read_local_notifications():
-    if not os.path.exists(LOCAL_NOTIFICATIONS_FILE):
-        return []
-    try:
-        with open(LOCAL_NOTIFICATIONS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-def _write_local_notifications(notifs):
-    try:
-        with open(LOCAL_NOTIFICATIONS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(notifs, f, indent=4, default=str)
-        return True
-    except Exception:
-        return False
-
-def create_notification(title: str, message: str, notif_type: str = 'info'):
-    notifs = _read_local_notifications()
-    new_notif = {
-        'id': uuid.uuid4().hex,
-        'title': title,
-        'message': message,
-        'type': notif_type,
-        'is_read': False,
-        'created_at': datetime.now(timezone.utc).isoformat()
-    }
-    notifs.insert(0, new_notif) # Insert at beginning
-    # Keep only last 100 notifications to prevent bloat
-    if len(notifs) > 100:
-        notifs = notifs[:100]
-    _write_local_notifications(notifs)
-    return new_notif
-
-def get_notifications(include_read: bool = True):
-    notifs = _read_local_notifications()
-    if not include_read:
-        notifs = [n for n in notifs if not n.get('is_read')]
-    return notifs
-
-def mark_notification_as_read(notif_id: str):
-    notifs = _read_local_notifications()
-    for n in notifs:
-        if n['id'] == notif_id:
-            n['is_read'] = True
-            _write_local_notifications(notifs)
-            return True
-    return False
-
-def mark_all_notifications_as_read():
-    notifs = _read_local_notifications()
-    for n in notifs:
-        n['is_read'] = True
-    _write_local_notifications(notifs)
-    return True
-
-def delete_notification(notif_id: str):
-    notifs = _read_local_notifications()
-    filtered = [n for n in notifs if n['id'] != notif_id]
-    if len(filtered) != len(notifs):
-        _write_local_notifications(filtered)
-        return True
-    return False

@@ -111,10 +111,24 @@ class ConnectionManager:
         self.user_info[websocket] = {"username": username, "role": role}
 
     def disconnect(self, websocket: WebSocket):
+        username = None
+        if websocket in self.user_info:
+            username = self.user_info[websocket].get("username")
+            del self.user_info[websocket]
+            
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-        if websocket in self.user_info:
-            del self.user_info[websocket]
+            
+        if username:
+            # Check if user has any other active connections (e.g. other tabs)
+            has_other_connections = any(
+                info.get("username") == username 
+                for info in self.user_info.values()
+            )
+            
+            if not has_other_connections:
+                # User has completely disconnected
+                db_manager.update_user_online_status(username, False)
 
     async def broadcast_to_admins(self, message: dict):
         for conn in list(self.active_connections):
@@ -173,6 +187,7 @@ def get_current_user(request: Request):
     if timeout_until_val:
         try:
             # Menggunakan timezone-aware datetime parsing
+            # Python 3.11+ mendukung format ISO dengan offset Z/+07:00 via fromisoformat
             if isinstance(timeout_until_val, datetime):
                 timeout_until = timeout_until_val
                 if timeout_until.tzinfo is None:
@@ -328,7 +343,8 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
             httponly=True,
             secure=False,
             samesite="lax",
-            max_age=cookie_max_age
+            max_age=cookie_max_age,
+            path="/"
         )
         
         # Kirim notifikasi login ke Telegram (non-blocking)
@@ -662,6 +678,8 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
                 raw_json = scan.get("raw_json")
                 if isinstance(raw_json, list):
                     vuln_count += len(raw_json)
+                elif isinstance(raw_json, dict) and isinstance(raw_json.get("low_info_vulns"), list):
+                    vuln_count += len(raw_json["low_info_vulns"])
                 domains_data[domain_name][bucket_index] += vuln_count
 
         return {
@@ -797,12 +815,17 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
                         domains_by_sev[sev][bucket_index][domain_name] = domains_by_sev[sev][bucket_index].get(domain_name, 0) + 1
                         
                 raw_json = scan.get("raw_json")
+                low_info_list = []
                 if isinstance(raw_json, list):
-                    for v in raw_json:
-                        sev = (v.get("severity") or "").upper()
-                        if sev in severities_data:
-                            severities_data[sev][bucket_index] += 1
-                            domains_by_sev[sev][bucket_index][domain_name] = domains_by_sev[sev][bucket_index].get(domain_name, 0) + 1
+                    low_info_list = raw_json
+                elif isinstance(raw_json, dict) and isinstance(raw_json.get("low_info_vulns"), list):
+                    low_info_list = raw_json["low_info_vulns"]
+                    
+                for v in low_info_list:
+                    sev = (v.get("severity") or "").upper()
+                    if sev in severities_data:
+                        severities_data[sev][bucket_index] += 1
+                        domains_by_sev[sev][bucket_index][domain_name] = domains_by_sev[sev][bucket_index].get(domain_name, 0) + 1
 
         return {
             "source": "postgresql",
@@ -991,7 +1014,6 @@ async def run_pentest_tools_background(domain_name: str):
     async with aiohttp.ClientSession() as session:
         await process_domain_scan(session, domain_name, semaphore)
     print(f"[+] [BACKGROUND] Scan Pentest-Tools selesai untuk: {domain_name}")
-    
     # 1. Simpan ke database agar notifikasi permanen
     try:
         db_manager.create_notification(
@@ -1002,11 +1024,24 @@ async def run_pentest_tools_background(domain_name: str):
     except Exception:
         pass
 
-    # 2. Beritahu frontend via WebSocket
+    # 2. Siapkan notifikasi untuk WebSocket
+    notif = {
+        "id": uuid.uuid4().hex,
+        "title": "Scan Selesai",
+        "message": f"Scan untuk {domain_name} telah selesai.",
+        "type": "scan_finished",
+        "domain": domain_name,
+        "time": datetime.now(config.WIB).isoformat(),
+        "created_at": datetime.now(config.WIB).isoformat()
+    }
     await manager.broadcast_to_admins({
         "event": "scan_finished",
         "domain": domain_name,
         "time": datetime.now(timezone(timedelta(hours=7))).isoformat()
+    })
+    await manager.broadcast_to_admins({
+        "event": "new_notification",
+        "notification": notif
     })
 
 # ===================================================================
@@ -1014,6 +1049,7 @@ async def run_pentest_tools_background(domain_name: str):
 # ===================================================================
 class SchedulePayload(BaseModel):
     targets: List[str]
+    inactive_targets: Optional[List[str]] = []
 
 @app.post("/api/schedule-scan")
 async def schedule_scan(payload: SchedulePayload, current_user = Depends(get_current_user)):
@@ -1027,11 +1063,15 @@ async def schedule_scan(payload: SchedulePayload, current_user = Depends(get_cur
         with conn.cursor() as cur:
             for domain in payload.targets:
                 cur.execute("UPDATE domains SET is_active = True WHERE domain_name = %s", (domain,))
+            
+            if hasattr(payload, 'inactive_targets') and payload.inactive_targets:
+                for domain in payload.inactive_targets:
+                    cur.execute("UPDATE domains SET is_active = False WHERE domain_name = %s", (domain,))
         
         # Wajib di-commit agar perubahan tersimpan di database
         conn.commit()
         
-        print(f"[!] MARKAS: {len(payload.targets)} target dimasukkan ke radar aktif Celery oleh {current_user['username']}.")
+        print(f"[!] MARKAS: {len(payload.targets)} target dimasukkan ke radar aktif Celery oleh {current_user.get('username')}.")
         
         return {
             "status": "success", 
@@ -1080,23 +1120,37 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
             success_count = sum(1 for r in results if r)
             failed_count = len(results) - success_count
             print(f"[+] Network Scan Selesai: {success_count} sukses, {failed_count} gagal.")
-            
-            # (BARIS AWAIT KEDUA YANG BIKIN CRASH SUDAH DIHAPUS DI SINI)
-            
             for target in targets:
+                # 1. Simpan ke database
                 try:
                     db_manager.create_notification(
                         title="Network Scan Selesai",
-                        message=f"Pemindaian jaringan untuk target {target} telah selesai.",
+                        message=f"Network Scan untuk target {target} telah selesai.",
                         notif_type="scan_finished"
                     )
                 except Exception:
                     pass
-                    
+                
+                # 2. Siapkan notifikasi untuk WebSocket
+                notif = {
+                    "id": uuid.uuid4().hex,
+                    "title": "Network Scan Selesai",
+                    "message": f"Network Scan untuk {target} telah selesai.",
+                    "type": "scan_finished",
+                    "domain": target,
+                    "time": datetime.now(config.WIB).isoformat(),
+                    "created_at": datetime.now(config.WIB).isoformat()
+                }
+                
+                # 3. Beritahu via WebSocket
                 await manager.broadcast_to_admins({
                     "event": "scan_finished",
                     "domain": target,
-                    "time": datetime.now(timezone(timedelta(hours=7))).isoformat()
+                    "time": datetime.now(config.WIB).isoformat()
+                })
+                await manager.broadcast_to_admins({
+                    "event": "new_notification",
+                    "notification": notif
                 })
 
 async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
@@ -1110,22 +1164,35 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
             failed_count = len(results) - success_count
             print(f"[+] Web Scan Selesai: {success_count} sukses, {failed_count} gagal.")
             
-            # (BARIS AWAIT KEDUA YANG BIKIN CRASH SUDAH DIHAPUS DI SINI)
-            
             for target in targets:
+                # 1. Simpan ke database
                 try:
                     db_manager.create_notification(
-                        title="Website Scan Selesai",
-                        message=f"Pemindaian web untuk target {target} telah selesai.",
+                        title="Web Scan Selesai",
+                        message=f"Web Scan untuk target {target} telah selesai.",
                         notif_type="scan_finished"
                     )
                 except Exception:
                     pass
                 
+                # 2. Siapkan notifikasi untuk WebSocket
+                notif = {
+                    "id": uuid.uuid4().hex,
+                    "title": "Web Scan Selesai",
+                    "message": f"Web Scan untuk {target} telah selesai.",
+                    "type": "scan_finished",
+                    "domain": target,
+                    "time": datetime.now(config.WIB).isoformat(),
+                    "created_at": datetime.now(config.WIB).isoformat()
+                }
                 await manager.broadcast_to_admins({
                     "event": "scan_finished",
                     "domain": target,
                     "time": datetime.now(timezone(timedelta(hours=7))).isoformat()
+                })
+                await manager.broadcast_to_admins({
+                    "event": "new_notification",
+                    "notification": notif
                 })
 
 class WebScanRequest(BaseModel):
@@ -1617,47 +1684,41 @@ async def share_report_endpoint(req: ShareReportRequest, current_user = Depends(
 # ==============================================================================
 @app.get("/api/notifications")
 async def api_get_notifications():
-    """Mengambil semua notifikasi lokal"""
+    """Mengambil riwayat scan terakhir sebagai notifikasi recap"""
     try:
-        notifs = db_manager.get_notifications()
+        recent_scans = db_manager.get_scan_history_list(limit=10)
+        notifs = []
+        for scan in recent_scans:
+            domain = scan.get("domains", {}).get("domain_name", "Unknown")
+            risk = scan.get("risk_level", "SAFE")
+            notifs.append({
+                "id": str(scan.get("id")),
+                "title": f"Scan Selesai: {domain}",
+                "message": f"Risk Level: {risk}",
+                "type": "scan_finished",
+                "created_at": scan.get("scan_date"),
+                "is_read": False,
+                "domain": domain,
+                "time": scan.get("scan_date")
+            })
         return {"status": "success", "data": notifs}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/api/notifications/{notif_id}/read")
 async def api_mark_notification_read(notif_id: str):
-    """Menandai satu notifikasi telah dibaca"""
-    try:
-        success = db_manager.mark_notification_as_read(notif_id)
-        if success:
-            return {"status": "success"}
-        raise HTTPException(status_code=404, detail="Notification not found")
-    except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=str(e))
+    """No-op: notifikasi sekarang statis dari scan history"""
+    return {"status": "success"}
 
 @app.put("/api/notifications/read-all")
 async def api_mark_all_notifications_read():
-    """Menandai semua notifikasi telah dibaca"""
-    try:
-        db_manager.mark_all_notifications_as_read()
-        return {"status": "success"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """No-op: notifikasi sekarang statis dari scan history"""
+    return {"status": "success"}
 
 @app.delete("/api/notifications/{notif_id}")
 async def api_delete_notification(notif_id: str):
-    """Menghapus satu notifikasi"""
-    try:
-        success = db_manager.delete_notification(notif_id)
-        if success:
-            return {"status": "success"}
-        raise HTTPException(status_code=404, detail="Notification not found")
-    except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=str(e))
+    """No-op: tidak bisa menghapus riwayat scan dari menu notifikasi"""
+    return {"status": "success"}
 
 class InternalNotifyRequest(BaseModel):
     title: str
@@ -1673,11 +1734,12 @@ async def webhook_notify(req: InternalNotifyRequest, request: Request):
         raise HTTPException(status_code=403, detail="Forbidden")
         
     try:
-        notif = db_manager.create_notification(
-            title=req.title,
-            message=req.message,
-            notif_type=req.notif_type
-        )
+        notif = {
+            "id": uuid.uuid4().hex,
+            "title": req.title,
+            "message": req.message,
+            "type": req.notif_type
+        }
         
         await manager.broadcast_to_admins({
             "event": "new_notification",

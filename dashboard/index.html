@@ -11,7 +11,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=26">
+    <link rel="stylesheet" href="styles.css?v=73">
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <!-- Chart.js -->
@@ -247,10 +247,11 @@
                         <div class="notif-dropdown-header">
                             <h3>Notifikasi</h3>
                             <button class="icon-btn-sm" onclick="markAllNotificationsAsRead(event)"
-                                title="Tandai semua telah dibaca">
+                                title="Hapus semua notifikasi">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                                 </svg>
                             </button>
                         </div>
@@ -999,14 +1000,7 @@
                         <div class="meta-label">RULE ID</div>
                         <div class="meta-value" id="modalRuleId">00000000-0000</div>
                     </div>
-                    <div>
-                        <div class="meta-label">FIRST SEEN</div>
-                        <div class="meta-value" id="modalFirstSeen">-</div>
-                    </div>
-                    <div>
-                        <div class="meta-label">LAST SEEN</div>
-                        <div class="meta-value" id="modalLastSeen">-</div>
-                    </div>
+
                     <div>
                         <div class="meta-label">LOGS MATCHED</div>
                         <div class="meta-value">1</div>
@@ -1015,51 +1009,54 @@
 
                 <div class="threat-insights-card">
                     <div class="insights-header">
-                        <h3>THREAT INSIGHTS</h3>
+                        <h3>Risk Description</h3>
                         <span class="confidence">Confidence: High</span>
                     </div>
                     <div class="insights-desc" id="modalDesc">
                         Description goes here.
                     </div>
 
-                    <div class="insights-grid">
-                        <div>
-                            <div class="meta-label">SUGGESTED SEVERITY</div>
-                            <div class="meta-value" id="modalSeverity">High</div>
-                        </div>
-                        <div>
-                            <div class="meta-label">THREAT TYPE</div>
-                            <div class="meta-value">web_scanner</div>
-                        </div>
-                    </div>
+
 
                     <div class="mt-4">
-                        <div class="meta-label">RECOMMENDATION</div>
-                        <div class="meta-value" id="modalRecommendation">Investigate and patch.</div>
+                        <div class="insights-header">
+                            <h3>Recommendation</h3>
+                        </div>
+                        <div class="insights-desc mt-2" id="modalRecommendation">Investigate and patch.</div>
+                    </div>
+
+                    <!-- New Classification Section -->
+                    <div class="mt-4" id="modalClassificationSection" style="display: none;">
+                        <div class="insights-header">
+                            <h3>Classification</h3>
+                        </div>
+                        <div class="insights-desc mt-2" style="line-height: 1.6;">
+                            <div id="class_epss_score_container" style="display:none;">
+                                <strong>EPSS score:</strong> <span id="modalEpssScore"></span>
+                            </div>
+                            <div id="class_epss_percentile_container" style="display:none;">
+                                <strong>EPSS percentile:</strong> <span id="modalEpssPercentile"></span>
+                            </div>
+                            <div id="class_cisa_kev_container" style="display:none;">
+                                <strong>CISA KEV:</strong> <span id="modalCisaKev"></span>
+                            </div>
+                            <div id="class_cve_container" style="display:none;">
+                                <strong>CVE:</strong> <span id="modalCve"></span>
+                            </div>
+                            <div id="class_cvss_v3_container" style="display:none;">
+                                <strong>CVSS V3:</strong> <span id="modalCvssV3"></span>
+                            </div>
+                            <div id="class_cwe_container" style="display:none;">
+                                <strong>CWE:</strong> <span id="modalCwe"></span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <div class="evidence-section mt-4">
-                    <div class="meta-label mb-2">EVIDENCE LOGS</div>
-                    <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow:hidden;">
-                        <table class="modern-table small-table" style="margin:0;">
-                            <thead>
-                                <tr>
-                                    <th>TIMESTAMP</th>
-                                    <th>HOST</th>
-                                    <th>PROGRAM</th>
-                                    <th>MESSAGE</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td id="modalLogTime">-</td>
-                                    <td id="modalLogHost">-</td>
-                                    <td>pentest-tools</td>
-                                    <td id="modalLogMsg" class="font-mono text-truncate">...</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <h3 style="margin-bottom: 12px;">Evidence</h3>
+                    <div id="evidenceContainer">
+                        <!-- Evidence instances will be injected here by app.js -->
                     </div>
                 </div>
             </div>
@@ -1140,7 +1137,7 @@
             </div>
             <div class="modal-body" style="padding: 24px;">
                 <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="font-size: 13px; font-weight: 500; color: var(--color-ink); margin-bottom: 6px; display: block;">Target Domain / IP</label>
+                    <label style="font-size: 13px; font-weight: 500; color: var(--color-ink); margin-bottom: 6px; display: block;">Target Domain</label>
                     <select id="networkScanTargetSelect" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; color: var(--color-ink); font-family: var(--font-sans); font-size: 14px; cursor: pointer; outline: none; appearance: none; -webkit-appearance: none; background-image: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%2364748b%22 stroke-width=%222%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>'); background-repeat: no-repeat; background-position: right 12px center;">
                         <option value="">Loading targets...</option>
                     </select>
@@ -1509,7 +1506,7 @@
     </div>
 
     <!-- Chart Detail Modal -->
-    <div class="modal-overlay" id="chartDetailModalOverlay">
+    <div class="modal-overlay" id="chartDetailModalOverlay" style="z-index: 1050;">
         <div class="modal-dialog" style="max-width: 450px;">
             <div class="modal-header">
                 <div class="modal-title-group">
@@ -1547,7 +1544,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=46"></script>
+    <script src="app.js?v=93"></script>
 </body>
 
 </html>
