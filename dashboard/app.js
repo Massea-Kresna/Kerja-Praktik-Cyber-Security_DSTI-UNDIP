@@ -3483,12 +3483,14 @@ function connectLiveWebSocket(sessionId) {
                     renderNotificationList();
                 }
             } else if (data.event === 'force_logout') {
+                window.kickedReason = 'force_logout';
                 showToast("Sesi Diakhiri", "Anda telah dipaksa keluar oleh Administrator.", "⚠️");
                 setTimeout(() => {
                     handleLogout();
                 }, 1000);
             } else if (data.event === 'timeout') {
-                showToast("Akun Ditangguhkan", "Akun Anda telah ditangguhkan selama 2 jam oleh Administrator.", "⏳");
+                window.kickedReason = 'timeout';
+                showToast("Akun Ditangguhkan", "Akun Anda telah ditangguhkan oleh Administrator.", "⏳");
                 setTimeout(() => {
                     handleLogout();
                 }, 1000);
@@ -3507,6 +3509,15 @@ function connectLiveWebSocket(sessionId) {
                     connectLiveWebSocket(sessionId);
                 }
             }, 5000);
+        } else if (e.code === 4000) {
+            // Jika kode 4000, berarti user di-kick (force logout / timeout)
+            if (!window.kickedReason) {
+                showToast("Sesi Diakhiri", "Anda telah dikeluarkan oleh sistem.", "⚠️");
+                setTimeout(() => {
+                    handleLogout();
+                }, 500);
+            }
+            window.kickedReason = null;
         }
     };
 }
