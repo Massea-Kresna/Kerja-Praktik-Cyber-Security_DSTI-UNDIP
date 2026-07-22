@@ -1014,9 +1014,6 @@ async def run_pentest_tools_background(domain_name: str):
     async with aiohttp.ClientSession() as session:
         await process_domain_scan(session, domain_name, semaphore)
     print(f"[+] [BACKGROUND] Scan Pentest-Tools selesai untuk: {domain_name}")
-    # 1. Simpan ke database agar notifikasi permanen
-    try:
-
     # 2. Siapkan notifikasi untuk WebSocket
     notif = {
         "id": uuid.uuid4().hex,
@@ -1114,9 +1111,6 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
             failed_count = len(results) - success_count
             print(f"[+] Network Scan Selesai: {success_count} sukses, {failed_count} gagal.")
             for target in targets:
-                # 1. Simpan ke database
-                try:
-                
                 # 2. Siapkan notifikasi untuk WebSocket
                 notif = {
                     "id": uuid.uuid4().hex,
@@ -1151,9 +1145,6 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
             print(f"[+] Web Scan Selesai: {success_count} sukses, {failed_count} gagal.")
             
             for target in targets:
-                # 1. Simpan ke database
-                try:
-                
                 # 2. Siapkan notifikasi untuk WebSocket
                 notif = {
                     "id": uuid.uuid4().hex,
