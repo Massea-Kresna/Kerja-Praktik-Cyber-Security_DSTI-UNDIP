@@ -1473,6 +1473,22 @@ button, input, select, textarea {
     display: inline-block;
 }
 
+.status-timeout {
+    color: #ef4444;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+}
+
+.status-timeout::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background-color: #ef4444;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+}
+
 .btn-force-logout {
     border: 1px solid #ef4444;
     color: #ef4444;

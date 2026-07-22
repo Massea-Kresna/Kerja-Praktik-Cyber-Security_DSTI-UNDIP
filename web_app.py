@@ -111,10 +111,24 @@ class ConnectionManager:
         self.user_info[websocket] = {"username": username, "role": role}
 
     def disconnect(self, websocket: WebSocket):
+        username = None
+        if websocket in self.user_info:
+            username = self.user_info[websocket].get("username")
+            del self.user_info[websocket]
+            
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-        if websocket in self.user_info:
-            del self.user_info[websocket]
+            
+        if username:
+            # Check if user has any other active connections (e.g. other tabs)
+            has_other_connections = any(
+                info.get("username") == username 
+                for info in self.user_info.values()
+            )
+            
+            if not has_other_connections:
+                # User has completely disconnected
+                db_manager.update_user_online_status(username, False)
 
     async def broadcast_to_admins(self, message: dict):
         for conn in list(self.active_connections):
@@ -173,7 +187,12 @@ def get_current_user(request: Request):
         try:
             # Menggunakan timezone-aware datetime parsing
             # Python 3.11+ mendukung format ISO dengan offset Z/+07:00 via fromisoformat
-            timeout_until = datetime.fromisoformat(timeout_until_str.replace('Z', '+00:00'))
+            if isinstance(timeout_until_str, datetime):
+                timeout_until = timeout_until_str
+                if timeout_until.tzinfo is None:
+                    timeout_until = timeout_until.replace(tzinfo=timezone.utc)
+            else:
+                timeout_until = datetime.fromisoformat(timeout_until_str.replace('Z', '+00:00'))
             now = datetime.now(timezone.utc)
             if timeout_until > now:
                 # Force logout
@@ -274,7 +293,12 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
     timeout_until_str = user.get("timeout_until")
     if timeout_until_str:
         try:
-            timeout_until = datetime.fromisoformat(timeout_until_str.replace('Z', '+00:00'))
+            if isinstance(timeout_until_str, datetime):
+                timeout_until = timeout_until_str
+                if timeout_until.tzinfo is None:
+                    timeout_until = timeout_until.replace(tzinfo=timezone.utc)
+            else:
+                timeout_until = datetime.fromisoformat(timeout_until_str.replace('Z', '+00:00'))
             now = datetime.now(timezone.utc)
             if timeout_until > now:
                 sisa_detik = int((timeout_until - now).total_seconds())
@@ -318,7 +342,8 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
             httponly=True,
             secure=False,
             samesite="lax",
-            max_age=cookie_max_age
+            max_age=cookie_max_age,
+            path="/"
         )
         
         # Kirim notifikasi login ke Telegram (non-blocking)

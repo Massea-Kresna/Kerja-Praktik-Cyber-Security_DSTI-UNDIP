@@ -3065,19 +3065,30 @@ function renderUserTable() {
             : `<span class="badge-user-role">User</span>`;
 
         const isOnline = u.is_online;
-        const statusBadge = isOnline
-            ? `<span class="status-indicator status-online">Online</span>`
-            : `<span class="status-indicator status-offline">Offline</span>`;
-
         const lastActiveText = u.is_online ? "Baru saja" : formatRelativeTime(u.last_online);
 
         // Logika check timeout
         let isTimedOut = false;
+        let timeoutText = '';
         if (u.timeout_until) {
             const timeoutDate = new Date(u.timeout_until);
-            if (timeoutDate > new Date()) {
+            const now = new Date();
+            if (timeoutDate > now) {
                 isTimedOut = true;
+                const diffSecs = Math.floor((timeoutDate - now) / 1000);
+                const mins = Math.floor(diffSecs / 60);
+                const secs = diffSecs % 60;
+                timeoutText = ` (Sisa ${mins}m ${secs}s)`;
             }
+        }
+
+        let statusBadge = '';
+        if (isOnline) {
+            statusBadge = `<span class="status-indicator status-online">Online</span>`;
+        } else if (isTimedOut) {
+            statusBadge = `<span class="status-indicator status-timeout">Timeout</span>`;
+        } else {
+            statusBadge = `<span class="status-indicator status-offline">Offline</span>`;
         }
 
         let actionButtons = '';
@@ -3085,9 +3096,12 @@ function renderUserTable() {
             actionButtons = `<span style="color:var(--text-tertiary); font-style:italic;">Akun Anda</span>`;
         } else if (isTimedOut) {
             actionButtons = `
-                <div style="display: flex; gap: 8px; align-items: center;">
-                    <button class="btn-timeout" style="border-color:#22c55e; color:#22c55e; margin: 0;" onclick="triggerRemoveTimeout('${u.username}')">Cabut Timeout</button>
-                    <button class="btn-delete-user" style="margin: 0;" onclick="triggerDeleteUser('${u.username}')">Hapus</button>
+                <div style="display: flex; flex-direction: column; gap: 4px; justify-content: center;">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="btn-timeout" style="border-color:#22c55e; color:#22c55e; margin: 0;" onclick="triggerRemoveTimeout('${u.username}')">Cabut Timeout</button>
+                        <button class="btn-delete-user" style="margin: 0;" onclick="triggerDeleteUser('${u.username}')">Hapus</button>
+                    </div>
+                    <span style="font-size: 11px; color: #ef4444; font-weight: 500; margin-left: 2px;">${timeoutText.trim()}</span>
                 </div>
             `;
         } else {

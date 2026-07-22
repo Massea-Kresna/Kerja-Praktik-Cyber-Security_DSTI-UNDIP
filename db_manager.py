@@ -172,6 +172,43 @@ def update_user_session(username: str, session_id: str or None, is_online: bool)
             return u
     return None
 
+def update_user_online_status(username: str, is_online: bool):
+    now_iso = datetime.now(timezone.utc).isoformat()
+    conn = get_db_connection()
+    if conn:
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                if is_online:
+                    cur.execute(
+                        'UPDATE users SET is_online = %s, last_online = %s WHERE username = %s RETURNING *',
+                        (is_online, now_iso, username)
+                    )
+                else:
+                    cur.execute(
+                        'UPDATE users SET is_online = %s WHERE username = %s RETURNING *',
+                        (is_online, username)
+                    )
+                res = cur.fetchone()
+                conn.commit()
+                if res:
+                    return dict(res)
+        except Exception as e:
+            print(f'[-] Postgres update_user_online_status error, fallback ke lokal: {e}')
+            if conn:
+                conn.rollback()
+        finally:
+            conn.close()
+            
+    users = _read_local_users()
+    for u in users:
+        if u['username'] == username:
+            u['is_online'] = is_online
+            if is_online:
+                u['last_online'] = now_iso
+            _write_local_users(users)
+            return u
+    return None
+
 def update_user_timeout(username: str, timeout_until: str or None):
     conn = get_db_connection()
     if conn:
