@@ -1040,23 +1040,26 @@ class SchedulePayload(BaseModel):
     inactive_targets: Optional[List[str]] = []
 
 @app.post("/api/schedule-scan")
-async def schedule_scan(payload: SchedulePayload):
+async def schedule_scan(payload: SchedulePayload, current_user = Depends(get_current_user)):
     """Memprioritaskan domain ke dalam antrean Supabase untuk dieksekusi Celery Beat"""
     if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database Supabase belum terkoneksi!")
 
     try:
-        for domain in payload.targets:
-            dom = db_manager.get_domain_by_name(domain)
-            if dom:
-                db_manager.update_domain(dom['id'], dom['domain_name'], dom['ip_address'], True)
-        
-        for domain in payload.inactive_targets:
-            dom = db_manager.get_domain_by_name(domain)
-            if dom:
-                db_manager.update_domain(dom['id'], dom['domain_name'], dom['ip_address'], False)
+        # Gunakan eksekusi SQL langsung agar jauh lebih cepat dan kebal error Tuple/Dict
+        conn = db_manager.get_raw_connection()
+        with conn.cursor() as cur:
+            for domain in payload.targets:
+                cur.execute("UPDATE domains SET is_active = True WHERE domain_name = %s", (domain,))
             
-        print(f"[!] MARKAS: {len(payload.targets)} target dimasukkan ke radar aktif Celery.")
+            if hasattr(payload, 'inactive_targets') and payload.inactive_targets:
+                for domain in payload.inactive_targets:
+                    cur.execute("UPDATE domains SET is_active = False WHERE domain_name = %s", (domain,))
+        
+        # Wajib di-commit agar perubahan tersimpan di database
+        conn.commit()
+        
+        print(f"[!] MARKAS: {len(payload.targets)} target dimasukkan ke radar aktif Celery oleh {current_user.get('username')}.")
         
         return {
             "status": "success", 
