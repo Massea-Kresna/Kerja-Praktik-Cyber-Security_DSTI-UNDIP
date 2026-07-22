@@ -1000,14 +1000,7 @@
                         <div class="meta-label">RULE ID</div>
                         <div class="meta-value" id="modalRuleId">00000000-0000</div>
                     </div>
-                    <div>
-                        <div class="meta-label">FIRST SEEN</div>
-                        <div class="meta-value" id="modalFirstSeen">-</div>
-                    </div>
-                    <div>
-                        <div class="meta-label">LAST SEEN</div>
-                        <div class="meta-value" id="modalLastSeen">-</div>
-                    </div>
+
                     <div>
                         <div class="meta-label">LOGS MATCHED</div>
                         <div class="meta-value">1</div>
@@ -1016,51 +1009,54 @@
 
                 <div class="threat-insights-card">
                     <div class="insights-header">
-                        <h3>THREAT INSIGHTS</h3>
+                        <h3>Risk Description</h3>
                         <span class="confidence">Confidence: High</span>
                     </div>
                     <div class="insights-desc" id="modalDesc">
                         Description goes here.
                     </div>
 
-                    <div class="insights-grid">
-                        <div>
-                            <div class="meta-label">SUGGESTED SEVERITY</div>
-                            <div class="meta-value" id="modalSeverity">High</div>
-                        </div>
-                        <div>
-                            <div class="meta-label">THREAT TYPE</div>
-                            <div class="meta-value">web_scanner</div>
-                        </div>
-                    </div>
+
 
                     <div class="mt-4">
-                        <div class="meta-label">RECOMMENDATION</div>
-                        <div class="meta-value" id="modalRecommendation">Investigate and patch.</div>
+                        <div class="insights-header">
+                            <h3>Recommendation</h3>
+                        </div>
+                        <div class="insights-desc mt-2" id="modalRecommendation">Investigate and patch.</div>
+                    </div>
+
+                    <!-- New Classification Section -->
+                    <div class="mt-4" id="modalClassificationSection" style="display: none;">
+                        <div class="insights-header">
+                            <h3>Classification</h3>
+                        </div>
+                        <div class="insights-desc mt-2" style="line-height: 1.6;">
+                            <div id="class_epss_score_container" style="display:none;">
+                                <strong>EPSS score:</strong> <span id="modalEpssScore"></span>
+                            </div>
+                            <div id="class_epss_percentile_container" style="display:none;">
+                                <strong>EPSS percentile:</strong> <span id="modalEpssPercentile"></span>
+                            </div>
+                            <div id="class_cisa_kev_container" style="display:none;">
+                                <strong>CISA KEV:</strong> <span id="modalCisaKev"></span>
+                            </div>
+                            <div id="class_cve_container" style="display:none;">
+                                <strong>CVE:</strong> <span id="modalCve"></span>
+                            </div>
+                            <div id="class_cvss_v3_container" style="display:none;">
+                                <strong>CVSS V3:</strong> <span id="modalCvssV3"></span>
+                            </div>
+                            <div id="class_cwe_container" style="display:none;">
+                                <strong>CWE:</strong> <span id="modalCwe"></span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <div class="evidence-section mt-4">
-                    <div class="meta-label mb-2">EVIDENCE LOGS</div>
-                    <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow:hidden;">
-                        <table class="modern-table small-table" style="margin:0;">
-                            <thead>
-                                <tr>
-                                    <th>TIMESTAMP</th>
-                                    <th>HOST</th>
-                                    <th>PROGRAM</th>
-                                    <th>MESSAGE</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td id="modalLogTime">-</td>
-                                    <td id="modalLogHost">-</td>
-                                    <td>pentest-tools</td>
-                                    <td id="modalLogMsg" class="font-mono text-truncate">...</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <h3 style="margin-bottom: 12px;">Evidence</h3>
+                    <div id="evidenceContainer">
+                        <!-- Evidence instances will be injected here by app.js -->
                     </div>
                 </div>
             </div>
@@ -1548,7 +1544,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=74"></script>
+    <script src="app.js?v=87"></script>
 </body>
 
 </html>

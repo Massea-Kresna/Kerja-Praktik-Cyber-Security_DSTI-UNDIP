@@ -2307,10 +2307,82 @@ function openThreatModal(vuln) {
     // Mengisi data inti
     document.getElementById('modalTitle').textContent = vuln.title || 'Vulnerability Alert';
     document.getElementById('modalRuleId').textContent = vuln.check_type || 'Unknown Scanner';
-    document.getElementById('modalSeverity').textContent = vuln.severity || 'LOW';
-    document.getElementById('modalSeverity').className = `meta-value text-${getSeverityClass(vuln.severity)}`;
+
     document.getElementById('modalDesc').textContent = vuln.description || 'No description available.';
     document.getElementById('modalRecommendation').textContent = vuln.recommendation || 'No recommendation provided.';
+
+    // Menangani Classification Section
+    let hasClassification = false;
+    
+    if (vuln.epss_score) {
+        document.getElementById('class_epss_score_container').style.display = 'block';
+        document.getElementById('modalEpssScore').textContent = vuln.epss_score;
+        hasClassification = true;
+    } else {
+        document.getElementById('class_epss_score_container').style.display = 'none';
+    }
+
+    if (vuln.epss_percentile) {
+        document.getElementById('class_epss_percentile_container').style.display = 'block';
+        document.getElementById('modalEpssPercentile').textContent = vuln.epss_percentile;
+        hasClassification = true;
+    } else {
+        document.getElementById('class_epss_percentile_container').style.display = 'none';
+    }
+
+    if (vuln.cisa_kev !== undefined && vuln.cisa_kev !== null) {
+        document.getElementById('class_cisa_kev_container').style.display = 'block';
+        document.getElementById('modalCisaKev').textContent = vuln.cisa_kev ? 'True' : 'False';
+        hasClassification = true;
+    } else {
+        document.getElementById('class_cisa_kev_container').style.display = 'none';
+    }
+
+    let validCve = vuln.cve && vuln.cve.trim() !== '' && vuln.cve.trim() !== '{}';
+
+    if (validCve) {
+        document.getElementById('class_cve_container').style.display = 'block';
+        
+        // Parse and generate hyperlinks for CVEs
+        const cves = vuln.cve.split(',').map(c => c.trim()).filter(c => c && c !== '{}');
+        const cveHtml = cves.map(c => `<a href="https://nvd.nist.gov/vuln/detail/${c}" target="_blank" style="color: #0d6efd; text-decoration: underline;">${c}</a>`).join(', ');
+        
+        document.getElementById('modalCve').innerHTML = cveHtml;
+        hasClassification = true;
+    } else {
+        document.getElementById('class_cve_container').style.display = 'none';
+    }
+
+    if (vuln.cvss_v3) {
+        document.getElementById('class_cvss_v3_container').style.display = 'block';
+        document.getElementById('modalCvssV3').textContent = vuln.cvss_v3;
+        hasClassification = true;
+    } else {
+        document.getElementById('class_cvss_v3_container').style.display = 'none';
+    }
+
+    if (vuln.cwe) {
+        document.getElementById('class_cwe_container').style.display = 'block';
+        
+        // Parse and generate hyperlinks for CWEs
+        const cwes = vuln.cwe.split(',').map(c => c.trim()).filter(c => c);
+        const cweHtml = cwes.map(c => {
+            // Extract the number from CWE-XXX
+            const match = c.match(/CWE-(\d+)/i);
+            if (match) {
+                return `<a href="https://cwe.mitre.org/data/definitions/${match[1]}.html" target="_blank" style="color: #0d6efd; text-decoration: underline;">${c}</a>`;
+            }
+            return c; // fallback if regex fails
+        }).join(', ');
+        
+        document.getElementById('modalCwe').innerHTML = cweHtml;
+        hasClassification = true;
+    } else {
+        document.getElementById('class_cwe_container').style.display = 'none';
+    }
+
+    // Only display the Classification section if there is a valid CVE
+    document.getElementById('modalClassificationSection').style.display = validCve ? 'block' : 'none';
 
     // ==========================================
     // LOGIKA PENGKATEGORIAN OTOMATIS (ULTIMATE VERSION)
@@ -2400,14 +2472,119 @@ function openThreatModal(vuln) {
     const progBadge = document.getElementById('modalProgramName');
     if (progBadge) progBadge.textContent = programName;
 
-    // Mock data for evidence logs
-    const now = new Date().toISOString();
-    document.getElementById('modalFirstSeen').textContent = formatDate(now);
-    document.getElementById('modalLastSeen').textContent = formatDate(now);
+    // Render Evidence
+    const evidenceContainer = document.getElementById('evidenceContainer');
+    if (evidenceContainer) {
+        evidenceContainer.innerHTML = ''; // clear
 
-    document.getElementById('modalLogTime').textContent = formatDate(now);
-    document.getElementById('modalLogHost').textContent = currentDomainData?.domain?.domain_name || 'host';
-    document.getElementById('modalLogMsg').textContent = `Matched signature: ${vuln.title}`;
+        if (vuln.evidence && vuln.evidence.trim() !== '') {
+            try {
+                const evJson = JSON.parse(vuln.evidence);
+                if (evJson.type === 'instances' && Array.isArray(evJson.data)) {
+                    evJson.data.forEach((inst) => {
+                        evidenceContainer.appendChild(createEvidenceCard(inst));
+                    });
+                } else if (evJson.type === 'text') {
+                    evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="white-space: pre-wrap;">${escapeHtml(evJson.data)}</div></div>`;
+                } else {
+                    evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="white-space: pre-wrap;">${escapeHtml(vuln.evidence)}</div></div>`;
+                }
+            } catch (e) {
+                // Fallback for old data or plain text
+                evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="white-space: pre-wrap;">${escapeHtml(vuln.evidence)}</div></div>`;
+            }
+        } else {
+            evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc">No specific evidence provided by the scanner. \n(Signature: ${escapeHtml(vuln.title)})</div></div>`;
+        }
+    }
+}
+
+function escapeHtml(unsafe) {
+    if (!unsafe) return '';
+    return unsafe.toString()
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+}
+
+function createEvidenceCard(inst) {
+    const card = document.createElement('div');
+    card.className = 'evidence-card';
+    
+    let html = '';
+    
+    // URL Box
+    if (inst.uri) {
+        let paramStr = '';
+        if (inst.parameter) {
+            paramStr = `
+            <div class="evidence-param-box">
+                <div class="evidence-url-label">Cookie / Parameter</div>
+                <div style="font-size:0.9rem; color:var(--color-text);">${escapeHtml(inst.parameter)}</div>
+            </div>`;
+        }
+        
+        html += `
+        <div class="evidence-url-box">
+            <div>
+                <div class="evidence-url-label">URL</div>
+                <a href="${escapeHtml(inst.uri)}" target="_blank" class="evidence-url-link">${escapeHtml(inst.uri)}</a>
+            </div>
+            ${paramStr}
+        </div>`;
+    }
+    
+    // Description/Evidence string
+    if (inst.evidence || inst.details) {
+        const desc = inst.evidence || inst.details;
+        html += `<div class="evidence-desc">${escapeHtml(desc)}</div>`;
+    }
+    
+    // Request / Response Terminal
+    let traceText = '';
+    if (inst.request_response) {
+        traceText = inst.request_response;
+    } else if (inst.request || inst.response) {
+        if (inst.request) traceText += '--- REQUEST ---\n' + inst.request + '\n\n';
+        if (inst.response) traceText += '--- RESPONSE ---\n' + inst.response;
+    } else if (inst.output) {
+        traceText = inst.output;
+    }
+    
+    if (traceText) {
+        const lines = escapeHtml(traceText).trim().split('\n');
+        let linesHtml = '';
+        let contentHtml = '';
+        lines.forEach((l, i) => {
+            linesHtml += `<div>${i+1}</div>`;
+            contentHtml += `<div>> ${l || ' '}</div>`;
+        });
+        
+        html += `
+        <div class="evidence-terminal">
+            <div class="evidence-terminal-header">
+                <span>Request / Response</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            </div>
+            <div class="evidence-terminal-body">
+                <div class="evidence-terminal-lines">${linesHtml}</div>
+                <div class="evidence-terminal-content">${contentHtml}</div>
+            </div>
+            <div class="evidence-terminal-footer" onclick="this.previousElementSibling.style.maxHeight = this.previousElementSibling.style.maxHeight === 'none' ? '250px' : 'none'; this.textContent = this.previousElementSibling.style.maxHeight === 'none' ? 'Collapse' : 'Expand';">
+                Expand
+            </div>
+        </div>`;
+    }
+    
+    // Fallback if neither URL nor trace was rendered, just dump JSON
+    if (!html) {
+        html = `<div class="evidence-desc" style="white-space: pre-wrap; font-family: monospace;">${escapeHtml(JSON.stringify(inst, null, 2))}</div>`;
+    }
+    
+    card.innerHTML = html;
+    return card;
 }
 
 function closeThreatModal() {

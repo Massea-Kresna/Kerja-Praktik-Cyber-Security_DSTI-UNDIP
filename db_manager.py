@@ -429,10 +429,17 @@ def insert_scan_result(history_id, scan_result):
                 v.get('check', 'UNKNOWN'),
                 v.get('title', ''),
                 v.get('detail', ''),
-                v.get('recommendation', '')
+                v.get('recommendation', ''),
+                v.get('epss_score'),
+                v.get('epss_percentile'),
+                v.get('cisa_kev'),
+                v.get('cve'),
+                v.get('cvss_v3'),
+                v.get('cwe'),
+                v.get('evidence')
             ) for v in scan_result]
             cur.executemany(
-                'INSERT INTO scan_result (history_id, severity, check_type, title, description, recommendation) VALUES (%s, %s, %s, %s, %s, %s)',
+                'INSERT INTO scan_result (history_id, severity, check_type, title, description, recommendation, epss_score, epss_percentile, cisa_kev, cve, cvss_v3, cwe, evidence) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
                 data
             )
             conn.commit()
@@ -541,14 +548,64 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type='Web Scanne
                 
             title = f.get('title', f.get('name', 'Unknown Vulnerability'))
             desc = f.get('description', '')
+            if not desc:
+                desc = f.get('risk_description', '')
+            if not desc:
+                desc = f.get('output', '')
+            if not desc:
+                desc = f.get('details', '')
             recom = f.get('remediation', f.get('recommendation', ''))
+            
+            # Ekstraksi atribut klasifikasi baru
+            epss_score = f.get('epss_score')
+            epss_percentile = f.get('epss_percentile')
+            cisa_kev = f.get('cisa_kev')
+            
+            cve_val = f.get('cve', '')
+            if not cve_val:
+                cves = f.get('cves', [])
+                if isinstance(cves, list) and cves:
+                    cve_val = ', '.join(str(c) for c in cves)
+            
+            cvss_v3 = f.get('cvss_v3')
+            if not cvss_v3:
+                cvss_v3 = f.get('cvss3_score')
+            
+            cwe_val = f.get('cwe', '')
+            if not cwe_val:
+                cwes = f.get('cwes', [])
+                if isinstance(cwes, list) and cwes:
+                    cwe_val = ', '.join(str(c) for c in cwes)
+            
+            # Ekstraksi Evidence (Simpan sebagai JSON agar UI baru dapat melakukan render komponen card)
+            evidence_val = ''
+            instances = f.get('instances', [])
+            
+            if isinstance(instances, list) and instances:
+                evidence_val = json.dumps({"type": "instances", "data": instances})
+            else:
+                fallback_txt = f.get('output', '')
+                if not fallback_txt:
+                    fallback_txt = f.get('details', '')
+                
+                if fallback_txt:
+                    evidence_val = json.dumps({"type": "text", "data": fallback_txt})
+                else:
+                    evidence_val = ''
             
             vuln_obj = {
                 'severity': severity,
                 'check': scanner_type,
                 'title': title,
                 'detail': desc,
-                'recommendation': recom
+                'recommendation': recom,
+                'epss_score': epss_score,
+                'epss_percentile': epss_percentile,
+                'cisa_kev': cisa_kev,
+                'cve': cve_val,
+                'cvss_v3': cvss_v3,
+                'cwe': cwe_val,
+                'evidence': evidence_val
             }
             
             if severity in ['MEDIUM', 'HIGH', 'CRITICAL']:
@@ -559,7 +616,14 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type='Web Scanne
                     'check_type': scanner_type,
                     'title': title,
                     'description': desc,
-                    'recommendation': recom
+                    'recommendation': recom,
+                    'epss_score': epss_score,
+                    'epss_percentile': epss_percentile,
+                    'cisa_kev': cisa_kev,
+                    'cve': cve_val,
+                    'cvss_v3': cvss_v3,
+                    'cwe': cwe_val,
+                    'evidence': evidence_val
                 })
             
             if severity in ['HIGH', 'CRITICAL']:
@@ -877,7 +941,7 @@ def get_scan_results_for_history(history_id):
     if not conn: return []
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute('SELECT severity, check_type, title, description, recommendation FROM scan_result WHERE history_id = %s', (history_id,))
+            cur.execute('SELECT severity, check_type, title, description, recommendation, epss_score, epss_percentile, cisa_kev, cve, cvss_v3, cwe, evidence FROM scan_result WHERE history_id = %s', (history_id,))
             res = cur.fetchall()
             return [dict(r) for r in res]
     except Exception as e:
@@ -950,7 +1014,7 @@ def get_scan_history_list(limit=20):
             if not h_res: return []
             
             h_ids = tuple([h['id'] for h in h_res])
-            cur.execute('SELECT history_id, title, severity, check_type, description, recommendation FROM scan_result WHERE history_id IN %s', (h_ids,))
+            cur.execute('SELECT history_id, title, severity, check_type, description, recommendation, epss_score, epss_percentile, cisa_kev, cve, cvss_v3, cwe, evidence FROM scan_result WHERE history_id IN %s', (h_ids,))
             sr_res = cur.fetchall()
             
             sr_map = {}
@@ -990,6 +1054,7 @@ def get_vulnerabilities_list(severity=None, limit=50):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             query = """
                 SELECT sr.id, sr.severity, sr.check_type, sr.title, sr.description, sr.recommendation, 
+                       sr.epss_score, sr.epss_percentile, sr.cisa_kev, sr.cve, sr.cvss_v3, sr.cwe, sr.evidence,
                        sr.history_id, sh.scan_date, sh.domain_id, d.domain_name
                 FROM scan_result sr
                 JOIN scan_history sh ON sr.history_id = sh.id
