@@ -981,10 +981,22 @@ async def run_pentest_tools_background(domain_name: str):
     async with aiohttp.ClientSession() as session:
         await process_domain_scan(session, domain_name, semaphore)
     print(f"[+] [BACKGROUND] Scan Pentest-Tools selesai untuk: {domain_name}")
+    
+    # 1. Simpan ke database agar notifikasi permanen
+    try:
+        db_manager.create_notification(
+            title="Scan Selesai",
+            message=f"Pemindaian untuk target {domain_name} telah selesai.",
+            notif_type="scan_finished"
+        )
+    except Exception:
+        pass
+
+    # 2. Beritahu frontend via WebSocket
     await manager.broadcast_to_admins({
         "event": "scan_finished",
         "domain": domain_name,
-        "time": datetime.now(config.WIB).isoformat()
+        "time": datetime.now(timezone(timedelta(hours=7))).isoformat()
     })
 
 # ===================================================================
@@ -1058,12 +1070,23 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
             success_count = sum(1 for r in results if r)
             failed_count = len(results) - success_count
             print(f"[+] Network Scan Selesai: {success_count} sukses, {failed_count} gagal.")
-            await asyncio.gather(*tasks)
+            
+            # (BARIS AWAIT KEDUA YANG BIKIN CRASH SUDAH DIHAPUS DI SINI)
+            
             for target in targets:
+                try:
+                    db_manager.create_notification(
+                        title="Network Scan Selesai",
+                        message=f"Pemindaian jaringan untuk target {target} telah selesai.",
+                        notif_type="scan_finished"
+                    )
+                except Exception:
+                    pass
+                    
                 await manager.broadcast_to_admins({
                     "event": "scan_finished",
                     "domain": target,
-                    "time": datetime.now(config.WIB).isoformat()
+                    "time": datetime.now(timezone(timedelta(hours=7))).isoformat()
                 })
 
 async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
@@ -1076,12 +1099,23 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
             success_count = sum(1 for r in results if r)
             failed_count = len(results) - success_count
             print(f"[+] Web Scan Selesai: {success_count} sukses, {failed_count} gagal.")
-            await asyncio.gather(*tasks)
+            
+            # (BARIS AWAIT KEDUA YANG BIKIN CRASH SUDAH DIHAPUS DI SINI)
+            
             for target in targets:
+                try:
+                    db_manager.create_notification(
+                        title="Website Scan Selesai",
+                        message=f"Pemindaian web untuk target {target} telah selesai.",
+                        notif_type="scan_finished"
+                    )
+                except Exception:
+                    pass
+                
                 await manager.broadcast_to_admins({
                     "event": "scan_finished",
                     "domain": target,
-                    "time": datetime.now(config.WIB).isoformat()
+                    "time": datetime.now(timezone(timedelta(hours=7))).isoformat()
                 })
 
 class WebScanRequest(BaseModel):
