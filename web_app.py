@@ -1016,13 +1016,6 @@ async def run_pentest_tools_background(domain_name: str):
     print(f"[+] [BACKGROUND] Scan Pentest-Tools selesai untuk: {domain_name}")
     # 1. Simpan ke database agar notifikasi permanen
     try:
-        db_manager.create_notification(
-            title="Scan Selesai",
-            message=f"Pemindaian untuk target {domain_name} telah selesai.",
-            notif_type="scan_finished"
-        )
-    except Exception:
-        pass
 
     # 2. Siapkan notifikasi untuk WebSocket
     notif = {
@@ -1123,13 +1116,6 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
             for target in targets:
                 # 1. Simpan ke database
                 try:
-                    db_manager.create_notification(
-                        title="Network Scan Selesai",
-                        message=f"Network Scan untuk target {target} telah selesai.",
-                        notif_type="scan_finished"
-                    )
-                except Exception:
-                    pass
                 
                 # 2. Siapkan notifikasi untuk WebSocket
                 notif = {
@@ -1167,13 +1153,6 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
             for target in targets:
                 # 1. Simpan ke database
                 try:
-                    db_manager.create_notification(
-                        title="Web Scan Selesai",
-                        message=f"Web Scan untuk target {target} telah selesai.",
-                        notif_type="scan_finished"
-                    )
-                except Exception:
-                    pass
                 
                 # 2. Siapkan notifikasi untuk WebSocket
                 notif = {
