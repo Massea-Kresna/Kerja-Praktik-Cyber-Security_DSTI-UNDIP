@@ -31,6 +31,60 @@ def check_db_connection():
         return True
     return False
 
+def save_reset_token(email: str, token: str):
+    """Menyimpan token ke database dengan masa aktif 15 menit"""
+    expiry = datetime.now(timezone.utc) + timedelta(minutes=15)
+    query = "UPDATE users SET reset_token = %s, token_expiry = %s WHERE username = %s"
+    
+    conn = get_db_connection()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(query, (token, expiry, email))
+            conn.commit()
+        except Exception as e:
+            print(f"[-] Gagal menyimpan reset token: {e}")
+            conn.rollback()
+        finally:
+            conn.close()
+
+def verify_reset_token(token: str):
+    """Mengecek apakah token valid dan belum kedaluwarsa"""
+    query = "SELECT id, username FROM users WHERE reset_token = %s AND token_expiry > %s"
+    now = datetime.now(timezone.utc)
+    
+    conn = get_db_connection()
+    if conn:
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, (token, now))
+                return cur.fetchone()
+        except Exception as e:
+            print(f"[-] Gagal memverifikasi token: {e}")
+            return None
+        finally:
+            conn.close()
+    return None
+
+def reset_user_password(user_id: int, new_hashed_password: str):
+    """Menimpa password baru dan menghapus token yang sudah terpakai"""
+    query = "UPDATE users SET password = %s, reset_token = NULL, token_expiry = NULL WHERE id = %s"
+    
+    conn = get_db_connection()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(query, (new_hashed_password, user_id))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"[-] Gagal mereset password: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+    return False
+
 # ==============================================================================
 # AUTH & USER MANAGEMENT (LOCAL POSTGRES DENGAN JSON FALLBACK)
 # ==============================================================================
@@ -1078,7 +1132,3 @@ def get_vulnerabilities_list(severity=None, limit=50):
         return []
     finally:
         conn.close()
-
-# ==============================================================================
-# NOTIFICATIONS MANAGEMENT (LOCAL JSON) - Dihapus karena menggunakan riwayat scan
-# ==============================================================================
