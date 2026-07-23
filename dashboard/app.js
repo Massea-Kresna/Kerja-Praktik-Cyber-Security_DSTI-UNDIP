@@ -2934,7 +2934,7 @@ function handleSuccessfulLogin(user) {
     }
     const roleEl = document.getElementById('sidebar-user-role');
     if (user.role === 'admin') {
-        document.getElementById('sidebar-user-role').innerHTML = `<span class="badge-admin-role">Admin</span>`;
+        document.getElementById('sidebar-user-role').innerHTML = `<span class="badge-admin-role">ADMIN</span>`;
         document.getElementById('nav-admin').style.display = 'flex';
         document.getElementById('notifWrapper').style.display = 'block';
 

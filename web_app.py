@@ -484,16 +484,14 @@ async def forgot_password(req: ForgotPasswordRequest, background_tasks: Backgrou
 
 @app.post("/api/auth/reset-password")
 def reset_password(req: ResetPasswordRequest):
-    # 1. Validasi token
     user = db_manager.verify_reset_token(req.token)
     if not user:
         raise HTTPException(status_code=400, detail="Token reset tidak valid atau sudah kedaluwarsa.")
     
-    # 2. Enkripsi (Hash) password baru menggunakan fungsi bawaan db_manager Anda
     new_hashed_pw = db_manager.hash_password(req.new_password)
     
-    # 3. Timpa ke dalam database
-    success = db_manager.reset_user_password(user["id"], new_hashed_pw)
+    # UBAH BARIS INI: Gunakan user["username"], bukan user["id"]
+    success = db_manager.reset_user_password(user["username"], new_hashed_pw)
     
     if success:
         return {"status": "ok", "message": "Password berhasil diubah! Silakan login menggunakan password baru Anda."}
