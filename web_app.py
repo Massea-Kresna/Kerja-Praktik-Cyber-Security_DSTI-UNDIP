@@ -24,6 +24,7 @@ import uuid
 import os
 import json
 import requests
+import secrets
 from typing import List, Optional
 
 from datetime import datetime, timedelta, timezone
@@ -98,6 +99,46 @@ def send_otp_email(to_email: str, otp: str):
         print(f"[-] Gagal mengirim email OTP: {e}")
         return False
 
+def send_reset_email(to_email: str, reset_token: str, base_url: str):
+    if not config.SMTP_USERNAME or not config.SMTP_PASSWORD:
+        print("[-] SMTP tidak dikonfigurasi. Lewati pengiriman email.")
+        return False
+        
+    msg = MIMEMultipart()
+    msg['From'] = f"UNDIP Security Dashboard <{config.SMTP_USERNAME}>"
+    msg['To'] = to_email
+    msg['Subject'] = "Reset Password - Pentest Dashboard"
+    
+    # Sesuaikan port jika dashboard Anda berjalan di port yang berbeda
+    reset_link = f"{base_url}/dashboard/reset_password.html?token={reset_token}"
+    
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Reset Password Anda</h2>
+        <p>Kami menerima permintaan untuk mereset kata sandi akun Anda di Pentest Dashboard.</p>
+        <div style="background-color: #f3f4f6; padding: 24px; text-align: center; border-radius: 8px; margin: 20px 0;">
+            <a href="{reset_link}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Reset Password Sekarang</a>
+        </div>
+        <p style="color: #6b7280; font-size: 12px; margin-top: 16px;">Tautan ini hanya berlaku selama 15 menit. Jika Anda tidak meminta reset kata sandi, abaikan dan hapus email ini.</p>
+    </div>
+    """
+    msg.attach(MIMEText(html_content, 'html'))
+    
+    try:
+        if config.SMTP_PORT == 465:
+            server = smtplib.SMTP_SSL(config.SMTP_SERVER, config.SMTP_PORT)
+        else:
+            server = smtplib.SMTP(config.SMTP_SERVER, config.SMTP_PORT)
+            server.starttls() 
+            
+        server.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"[-] Gagal mengirim email reset: {e}")
+        return False
+
 # ===================================================================
 # WebSocket Connection Manager untuk Admin & Session Live Updates
 # ===================================================================
@@ -163,6 +204,13 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     username: str
     password: str
+
+class ForgotPasswordRequest(BaseModel):
+    username: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
 
 class TimeoutRequest(BaseModel):
     minutes: int
@@ -433,6 +481,38 @@ def get_me(current_user = Depends(get_current_user)):
         "role": current_user["role"],
         "session_id": current_user["session_id"]
     }
+
+@app.post("/api/auth/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest, background_tasks: BackgroundTasks, request: Request):
+    user = db_manager.get_user_by_username(req.username)
+    
+    if user:
+        token = secrets.token_hex(16)
+        db_manager.save_reset_token(req.username, token)
+        
+        base_url = str(request.base_url).rstrip('/')
+        
+        background_tasks.add_task(send_reset_email, req.username, token, base_url)
+    
+    return {"status": "ok", "message": "Jika email terdaftar di sistem, instruksi reset telah dikirim."}
+
+@app.post("/api/auth/reset-password")
+def reset_password(req: ResetPasswordRequest):
+    # 1. Validasi token
+    user = db_manager.verify_reset_token(req.token)
+    if not user:
+        raise HTTPException(status_code=400, detail="Token reset tidak valid atau sudah kedaluwarsa.")
+    
+    # 2. Enkripsi (Hash) password baru menggunakan fungsi bawaan db_manager Anda
+    new_hashed_pw = db_manager.hash_password(req.new_password)
+    
+    # 3. Timpa ke dalam database
+    success = db_manager.reset_user_password(user["id"], new_hashed_pw)
+    
+    if success:
+        return {"status": "ok", "message": "Password berhasil diubah! Silakan login menggunakan password baru Anda."}
+    else:
+        raise HTTPException(status_code=500, detail="Gagal menyimpan perubahan ke database.")
 
 # ===================================================================
 # API: Admin Panel Endpoints (Hanya untuk Admin)
