@@ -119,11 +119,12 @@
                         </div>
                     </div>
 
-                    <div class="auth-options">
+                    <div class="auth-options" style="display: flex; justify-content: space-between; align-items: center;">
                         <label class="remember-me">
                             <input type="checkbox" id="rememberMe">
                             <span>Remember me</span>
                         </label>
+                        <a href="#" onclick="showForgotPasswordForm()" style="color: var(--primary); font-size: 13px; text-decoration: none; font-weight: 500;">Lupa Password?</a>
                     </div>
                     <div style="width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 0; background-color: #ffffff; display: flex; justify-content: center; align-items: center; box-sizing: border-box; margin-top: 16px; margin-bottom: 24px;">
                         <div class="g-recaptcha" data-sitekey="6LfAKV8tAAAAAIqrh1Mfgny6IGOGR17N373Y7fgc" style="transform: scale(1); transform-origin: center;"></div>
@@ -145,6 +146,21 @@
                     <button type="submit" class="auth-btn" id="otpSubmitBtn">Verifikasi OTP</button>
                     <div style="text-align: center; margin-top: 16px;">
                         <a href="#" onclick="document.getElementById('otpForm').style.display='none'; document.getElementById('authForm').style.display='block'; document.getElementById('authErrorMsg').style.display='none'; document.getElementById('authOtp').value=''; return false;" style="color: #64748b; font-size: 13px; text-decoration: none;">&larr; Kembali ke Login</a>
+                    </div>
+                </form>
+
+                <!-- Form Lupa Password -->
+                <form class="auth-form" id="forgotPasswordForm" style="display: none;" onsubmit="handleForgotPasswordSubmit(event)">
+                    <div style="text-align: center; margin-bottom: 24px; color: #64748b; font-size: 14px;">
+                        Masukkan email/username Anda. Kami akan mengirimkan tautan untuk mereset kata sandi.
+                    </div>
+                    <div class="form-group">
+                        <label for="forgotEmail">Email / Username</label>
+                        <input type="text" id="forgotEmail" class="auth-input" placeholder="Masukkan username" required autocomplete="off">
+                    </div>
+                    <button type="submit" class="auth-btn" id="forgotSubmitBtn">Kirim Tautan Reset</button>
+                    <div style="text-align: center; margin-top: 16px;">
+                        <a href="#" onclick="showLoginForm()" style="color: #64748b; font-size: 13px; text-decoration: none;">&larr; Kembali ke Login</a>
                     </div>
                 </form>
             </div>
