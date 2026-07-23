@@ -2520,6 +2520,11 @@ function openThreatModal(vuln) {
                     } else {
                         evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="color: #6b7280; font-style: italic;">No specific HTTP trace/evidence attached for this vulnerability by the scanner. \n(Signature: ${escapeHtml(vuln.title)})</div></div>`;
                     }
+                } else if (evJson.type === 'vuln_evidence' && evJson.data && evJson.data.type === 'text') {
+                    evidenceContainer.innerHTML = `
+                    <div class="evidence-card">
+                        <div class="evidence-desc" style="white-space: pre-wrap; font-family: monospace; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; color: #334155;">${linkify(escapeHtml(evJson.data.data))}</div>
+                    </div>`;
                 } else {
                     // Jika ada format JSON lain, fallback
                     evidenceContainer.innerHTML = `<div class="evidence-card"><div class="evidence-desc" style="white-space: pre-wrap;">${linkify(escapeHtml(JSON.stringify(evJson)))}</div></div>`;
