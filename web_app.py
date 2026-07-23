@@ -333,9 +333,6 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
     
     # Cek apakah user ditemukan dan apakah password hash-nya cocok
     if not user or not db_manager.verify_password(credentials.password, user.get("password")):
-        # Kirim notifikasi login gagal ke Telegram (non-blocking)
-        client_ip = request.client.host if request.client else "N/A"
-        asyncio.create_task(telegram_notifier.notify_failed_login(credentials.username, client_ip))
         raise HTTPException(status_code=401, detail="Username atau password salah.")
         
     # 3. Cek timeout
@@ -395,10 +392,6 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
             path="/"
         )
         
-        # Kirim notifikasi login ke Telegram (non-blocking)
-        client_ip = request.client.host if request.client else "N/A"
-        asyncio.create_task(telegram_notifier.notify_login(credentials.username, user["role"], client_ip))
-        
         return {
             "status": "success",
             "message": "Login berhasil",
@@ -456,10 +449,6 @@ async def verify_otp(req: VerifyOTPRequest, request: Request, response: Response
         "login_time": datetime.now(config.WIB).isoformat()
     })
     
-    # Kirim notifikasi login admin ke Telegram (non-blocking)
-    client_ip = request.client.host if request.client else "N/A"
-    asyncio.create_task(telegram_notifier.notify_login(req.username, role, client_ip))
-    
     return {"username": req.username, "role": role, "session_id": session_id}
 
 @app.post("/api/auth/logout")
@@ -467,9 +456,6 @@ async def logout_user(response: Response, current_user = Depends(get_current_use
     """Mengakhiri session login user"""
     db_manager.update_user_session(current_user["username"], None, False)
     response.delete_cookie(key="session_id", path="/")
-    
-    # Kirim notifikasi logout ke Telegram (non-blocking)
-    asyncio.create_task(telegram_notifier.notify_logout(current_user["username"], "Logout mandiri"))
     
     return {"status": "ok", "message": "Logout berhasil."}
 
@@ -529,9 +515,6 @@ async def force_logout(target_username: str, admin_user = Depends(get_current_ad
     db_manager.update_user_session(target_username, None, False)
     await manager.kick_user(target_username, "force_logout")
     
-    # Kirim notifikasi force-logout ke Telegram (non-blocking)
-    asyncio.create_task(telegram_notifier.notify_logout(target_username, f"Force-logout oleh admin ({admin_user['username']})"))
-    
     return {"status": "ok", "message": f"User '{target_username}' berhasil di-force logout."}
 
 @app.post("/api/admin/users/{target_username}/timeout")
@@ -540,9 +523,6 @@ async def put_user_timeout(target_username: str, req: TimeoutRequest, admin_user
     timeout_time = (datetime.now(timezone.utc) + timedelta(minutes=req.minutes)).isoformat()
     db_manager.update_user_timeout(target_username, timeout_time)
     await manager.kick_user(target_username, "timeout")
-    
-    # Kirim notifikasi timeout ke Telegram (non-blocking)
-    asyncio.create_task(telegram_notifier.notify_logout(target_username, f"Timeout {req.minutes} menit oleh admin ({admin_user['username']})"))
     
     return {"status": "ok", "message": f"User '{target_username}' ditangguhkan selama {req.minutes} menit."}
 
@@ -1098,25 +1078,37 @@ async def run_pentest_tools_background(domain_name: str):
     async with aiohttp.ClientSession() as session:
         await process_domain_scan(session, domain_name, semaphore)
     print(f"[+] [BACKGROUND] Scan Pentest-Tools selesai untuk: {domain_name}")
-    # 2. Siapkan notifikasi untuk WebSocket
-    notif = {
-        "id": uuid.uuid4().hex,
-        "title": "Scan Selesai",
-        "message": f"Scan untuk {domain_name} telah selesai.",
-        "type": "scan_finished",
-        "domain": domain_name,
-        "time": datetime.now(config.WIB).isoformat(),
-        "created_at": datetime.now(config.WIB).isoformat()
-    }
     await manager.broadcast_to_admins({
         "event": "scan_finished",
         "domain": domain_name,
         "time": datetime.now(timezone(timedelta(hours=7))).isoformat()
     })
-    await manager.broadcast_to_admins({
-        "event": "new_notification",
-        "notification": notif
-    })
+    
+    recent_scans = db_manager.get_scan_history_list(limit=20)
+    risk_level = "SAFE"
+    for scan in recent_scans:
+        if scan.get("domains", {}).get("domain_name") == domain_name:
+            risk_level = scan.get("risk_level", "SAFE")
+            break
+            
+    if risk_level in ["MEDIUM", "HIGH", "CRITICAL"]:
+        await telegram_notifier.notify_high_risk_scan(domain_name, risk_level)
+
+    if risk_level in ["MEDIUM", "HIGH", "CRITICAL"]:
+        # 2. Siapkan notifikasi untuk WebSocket
+        notif = {
+            "id": uuid.uuid4().hex,
+            "title": "Scan Selesai",
+            "message": f"Scan untuk {domain_name} telah selesai.",
+            "type": "scan_finished",
+            "domain": domain_name,
+            "time": datetime.now(config.WIB).isoformat(),
+            "created_at": datetime.now(config.WIB).isoformat()
+        }
+        await manager.broadcast_to_admins({
+            "event": "new_notification",
+            "notification": notif
+        })
 
 # ===================================================================
 # Simpan Jadwal
@@ -1195,27 +1187,38 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
             failed_count = len(results) - success_count
             print(f"[+] Network Scan Selesai: {success_count} sukses, {failed_count} gagal.")
             for target in targets:
-                # 2. Siapkan notifikasi untuk WebSocket
-                notif = {
-                    "id": uuid.uuid4().hex,
-                    "title": "Network Scan Selesai",
-                    "message": f"Network Scan untuk {target} telah selesai.",
-                    "type": "scan_finished",
-                    "domain": target,
-                    "time": datetime.now(config.WIB).isoformat(),
-                    "created_at": datetime.now(config.WIB).isoformat()
-                }
-                
                 # 3. Beritahu via WebSocket
                 await manager.broadcast_to_admins({
                     "event": "scan_finished",
                     "domain": target,
                     "time": datetime.now(config.WIB).isoformat()
                 })
-                await manager.broadcast_to_admins({
-                    "event": "new_notification",
-                    "notification": notif
-                })
+                
+                recent_scans = db_manager.get_scan_history_list(limit=20)
+                risk_level = "SAFE"
+                for scan in recent_scans:
+                    if scan.get("domains", {}).get("domain_name") == target:
+                        risk_level = scan.get("risk_level", "SAFE")
+                        break
+                        
+                if risk_level in ["MEDIUM", "HIGH", "CRITICAL"]:
+                    await telegram_notifier.notify_high_risk_scan(target, risk_level)
+
+                if risk_level in ["MEDIUM", "HIGH", "CRITICAL"]:
+                    # 2. Siapkan notifikasi untuk WebSocket
+                    notif = {
+                        "id": uuid.uuid4().hex,
+                        "title": "Network Scan Selesai",
+                        "message": f"Network Scan untuk {target} telah selesai.",
+                        "type": "scan_finished",
+                        "domain": target,
+                        "time": datetime.now(config.WIB).isoformat(),
+                        "created_at": datetime.now(config.WIB).isoformat()
+                    }
+                    await manager.broadcast_to_admins({
+                        "event": "new_notification",
+                        "notification": notif
+                    })
 
 async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
     """Fungsi latar belakang untuk menjalankan Web Scan pada beberapa target."""
@@ -1229,25 +1232,37 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
             print(f"[+] Web Scan Selesai: {success_count} sukses, {failed_count} gagal.")
             
             for target in targets:
-                # 2. Siapkan notifikasi untuk WebSocket
-                notif = {
-                    "id": uuid.uuid4().hex,
-                    "title": "Web Scan Selesai",
-                    "message": f"Web Scan untuk {target} telah selesai.",
-                    "type": "scan_finished",
-                    "domain": target,
-                    "time": datetime.now(config.WIB).isoformat(),
-                    "created_at": datetime.now(config.WIB).isoformat()
-                }
                 await manager.broadcast_to_admins({
                     "event": "scan_finished",
                     "domain": target,
                     "time": datetime.now(timezone(timedelta(hours=7))).isoformat()
                 })
-                await manager.broadcast_to_admins({
-                    "event": "new_notification",
-                    "notification": notif
-                })
+                
+                recent_scans = db_manager.get_scan_history_list(limit=20)
+                risk_level = "SAFE"
+                for scan in recent_scans:
+                    if scan.get("domains", {}).get("domain_name") == target:
+                        risk_level = scan.get("risk_level", "SAFE")
+                        break
+                        
+                if risk_level in ["MEDIUM", "HIGH", "CRITICAL"]:
+                    await telegram_notifier.notify_high_risk_scan(target, risk_level)
+
+                if risk_level in ["MEDIUM", "HIGH", "CRITICAL"]:
+                    # 2. Siapkan notifikasi untuk WebSocket
+                    notif = {
+                        "id": uuid.uuid4().hex,
+                        "title": "Web Scan Selesai",
+                        "message": f"Web Scan untuk {target} telah selesai.",
+                        "type": "scan_finished",
+                        "domain": target,
+                        "time": datetime.now(config.WIB).isoformat(),
+                        "created_at": datetime.now(config.WIB).isoformat()
+                    }
+                    await manager.broadcast_to_admins({
+                        "event": "new_notification",
+                        "notification": notif
+                    })
 
 class WebScanRequest(BaseModel):
     targets: List[str]
@@ -1756,8 +1771,11 @@ async def api_get_notifications():
         recent_scans = db_manager.get_scan_history_list(limit=10)
         notifs = []
         for scan in recent_scans:
-            domain = scan.get("domains", {}).get("domain_name", "Unknown")
             risk = scan.get("risk_level", "SAFE")
+            if risk not in ["MEDIUM", "HIGH", "CRITICAL"]:
+                continue
+                
+            domain = scan.get("domains", {}).get("domain_name", "Unknown")
             notifs.append({
                 "id": str(scan.get("id")),
                 "title": f"Scan Selesai: {domain}",
