@@ -32,25 +32,26 @@ def check_db_connection():
     return False
 
 def save_reset_token(email: str, token: str):
-    """Menyimpan token ke database dengan masa aktif 15 menit"""
-    # FIX 1: Hapus timezone.utc, gunakan waktu lokal yang sinkron dengan TIMESTAMP Postgres
-    expiry = datetime.now() + timedelta(minutes=15)
+    """Menyimpan token (Waktu dikontrol penuh oleh Python)"""
+    # Gunakan waktu absolut UTC agar tidak terpengaruh lokasi server
+    expiry = datetime.now(timezone.utc) + timedelta(minutes=15)
     
+    saved_to_db = False
     conn = get_db_connection()
     if conn:
         try:
             with conn.cursor() as cur:
+                # Simpan waktu ke database tanpa menggunakan fungsi SQL
                 cur.execute("UPDATE users SET reset_token = %s, token_expiry = %s WHERE username = %s", (token, expiry, email))
-                if cur.rowcount > 0: # Pastikan ada baris yang sukses diubah
-                    conn.commit()
-                    return True
+                conn.commit()
+                saved_to_db = True
         except Exception as e:
-            print(f"[-] Gagal menyimpan reset token: {e}")
+            print(f"[-] Gagal menyimpan reset token PG: {e}")
             conn.rollback()
         finally:
             conn.close()
             
-    # FIX 2: Fallback ke JSON jika user tidak ada di tabel Postgres
+    # Backup otomatis ke JSON jika ada kendala di database
     users = _read_local_users()
     for u in users:
         if u['username'] == email:
@@ -58,31 +59,44 @@ def save_reset_token(email: str, token: str):
             u['token_expiry'] = expiry.isoformat()
             _write_local_users(users)
             return True
-    return False
+            
+    return saved_to_db
 
 def verify_reset_token(token: str):
-    """Mengecek apakah token valid dan belum kedaluwarsa"""
-    now = datetime.now() # Waktu lokal
+    """Mengecek token (Validasi waktu dilakukan 100% di Python)"""
+    now = datetime.now(timezone.utc)
     
+    # 1. Cek dari Database PostgreSQL
     conn = get_db_connection()
     if conn:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("SELECT username FROM users WHERE reset_token = %s AND token_expiry > %s", (token, now))
+                # Ambil data HANYA berdasarkan kecocokan token
+                cur.execute("SELECT username, token_expiry FROM users WHERE reset_token = %s", (token,))
                 res = cur.fetchone()
                 if res:
-                    return dict(res)
+                    exp = res['token_expiry']
+                    if exp:
+                        # Kembalikan zona waktu yang mungkin dihapus sepihak oleh Postgres
+                        if exp.tzinfo is None:
+                            exp = exp.replace(tzinfo=timezone.utc)
+                        
+                        # Validasi waktu secara matematis di Python
+                        if exp > now:
+                            return {"username": res['username']}
         except Exception as e:
-            print(f"[-] Gagal memverifikasi token: {e}")
+            print(f"[-] Gagal memverifikasi token PG: {e}")
         finally:
             conn.close()
             
-    # Fallback JSON
+    # 2. Cek dari Fallback JSON Lokal
     users = _read_local_users()
     for u in users:
         if u.get('reset_token') == token:
             try:
                 exp_time = datetime.fromisoformat(u['token_expiry'])
+                if exp_time.tzinfo is None:
+                    exp_time = exp_time.replace(tzinfo=timezone.utc)
                 if exp_time > now:
                     return {"username": u['username']}
             except Exception:
@@ -90,22 +104,21 @@ def verify_reset_token(token: str):
     return None
 
 def reset_user_password(username: str, new_hashed_password: str):
-    """Menimpa password baru dan menghapus token yang sudah terpakai"""
+    """Menimpa password baru dan membersihkan jejak token"""
+    saved_to_db = False
     conn = get_db_connection()
     if conn:
         try:
             with conn.cursor() as cur:
                 cur.execute("UPDATE users SET password = %s, reset_token = NULL, token_expiry = NULL WHERE username = %s", (new_hashed_password, username))
-                if cur.rowcount > 0:
-                    conn.commit()
-                    return True
+                conn.commit()
+                saved_to_db = True
         except Exception as e:
-            print(f"[-] Gagal mereset password: {e}")
+            print(f"[-] Gagal mereset password PG: {e}")
             conn.rollback()
         finally:
             conn.close()
             
-    # Fallback JSON
     users = _read_local_users()
     for u in users:
         if u['username'] == username:
@@ -114,7 +127,8 @@ def reset_user_password(username: str, new_hashed_password: str):
             u['token_expiry'] = None
             _write_local_users(users)
             return True
-    return False
+            
+    return saved_to_db
 
 # ==============================================================================
 # AUTH & USER MANAGEMENT (LOCAL POSTGRES DENGAN JSON FALLBACK)
