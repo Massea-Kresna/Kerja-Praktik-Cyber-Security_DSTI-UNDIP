@@ -1529,7 +1529,7 @@ function renderNetworkScans() {
         if (isLive) {
             domainName = scan.domain || 'Unknown Target';
             targetSubtitle = scan.target || "Scan in progress...";
-            scanIdLabel = scan.type || `Pentest Tool ${scan.scan_id}`;
+            scanIdLabel = 'Network Scan';
             const progressVal = scan.progress || 0;
 
             // Konversi Waktu (EEST ke WIB)
@@ -1595,7 +1595,7 @@ function renderNetworkScans() {
             actualIndex = allVulns.indexOf(scan);
             domainName = scan.domains?.domain_name || 'Unknown Target';
             targetSubtitle = scan.domains?.ip_address || '-';
-            scanIdLabel = 'Network Scanner';
+            scanIdLabel = 'Network Scan';
 
             if (scan.scan_date) {
                 const d = new Date(scan.scan_date);
@@ -4131,7 +4131,7 @@ function renderWebScannerTable() {
             actualIndex = allVulns.indexOf(scan);
             domainName = scan.domains?.domain_name || 'Unknown Target';
             targetSubtitle = scan.domains?.ip_address || '-';
-            scanIdLabel = scan.vulnerabilities && scan.vulnerabilities.length > 0 ? scan.vulnerabilities[0].check_type : 'Website Scanner';
+            scanIdLabel = 'Website Scan';
 
             if (scan.scan_date) {
                 const d = new Date(scan.scan_date);
