@@ -2841,10 +2841,13 @@ function showLoginOverlay() {
     document.getElementById('nav-admin').style.display = 'none';
     document.getElementById('mainHeader').style.display = 'none';
     document.getElementById('notifWrapper').style.display = 'none';
-
-    // Reset form login & OTP
     document.getElementById('authForm').style.display = 'block';
     document.getElementById('otpForm').style.display = 'none';
+    document.getElementById('authForm').style.display = 'block';
+    document.getElementById('otpForm').style.display = 'none';
+
+    const forgotForm = document.getElementById('forgotPasswordForm');
+    if(forgotForm) forgotForm.style.display = 'none';
     const otpInput = document.getElementById('authOtp');
     if (otpInput) otpInput.value = '';
     const errorMsg = document.getElementById('authErrorMsg');
@@ -2858,6 +2861,54 @@ function showLoginOverlay() {
     if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
         autoRefreshInterval = null;
+    }
+}
+
+// ==========================================
+// LOGIKA LUPA PASSWORD
+// ==========================================
+function showForgotPasswordForm() {
+    document.getElementById('authForm').style.display = 'none';
+    document.getElementById('otpForm').style.display = 'none';
+    document.getElementById('forgotPasswordForm').style.display = 'block';
+    document.getElementById('authErrorMsg').style.display = 'none';
+    document.getElementById('forgotEmail').value = '';
+}
+
+function showLoginForm() {
+    document.getElementById('forgotPasswordForm').style.display = 'none';
+    document.getElementById('otpForm').style.display = 'none';
+    document.getElementById('authForm').style.display = 'block';
+    document.getElementById('authErrorMsg').style.display = 'none';
+}
+
+async function handleForgotPasswordSubmit(e) {
+    e.preventDefault();
+    const email = document.getElementById('forgotEmail').value.trim();
+    const btn = document.getElementById('forgotSubmitBtn');
+    const errMsg = document.getElementById('authErrorMsg');
+
+    btn.textContent = 'Mengirim...';
+    btn.disabled = true;
+    errMsg.style.display = 'none';
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: email })
+        });
+        const data = await resp.json();
+
+        // Selalu tampilkan toast sukses (mencegah enumerasi) lalu kembali ke login
+        showToast("Informasi", data.message, "📧");
+        showLoginForm(); 
+    } catch (err) {
+        errMsg.textContent = "Gagal menghubungi server.";
+        errMsg.style.display = 'block';
+    } finally {
+        btn.textContent = 'Kirim Tautan Reset';
+        btn.disabled = false;
     }
 }
 
