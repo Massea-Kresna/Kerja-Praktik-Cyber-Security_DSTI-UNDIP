@@ -1582,7 +1582,7 @@ function renderNetworkScans() {
                     </td>
                     <td style="padding: 16px;">${statusHtml}</td>
                     <td style="padding: 16px;">
-                        <div style="font-weight: 500; font-size: 13px; color: #334155; margin-bottom: 4px;">https://${escapeHtml(domainName)}/</div>
+                        <div style="font-weight: 500; font-size: 13px; color: #334155; margin-bottom: 4px;">${escapeHtml(domainName)}</div>
                         <div style="font-size: 13px; color: #94a3b8;">${escapeHtml(targetSubtitle)}</div>
                     </td>
                     <td style="padding: 16px; min-width: 120px;">${summaryHtml}</td>
@@ -1645,7 +1645,7 @@ function renderNetworkScans() {
                     </td>
                     <td style="padding: 16px;">${statusHtml}</td>
                     <td style="padding: 16px;">
-                        <div style="font-weight: 500; font-size: 13px; color: #334155; margin-bottom: 4px;">https://${escapeHtml(domainName)}/</div>
+                        <div style="font-weight: 500; font-size: 13px; color: #334155; margin-bottom: 4px;">${escapeHtml(domainName)}</div>
                         <div style="font-size: 13px; color: #94a3b8;">${escapeHtml(targetSubtitle)}</div>
                     </td>
                     <td style="padding: 16px; min-width: 120px;">${summaryHtml}</td>
@@ -4118,7 +4118,7 @@ function renderWebScannerTable() {
                     </td>
                     <td style="padding: 16px;">${statusHtml}</td>
                     <td style="padding: 16px;">
-                        <div style="font-weight: 500; font-size: 13px; color: #334155; margin-bottom: 4px;">https://${escapeHtml(domainName)}/</div>
+                        <div style="font-weight: 500; font-size: 13px; color: #334155; margin-bottom: 4px;">${escapeHtml(domainName.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</div>
                         <div style="font-size: 13px; color: #94a3b8;">${escapeHtml(targetSubtitle)}</div>
                     </td>
                     <td style="padding: 16px; min-width: 120px;">${summaryHtml}</td>
@@ -4180,7 +4180,7 @@ function renderWebScannerTable() {
                     </td>
                     <td style="padding: 16px;">${statusHtml}</td>
                     <td style="padding: 16px;">
-                        <div style="font-weight: 500; font-size: 13px; color: #334155; margin-bottom: 4px;">https://${escapeHtml(domainName)}/</div>
+                        <div style="font-weight: 500; font-size: 13px; color: #334155; margin-bottom: 4px;">${escapeHtml(domainName)}</div>
                         <div style="font-size: 13px; color: #94a3b8;">${escapeHtml(targetSubtitle)}</div>
                     </td>
                     <td style="padding: 16px; min-width: 120px;">${summaryHtml}</td>

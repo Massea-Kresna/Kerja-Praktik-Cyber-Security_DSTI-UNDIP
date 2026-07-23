@@ -1236,15 +1236,28 @@ async def get_active_scans(current_user = Depends(get_current_user)):
                     target_id = scan.get("target_id")
                     domain = targets_map.get(target_id, f"Target ID: {target_id}")
                     
+                    # --- BACA TIPE SCAN (KARENA API TIDAK MENGEMBALIKAN tool_params) ---
+                    tool_id = str(scan.get("tool_id", ""))
+                    
+                    if tool_id == "350":
+                        scan_label = "Network Scan"
+                    elif tool_id == "385":
+                        scan_label = "Network Scan (Light)" # Khusus jika API memakai tool_id 385
+                    elif tool_id == "170":
+                        scan_label = "Website Scan"
+                    else:
+                        scan_label = f"Scanner Tool {tool_id}"
+
                     # Convert HTTP URL to domain if needed, but it's fine to display raw target
                     result.append({
                         "scan_id": scan.get("id"),
-                        "type": f"Pentest Tool {scan.get('tool_id')}",
+                        "type": scan_label,  # <-- Gunakan label baru di sini
                         "domain": domain,
                         "start_time": scan.get("start_time", "N/A"),
                         "live_status": scan.get("status_name"),
                         "progress": scan.get("progress", 0)
                     })
+
     except Exception as e:
         print(f"Error fetching live scans: {e}")
         return {"status": "error", "data": [], "message": str(e)}
