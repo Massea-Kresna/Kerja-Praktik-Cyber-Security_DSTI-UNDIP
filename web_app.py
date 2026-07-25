@@ -1081,7 +1081,9 @@ async def run_pentest_tools_background(domain_name: str):
         "domain": domain_name,
         "time": datetime.now(timezone(timedelta(hours=7))).isoformat()
     })
-    
+
+    await asyncio.sleep(3)
+
     recent_scans = db_manager.get_scan_history_list(limit=20)
     risk_level = "SAFE"
     for scan in recent_scans:
@@ -1191,6 +1193,8 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
                     "domain": target,
                     "time": datetime.now(config.WIB).isoformat()
                 })
+
+                await asyncio.sleep(3)
                 
                 recent_scans = db_manager.get_scan_history_list(limit=20)
                 risk_level = "SAFE"
@@ -1235,6 +1239,8 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
                     "domain": target,
                     "time": datetime.now(timezone(timedelta(hours=7))).isoformat()
                 })
+
+                await asyncio.sleep(3)
                 
                 recent_scans = db_manager.get_scan_history_list(limit=20)
                 risk_level = "SAFE"
@@ -1823,6 +1829,24 @@ async def webhook_notify(req: InternalNotifyRequest, request: Request):
             "message": req.message,
             "type": req.notif_type
         }
+
+        msg_upper = req.message.upper()
+        if any(risk in msg_upper for risk in ["MEDIUM", "HIGH", "CRITICAL"]):
+            # Mengambil nama domain dari judul (Misal: "Scan Selesai: example.com")
+            domain_target = req.title.split(":")[-1].strip()
+            
+            # Menentukan level risiko berdasarkan isi pesan Celery
+            risk_lvl = "MEDIUM"
+            if "CRITICAL" in msg_upper: 
+                risk_lvl = "CRITICAL"
+            elif "HIGH" in msg_upper: 
+                risk_lvl = "HIGH"
+            
+            try:
+                # Memanggil modul notifikasi Telegram
+                await telegram_notifier.notify_high_risk_scan(domain_target, risk_lvl)
+            except Exception as e:
+                print(f"[-] Gagal mengirim notifikasi Telegram dari Celery: {e}")
         
         await manager.broadcast_to_admins({
             "event": "new_notification",
