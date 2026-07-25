@@ -3743,9 +3743,8 @@ function connectLiveWebSocket(sessionId) {
         wsLive.close();
     }
 
-    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProto}//${window.location.host}/ws/live?session_id=${sessionId}`;
-    // const wsUrl = `ws://10.70.128.26:8000/ws/live?session_id=${sessionId}`;
+    let wsUrl = `${API_BASE}/ws/live?session_id=${sessionId}`;
+    wsUrl = wsUrl.replace(/^http/, 'ws');
 
     wsLive = new WebSocket(wsUrl);
 
