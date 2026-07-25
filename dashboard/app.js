@@ -2867,6 +2867,11 @@ function showLoginOverlay() {
         clearInterval(autoRefreshInterval);
         autoRefreshInterval = null;
     }
+    
+    if (typeof activeScansInterval !== 'undefined' && activeScansInterval) {
+        clearInterval(activeScansInterval);
+        activeScansInterval = null;
+    }
 }
 
 // ==========================================
