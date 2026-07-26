@@ -940,7 +940,9 @@ window.renderVulnTrendChart = function () {
                         beginAtZero: true,
                         grace: '5%',
                         ticks: { precision: 0 },
-                        grid: { color: '#e5e7eb', borderDash: [5, 5] },
+                        grid: { 
+                            borderDash: [5, 5] // Memastikan garis putus-putus tetap aktif
+                        },
                         border: { display: false }
                     },
                     x: {
@@ -1150,7 +1152,9 @@ window.renderSevTrendChart = function () {
                         beginAtZero: true,
                         grace: '5%',
                         ticks: { precision: 0 },
-                        grid: { color: '#e5e7eb', borderDash: [5, 5] },
+                        grid: { 
+                            borderDash: [5, 5] // Memastikan garis putus-putus tetap aktif
+                        },
                         border: { display: false }
                     },
                     x: {
@@ -5069,8 +5073,10 @@ function getEnlargedChartOptions(isSeverity) {
             y: {
                 beginAtZero: true,
                 grace: '5%',
-                ticks: { precision: 0, font: { size: 14 } },
-                grid: { color: '#e5e7eb', borderDash: [5, 5] },
+                ticks: { precision: 0 },
+                grid: { 
+                    borderDash: [5, 5] // Memastikan garis putus-putus tetap aktif
+                },
                 border: { display: false }
             },
             x: {
@@ -5193,25 +5199,29 @@ Chart.register({
     id: 'themeAutoUpdater',
     beforeUpdate: (chart) => {
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        
-        // Siapkan palet warna kanvas
-        const textColor = isDark ? '#94a3b8' : '#64748b';    // Warna teks tanggal & legenda
-        const gridColor = isDark ? '#273449' : '#e5e7eb';    // Warna garis pembatas (navy)
-        const tooltipBg = isDark ? '#1e293b' : '#ffffff';    // Latar pop-up hover
-        const tooltipTitle = isDark ? '#f8fafc' : '#1f2937'; // Judul pop-up
-        const tooltipBody = isDark ? '#e2e8f0' : '#374151';  // Isi pop-up
-        const tooltipBorder = isDark ? '#334155' : '#e5e7eb';// Garis pop-up
 
-        // Secara agresif menimpa warna yang ter-hardcode di dalam konfigurasi chart
+        const textColor = isDark ? '#94a3b8' : '#64748b';    
+
+        // WARNA GRID: #cbd5e1 (jelas & elegan di Light Mode), rgba transparan di Dark Mode
+        const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : '#cbd5e1'; 
+
+        const tooltipBg = isDark ? '#1e293b' : '#ffffff';    
+        const tooltipTitle = isDark ? '#f8fafc' : '#1f2937'; 
+        const tooltipBody = isDark ? '#e2e8f0' : '#374151';  
+        const tooltipBorder = isDark ? '#334155' : '#e5e7eb';
+
         if (chart.options.scales.x) {
             if (!chart.options.scales.x.ticks) chart.options.scales.x.ticks = {};
             chart.options.scales.x.ticks.color = textColor;
-            if (chart.options.scales.x.grid) chart.options.scales.x.grid.color = gridColor;
+            if (chart.options.scales.x.grid) chart.options.scales.x.grid.color = isDark ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9';
         }
         if (chart.options.scales.y) {
             if (!chart.options.scales.y.ticks) chart.options.scales.y.ticks = {};
             chart.options.scales.y.ticks.color = textColor;
-            if (chart.options.scales.y.grid) chart.options.scales.y.grid.color = gridColor;
+            if (chart.options.scales.y.grid) {
+                chart.options.scales.y.grid.color = gridColor;
+                chart.options.scales.y.grid.borderDash = [5, 5];
+            }
         }
         if (chart.options.plugins.legend) {
             if (!chart.options.plugins.legend.labels) chart.options.plugins.legend.labels = {};
@@ -5245,14 +5255,31 @@ function toggleTheme() {
     localStorage.setItem('dsti_theme', newTheme);
     updateThemeIcon(newTheme);
     
-    // Terapkan ke global default
-    Chart.defaults.color = newTheme === 'dark' ? '#94a3b8' : '#64748b';
+    // Tentukan warna grid yang kontras dan pas untuk masing-masing mode
+    const activeGridColor = newTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#cbd5e1';
+    const activeXGridColor = newTheme === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9';
     
-    // Memicu update() akan membuat Chart.js menjalankan ulang plugin 'beforeUpdate'
-    // di atas dan merender ulang grafiknya dengan warna yang ramah mata secara instan.
-    if (window.vulnChartInstance) window.vulnChartInstance.update();
-    if (window.sevChartInstance) window.sevChartInstance.update();
-    if (window.enlargedChartInstance) window.enlargedChartInstance.update();
+    // Secara otomatis mendeteksi dan memperbarui SEMUA grafik yang ada di halaman
+    const allCharts = Chart.instances;
+    if (allCharts) {
+        // Chart.instances bisa berupa objek atau array tergantung versi Chart.js
+        const chartList = Array.isArray(allCharts) ? allCharts : Object.values(allCharts);
+        
+        chartList.forEach(chart => {
+            if (chart && chart.options && chart.options.scales) {
+                // Perbarui sumbu Y (garis horizontal)
+                if (chart.options.scales.y && chart.options.scales.y.grid) {
+                    chart.options.scales.y.grid.color = activeGridColor;
+                    chart.options.scales.y.grid.borderDash = [5, 5];
+                }
+                // Perbarui sumbu X
+                if (chart.options.scales.x && chart.options.scales.x.grid) {
+                    chart.options.scales.x.grid.color = activeXGridColor;
+                }
+                chart.update();
+            }
+        });
+    }
 }
 
 function updateThemeIcon(theme) {
