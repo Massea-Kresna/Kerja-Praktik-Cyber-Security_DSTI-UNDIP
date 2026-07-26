@@ -11,7 +11,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=73">
+    <link rel="stylesheet" href="styles.css?v=74">
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <!-- Chart.js -->
@@ -246,6 +246,14 @@
             <header class="topbar" id="mainHeader"
                 style="display: none; justify-content: space-between; align-items: center;">
                 <h1 class="topbar-title">Security Scanner</h1>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <!-- Tombol Dark/Light Mode -->
+                    <button class="icon-btn" onclick="toggleTheme()" id="themeToggleBtn" style="border: none; background: transparent; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; padding: 8px;">
+                        <svg id="themeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <!-- Default icon: Moon -->
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                    </button>
                 <!-- Notification Bell Wrapper -->
                 <div class="notification-wrapper" id="notifWrapper" style="display: none;">
                     <button class="notification-bell-btn" id="notificationBellBtn"
@@ -693,10 +701,10 @@
                                     </button>
                                     <div class="multi-select-panel" style="right: 0; left: auto; width: 140px; top: 100%;">
                                         <div class="multi-select-items">
-                                            <label class="multi-select-item" onclick="exportDomains('txt'); toggleDropdown('exportDropdown');" style="cursor: pointer; display: block; padding: 8px 12px; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'">
+                                            <label class="multi-select-item" onclick="exportDomains('txt'); toggleDropdown('exportDropdown');" style="cursor: pointer; display: block; padding: 8px 12px;">
                                                 Export as .TXT
                                             </label>
-                                            <label class="multi-select-item" onclick="exportDomains('json'); toggleDropdown('exportDropdown');" style="cursor: pointer; display: block; padding: 8px 12px; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'">
+                                            <label class="multi-select-item" onclick="exportDomains('json'); toggleDropdown('exportDropdown');" style="cursor: pointer; display: block; padding: 8px 12px;">
                                                 Export as .JSON
                                             </label>
                                         </div>
@@ -1114,7 +1122,7 @@
                                 <div style="font-size: 11px; color: var(--color-muted); margin-top: 2px;">Full vulnerability analysis</div>
                             </div>
                         </label>
-                        <label style="flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; background: #fff; transition: all 0.15s;">
+                        <label style="flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; background: var(--color-surface); transition: all 0.15s;">
                             <input type="radio" name="webScanType" value="light" style="accent-color: var(--color-accent); width: 16px; height: 16px;">
                             <div>
                                 <div style="font-size: 13px; font-weight: 600; color: var(--color-ink);">Light Scan</div>
@@ -1169,7 +1177,7 @@
                                 <div style="font-size: 11px; color: var(--color-muted); margin-top: 2px;">Full port & vulnerability analysis</div>
                             </div>
                         </label>
-                        <label style="flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; background: #fff; transition: all 0.15s;">
+                        <label style="flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; background: var(--color-surface); transition: all 0.15s;">
                             <input type="radio" name="networkScanType" value="light" style="accent-color: var(--color-accent); width: 16px; height: 16px;">
                             <div>
                                 <div style="font-size: 13px; font-weight: 600; color: var(--color-ink);">Light Scan</div>
@@ -1560,7 +1568,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=93"></script>
+    <script src="app.js?v=94"></script>
 </body>
 
 </html>

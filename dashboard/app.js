@@ -956,10 +956,13 @@ window.renderVulnTrendChart = function () {
                         labels: {
                             usePointStyle: true,
                             pointStyle: 'circle',
+                            color: () => document.documentElement.getAttribute('data-theme') === 'dark' ? '#94a3b8' : '#64748b',
                             generateLabels: (chart) => {
+                                const legendTextColor = document.documentElement.getAttribute('data-theme') === 'dark' ? '#94a3b8' : '#64748b';
                                 return chart.data.datasets.map((dataset, i) => ({
                                     text: dataset.label,
                                     fillStyle: dataset.borderColor,
+                                    fontColor: legendTextColor,
                                     hidden: !chart.isDatasetVisible(i),
                                     strokeStyle: dataset.borderColor,
                                     pointStyle: 'circle',
@@ -1163,10 +1166,13 @@ window.renderSevTrendChart = function () {
                         labels: {
                             usePointStyle: true,
                             pointStyle: 'circle',
+                            color: () => document.documentElement.getAttribute('data-theme') === 'dark' ? '#94a3b8' : '#64748b',
                             generateLabels: (chart) => {
+                                const legendTextColor = document.documentElement.getAttribute('data-theme') === 'dark' ? '#94a3b8' : '#64748b';
                                 return chart.data.datasets.map((dataset, i) => ({
                                     text: dataset.label,
                                     fillStyle: dataset.borderColor,
+                                    fontColor: legendTextColor,
                                     hidden: !chart.isDatasetVisible(i),
                                     strokeStyle: dataset.borderColor,
                                     pointStyle: 'circle',
@@ -1570,7 +1576,7 @@ function renderNetworkScans() {
 
             // STRUKTUR HTML LIVE ROW YANG SUDAH DIRAPIKAN
             return `
-                <tr style="cursor: default; border-bottom: 1px solid #f1f5f9; background: #fafafa;">
+                <tr style="cursor: default; transition: background 0.2s;">
                     <td style="text-align: center; padding: 16px;" onclick="event.stopPropagation();">
                         <input type="checkbox" value="${uniqueScanId}" ${isChecked} onchange="window.toggleNetworkCheckbox(event, this.value)" onclick="event.stopPropagation();" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;">
                     </td>
@@ -1633,7 +1639,7 @@ function renderNetworkScans() {
 
             // STRUKTUR HTML DATABASE ROW YANG SUDAH DIRAPIKAN
             return `
-                <tr onclick="openScanModalIndex(${actualIndex})" style="cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+               <tr onclick="openScanModalIndex(${actualIndex})" style="cursor: pointer; transition: background 0.2s;">
                     <td style="text-align: center; padding: 16px;" onclick="event.stopPropagation();">
                         <input type="checkbox" value="${uniqueScanId}" ${isChecked} onchange="window.toggleNetworkCheckbox(event, this.value)" onclick="event.stopPropagation();" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;">
                     </td>
@@ -4168,7 +4174,7 @@ function renderWebScannerTable() {
             actionBtn = `<button class="btn btn-outline" onclick="stopActiveScan(${scan.scan_id})" style="border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, 0.03);" onmouseover="this.style.background='#ef4444'; this.style.color='#ffffff';" onmouseout="this.style.background='rgba(239, 68, 68, 0.03)'; this.style.color='#ef4444';">Stop Scan</button>`;
 
             return `
-                <tr style="cursor: default; border-bottom: 1px solid #f1f5f9; background: #fafafa;">
+                <tr style="cursor: default; transition: background 0.2s;">
                     <td style="text-align: center; padding: 16px;" onclick="event.stopPropagation();">
                         <input type="checkbox" value="${uniqueScanId}" ${isChecked} onchange="window.toggleWebCheckbox(event, this.value)" onclick="event.stopPropagation();" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;">
                     </td>
@@ -4230,7 +4236,7 @@ function renderWebScannerTable() {
             actionBtn = `<button class="btn btn-outline" onclick="openScanModalIndex(${actualIndex}); event.stopPropagation();">View Report</button>`;
 
             return `
-                <tr onclick="openScanModalIndex(${actualIndex})" style="cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                <tr onclick="openScanModalIndex(${actualIndex})" style="cursor: pointer; transition: background 0.2s;">
                     <td style="text-align: center; padding: 16px;" onclick="event.stopPropagation();">
                         <input type="checkbox" value="${uniqueScanId}" ${isChecked} onchange="window.toggleWebCheckbox(event, this.value)" onclick="event.stopPropagation();" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;">
                     </td>
@@ -4385,7 +4391,7 @@ function openWebScanModal() {
                     card.style.background = 'rgba(0, 88, 189, 0.04)';
                 } else {
                     card.style.borderColor = 'var(--color-border)';
-                    card.style.background = '#fff';
+                    card.style.background = 'var(--color-surface)';
                 }
             });
         });
@@ -4466,7 +4472,7 @@ function openNetworkScanModal() {
                     card.style.background = 'rgba(0, 88, 189, 0.04)';
                 } else {
                     card.style.borderColor = 'var(--color-border)';
-                    card.style.background = '#fff';
+                    card.style.background = 'var(--color-surface)';
                 }
             });
         });
@@ -4559,18 +4565,18 @@ function showSeverityDetailModal(items, timeLabel, rawIsoString) {
         row.style.justifyContent = 'space-between';
         row.style.alignItems = 'center';
         row.style.padding = '10px 14px';
-        row.style.background = '#f8fafc';
+        row.style.backgroundColor = 'var(--color-surface)';
         row.style.borderRadius = '6px';
         row.style.border = '1px solid var(--color-border)';
         row.style.cursor = 'pointer';
         row.style.transition = 'background 0.2s, border-color 0.2s';
 
         row.onmouseover = () => {
-            row.style.background = '#f1f5f9';
-            row.style.borderColor = '#cbd5e1';
+            row.style.backgroundColor = 'var(--bg-surface-hover)';
+            row.style.borderColor = 'var(--primary)';
         };
         row.onmouseout = () => {
-            row.style.background = '#f8fafc';
+            row.style.backgroundColor = 'var(--color-surface)';
             row.style.borderColor = 'var(--color-border)';
         };
 
@@ -4653,18 +4659,18 @@ function showChartDetailModal(chartInstance, index, titleSuffix, rawIsoString, i
             row.style.justifyContent = 'space-between';
             row.style.alignItems = 'center';
             row.style.padding = '10px 14px';
-            row.style.background = '#f8fafc';
+            row.style.backgroundColor = 'var(--color-surface)';
             row.style.borderRadius = '6px';
             row.style.border = '1px solid var(--color-border)';
             row.style.cursor = 'pointer';
             row.style.transition = 'background 0.2s, border-color 0.2s';
 
             row.onmouseover = () => {
-                row.style.background = '#f1f5f9';
-                row.style.borderColor = '#cbd5e1';
+                row.style.backgroundColor = 'var(--bg-surface-hover)';
+                row.style.borderColor = 'var(--primary)';
             };
             row.onmouseout = () => {
-                row.style.background = '#f8fafc';
+                row.style.backgroundColor = 'var(--color-surface)';
                 row.style.borderColor = 'var(--color-border)';
             };
 
@@ -5080,12 +5086,15 @@ function getEnlargedChartOptions(isSeverity) {
                 labels: {
                     usePointStyle: true,
                     pointStyle: 'circle',
+                    color: () => document.documentElement.getAttribute('data-theme') === 'dark' ? '#94a3b8' : '#64748b',
                     font: { size: 15, weight: '500' },
                     padding: 20,
                     generateLabels: (chart) => {
+                        const legendTextColor = document.documentElement.getAttribute('data-theme') === 'dark' ? '#94a3b8' : '#64748b';
                         return chart.data.datasets.map((dataset, i) => ({
                             text: dataset.label,
                             fillStyle: dataset.borderColor,
+                            fontColor: legendTextColor,
                             hidden: !chart.isDatasetVisible(i),
                             strokeStyle: dataset.borderColor,
                             pointStyle: 'circle',
@@ -5173,3 +5182,89 @@ window.toggleSidebar = function () {
         }, 300);
     }
 };
+
+// ==========================================
+// LOGIKA DARK MODE / LIGHT MODE & CHART.JS FIX
+// ==========================================
+
+// 1. Daftarkan Plugin Global Chart.js 
+// (Gunakan beforeUpdate agar warna ditimpa SEBELUM teks dan skala dihitung)
+Chart.register({
+    id: 'themeAutoUpdater',
+    beforeUpdate: (chart) => {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        
+        // Siapkan palet warna kanvas
+        const textColor = isDark ? '#94a3b8' : '#64748b';    // Warna teks tanggal & legenda
+        const gridColor = isDark ? '#273449' : '#e5e7eb';    // Warna garis pembatas (navy)
+        const tooltipBg = isDark ? '#1e293b' : '#ffffff';    // Latar pop-up hover
+        const tooltipTitle = isDark ? '#f8fafc' : '#1f2937'; // Judul pop-up
+        const tooltipBody = isDark ? '#e2e8f0' : '#374151';  // Isi pop-up
+        const tooltipBorder = isDark ? '#334155' : '#e5e7eb';// Garis pop-up
+
+        // Secara agresif menimpa warna yang ter-hardcode di dalam konfigurasi chart
+        if (chart.options.scales.x) {
+            if (!chart.options.scales.x.ticks) chart.options.scales.x.ticks = {};
+            chart.options.scales.x.ticks.color = textColor;
+            if (chart.options.scales.x.grid) chart.options.scales.x.grid.color = gridColor;
+        }
+        if (chart.options.scales.y) {
+            if (!chart.options.scales.y.ticks) chart.options.scales.y.ticks = {};
+            chart.options.scales.y.ticks.color = textColor;
+            if (chart.options.scales.y.grid) chart.options.scales.y.grid.color = gridColor;
+        }
+        if (chart.options.plugins.legend) {
+            if (!chart.options.plugins.legend.labels) chart.options.plugins.legend.labels = {};
+            chart.options.plugins.legend.labels.color = textColor;
+        }
+        if (chart.options.plugins.tooltip) {
+            chart.options.plugins.tooltip.backgroundColor = tooltipBg;
+            chart.options.plugins.tooltip.titleColor = tooltipTitle;
+            chart.options.plugins.tooltip.bodyColor = tooltipBody;
+            chart.options.plugins.tooltip.borderColor = tooltipBorder;
+        }
+    }
+});
+
+function initTheme() {
+    const savedTheme = localStorage.getItem('dsti_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeIcon(savedTheme);
+    
+    // Terapkan default text color global ke Chart.js
+    const isDark = savedTheme === 'dark';
+    Chart.defaults.color = isDark ? '#94a3b8' : '#64748b';
+}
+
+function toggleTheme() {
+    const htmlEl = document.documentElement;
+    const currentTheme = htmlEl.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    htmlEl.setAttribute('data-theme', newTheme);
+    localStorage.setItem('dsti_theme', newTheme);
+    updateThemeIcon(newTheme);
+    
+    // Terapkan ke global default
+    Chart.defaults.color = newTheme === 'dark' ? '#94a3b8' : '#64748b';
+    
+    // Memicu update() akan membuat Chart.js menjalankan ulang plugin 'beforeUpdate'
+    // di atas dan merender ulang grafiknya dengan warna yang ramah mata secara instan.
+    if (window.vulnChartInstance) window.vulnChartInstance.update();
+    if (window.sevChartInstance) window.sevChartInstance.update();
+    if (window.enlargedChartInstance) window.enlargedChartInstance.update();
+}
+
+function updateThemeIcon(theme) {
+    const icon = document.getElementById('themeIcon');
+    if (!icon) return;
+    
+    if (theme === 'dark') {
+        icon.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+    } else {
+        icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+    }
+}
+
+// Jalankan saat file dimuat
+initTheme();

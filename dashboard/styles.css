@@ -2243,3 +2243,457 @@ input[type=number] {
 .evidence-terminal-footer:hover {
     background: #3c3c3c;
 }
+
+/* =========================================================
+   ✨ PREMIUM DARK MODE (ULTIMATE FIX v2 — Kontras Teks Penuh) ✨
+   =========================================================
+   Catatan: banyak teks di app.js/index.html memakai warna HEX
+   yang di-hardcode langsung di atribut style (bukan variabel
+   CSS). Warna itu didesain untuk background terang, sehingga
+   di dark mode jadi gelap-di-atas-gelap (bahkan putih-di-atas-
+   putih di beberapa tempat). Blok ini menimpanya lewat variabel
+   DAN lewat selector atribut [style*="..."] agar seluruh teks
+   tetap terbaca tanpa perlu mengubah app.js/index.html. */
+
+/* 1. Timpa Variabel Global yang dipakai app.js & inline style */
+:root[data-theme="dark"] {
+    --bg-body: #0b1121;
+    --bg-surface: #151e32;
+    --bg-surface-hover: #1e293b;
+    --bg-input: #0f172a;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --border-color: #273449;
+
+    /* Timpa variabel inline dari HTML */
+    --color-surface: #151e32;
+    --color-bg: #0b1121;
+    --color-border: #273449;
+    --color-ink: #f8fafc;
+    --color-ink-soft: #cbd5e1;
+    --color-ink-lighter: #94a3b8;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+
+    /* Sebelumnya --color-muted & --color-muted-light TIDAK ditimpa,
+       padahal dipakai di ~20 tempat (card-title, meta-label, domain-score,
+       filter-btn, icon-btn, dll) -> jadi abu-abu gelap tak terbaca di
+       atas background gelap. Ini penyebab utama laporan "teks tak terbaca". */
+    --color-muted: #a7b2c4;
+    --color-muted-light: #8b96a8;
+
+    /* Aksen biru dicerahkan supaya tetap kontras di atas background gelap */
+    --color-accent: #5B9CFF;
+    --color-accent-soft: #1d3a63;
+    --primary: #5B9CFF;
+    --primary-light: rgba(91, 156, 255, 0.18);
+}
+
+/* 2. Reset Background Dasar */
+[data-theme="dark"] body,
+[data-theme="dark"] .page-canvas,
+[data-theme="dark"] .dashboard-layout {
+    background-color: var(--bg-body) !important;
+    color: var(--text-main) !important;
+}
+
+[data-theme="dark"] .card,
+[data-theme="dark"] .table-card,
+[data-theme="dark"] .modal-dialog,
+[data-theme="dark"] .topbar,
+[data-theme="dark"] .main-header,
+[data-theme="dark"] .pagination-container,
+[data-theme="dark"] .multi-select-panel,
+[data-theme="dark"] .notification-dropdown,
+[data-theme="dark"] .threat-insights-card,
+[data-theme="dark"] .evidence-card {
+    background-color: var(--bg-surface) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-main) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* 3. PERBAIKAN TABEL (Mencegah teks gelap di background gelap) */
+[data-theme="dark"] .modern-table th {
+    background-color: var(--bg-input) !important;
+    border-bottom: 1px solid var(--border-color) !important;
+    color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] .modern-table td {
+    border-bottom: 1px solid var(--border-color) !important;
+    color: var(--text-main) !important;
+}
+
+/* Paksa semua teks dalam div/span di tabel jadi terang (kecuali badge/status warna) */
+[data-theme="dark"] .modern-table td div,
+[data-theme="dark"] .modern-table td span:not(.badge):not(.status-indicator):not(.badge-admin-role):not(.badge-user-role):not([style*="background"]):not(.sev-dot) {
+    color: var(--text-main) !important;
+}
+
+[data-theme="dark"] .modern-table tr:hover td {
+    background-color: var(--bg-surface-hover) !important;
+}
+
+/* 4. PERBAIKAN MONITORED DOMAINS LIST */
+[data-theme="dark"] .domain-item {
+    border-bottom: 1px solid var(--border-color) !important;
+}
+[data-theme="dark"] .domain-item:hover {
+    background-color: var(--bg-surface-hover) !important;
+}
+[data-theme="dark"] .domain-name {
+    color: var(--text-main) !important;
+}
+[data-theme="dark"] .domain-desc,
+[data-theme="dark"] .domain-score {
+    color: var(--text-muted) !important;
+}
+[data-theme="dark"] .domain-icon {
+    background-color: var(--bg-input) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-muted) !important;
+}
+
+/* 5. PERBAIKAN KOTAK TERANG DARI INLINE STYLE (statis di HTML & dinamis dari app.js) */
+[data-theme="dark"] div[style*="background: #fafafa"],
+[data-theme="dark"] div[style*="background:#fafafa"],
+[data-theme="dark"] div[style*="background: white"],
+[data-theme="dark"] div[style*="background:white"],
+[data-theme="dark"] div[style*="background: #fff"],
+[data-theme="dark"] div[style*="background:#fff"],
+[data-theme="dark"] div[style*="background: #ffffff"],
+[data-theme="dark"] div[style*="background:#ffffff"],
+[data-theme="dark"] div[style*="background-color: #ffffff"],
+[data-theme="dark"] div[style*="background-color:#ffffff"],
+[data-theme="dark"] div[style*="background: #f8fafc"],
+[data-theme="dark"] div[style*="background:#f8fafc"],
+[data-theme="dark"] div[style*="background: #f1f5f9"],
+[data-theme="dark"] div[style*="background:#f1f5f9"],
+[data-theme="dark"] div[style*="background: #f9fafb"],
+[data-theme="dark"] div[style*="background:#f9fafb"],
+[data-theme="dark"] div[style*="background: #e2e8f0"],
+[data-theme="dark"] div[style*="background:#e2e8f0"],
+[data-theme="dark"] tr[style*="background-color: #ffffff"],
+[data-theme="dark"] tr[style*="background-color:#ffffff"],
+[data-theme="dark"] tr[style*="background-color: #f9fafb"],
+[data-theme="dark"] tr[style*="background-color:#f9fafb"] {
+    background-color: var(--bg-surface) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* 6. Teks Heading & Link */
+[data-theme="dark"] h1, [data-theme="dark"] h2,
+[data-theme="dark"] h3, [data-theme="dark"] h4 {
+    color: #ffffff !important;
+}
+[data-theme="dark"] p {
+    color: var(--text-muted) !important;
+}
+[data-theme="dark"] .link-action {
+    color: #60a5fa !important;
+}
+
+/* 6b. PALING PENTING: teks HEX gelap yang di-hardcode inline (bukan variabel)
+   di semua elemen (span/div/label/td/p/strong), termasuk yang di-generate
+   dinamis oleh app.js lewat innerHTML — selector [style*] ini tetap
+   mengenai atribut style apa pun isinya saat itu, jadi ikut kena juga. */
+[data-theme="dark"] [style*="color: #1e293b"],
+[data-theme="dark"] [style*="color:#1e293b"],
+[data-theme="dark"] [style*="color: #334155"],
+[data-theme="dark"] [style*="color:#334155"],
+[data-theme="dark"] [style*="color: #1f2937"],
+[data-theme="dark"] [style*="color:#1f2937"],
+[data-theme="dark"] [style*="color: #374151"],
+[data-theme="dark"] [style*="color:#374151"] {
+    color: var(--text-main) !important;
+}
+[data-theme="dark"] [style*="color: #475569"],
+[data-theme="dark"] [style*="color:#475569"],
+[data-theme="dark"] [style*="color: #64748b"],
+[data-theme="dark"] [style*="color:#64748b"],
+[data-theme="dark"] [style*="color: #6b7280"],
+[data-theme="dark"] [style*="color:#6b7280"] {
+    color: var(--text-muted) !important;
+}
+
+/* 6c. Label generik ".form-group label" (mis. "Domain Name", opsi radio di
+   Generate Report) hardcode #191c1e dan tidak ikut hack [style*] di atas
+   karena tidak punya inline color sama sekali — perlu override sendiri. */
+[data-theme="dark"] .form-group label {
+    color: var(--text-main) !important;
+}
+
+/* 7. Input, Search Box, Button Outline */
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] .search-box,
+[data-theme="dark"] .auth-input {
+    background-color: var(--bg-input) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-main) !important;
+}
+[data-theme="dark"] input::placeholder {
+    color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] .btn-outline,
+[data-theme="dark"] .quick-date-btn,
+[data-theme="dark"] .multi-select-btn {
+    background-color: transparent !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-main) !important;
+}
+[data-theme="dark"] .btn-outline:hover,
+[data-theme="dark"] .quick-date-btn:hover,
+[data-theme="dark"] .multi-select-btn:hover {
+    background-color: var(--bg-surface-hover) !important;
+}
+
+/* 8. Multi-select dropdown items (sebelumnya teks #374151 tetap gelap di panel gelap) */
+[data-theme="dark"] .multi-select-item {
+    color: var(--text-main) !important;
+}
+[data-theme="dark"] .multi-select-item:hover {
+    background-color: var(--bg-surface-hover) !important;
+}
+[data-theme="dark"] .multi-select-search {
+    border-bottom-color: var(--border-color) !important;
+}
+
+/* 9. Filter chips (sebelumnya background putih solid, tidak ikut tema) */
+[data-theme="dark"] .filter-btn {
+    background: var(--bg-surface) !important;
+    color: var(--color-muted) !important;
+    border-color: var(--border-color) !important;
+}
+[data-theme="dark"] .filter-btn:hover {
+    background: var(--bg-surface-hover) !important;
+    color: var(--text-main) !important;
+    border-color: var(--color-muted-light) !important;
+}
+
+/* 10. Toast notification (BUG KRITIS: background tetap putih transparan,
+   sedangkan judul/isinya memakai var(--text-primary)/(--text-secondary)
+   yang sudah ditimpa jadi terang -> hasilnya teks TERANG DI ATAS PUTIH,
+   nyaris tak terlihat). */
+[data-theme="dark"] .toast-notification {
+    background: rgba(21, 30, 50, 0.95) !important;
+    border-top-color: rgba(255, 255, 255, 0.06) !important;
+    border-bottom-color: rgba(0, 0, 0, 0.3) !important;
+    border-right-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+/* 11. Badge role (Admin/User) di dalam tabel: background rgba tipis
+   di atas baris gelap membuat teks birunya nyaris tak berkontras */
+[data-theme="dark"] .badge-admin-role {
+    background-color: rgba(59, 130, 246, 0.18) !important;
+    color: #93c5fd !important;
+    border-color: rgba(59, 130, 246, 0.4) !important;
+}
+[data-theme="dark"] .badge-user-role {
+    background-color: rgba(148, 163, 184, 0.18) !important;
+    color: #cbd5e1 !important;
+    border-color: rgba(148, 163, 184, 0.35) !important;
+}
+
+/* 12. Status indikator (online/offline/timeout) — varian gelap agar
+   tidak jadi kotak putih menyala di tengah UI gelap */
+[data-theme="dark"] .status-online {
+    background: rgba(34, 197, 94, 0.14) !important;
+    color: #4ade80 !important;
+    border-color: rgba(34, 197, 94, 0.35) !important;
+}
+[data-theme="dark"] .status-offline {
+    background: rgba(148, 163, 184, 0.14) !important;
+    color: #94a3b8 !important;
+    border-color: rgba(148, 163, 184, 0.3) !important;
+}
+[data-theme="dark"] .status-timeout {
+    background: rgba(239, 68, 68, 0.14) !important;
+    color: #f87171 !important;
+    border-color: rgba(239, 68, 68, 0.35) !important;
+}
+
+/* 13. Evidence desc box (dipakai dinamis di app.js dengan
+   background:#f8fafc + color:#334155 dalam satu inline style) */
+[data-theme="dark"] .evidence-desc[style*="background"] {
+    background-color: var(--bg-input) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-main) !important;
+}
+
+/* =========================================================
+   LIGHT MODE — jaminan kontras (tetap default terang seperti semula)
+   ========================================================= */
+:root, :root[data-theme="light"] {
+    color-scheme: light;
+}
+:root[data-theme="dark"] {
+    color-scheme: dark;
+}
+
+/* =========================================================
+   ✨ ULTIMATE FIX: WARNA IKON & TOMBOL TABEL DI DARK MODE ✨
+   ========================================================= */
+
+/* 1. Ikon Status Selesai (Lingkaran Hijau & Centang) */
+/* Target menggunakan bentuk bulat sempurna (border-radius: 50%) */
+:root[data-theme="dark"] .modern-table td div[style*="border-radius: 50%"],
+:root[data-theme="dark"] .modern-table td div[style*="border-radius:50%"] {
+    background-color: rgba(16, 185, 129, 0.15) !important;
+    color: #10b981 !important; /* Kembalikan warna hijau */
+}
+:root[data-theme="dark"] .modern-table td div[style*="border-radius: 50%"] svg,
+:root[data-theme="dark"] .modern-table td div[style*="border-radius:50%"] svg {
+    stroke: #10b981 !important;
+}
+
+/* 2. Teks & Ikon Petir (Website Scan Live) */
+/* Tembak format HEX maupun hasil konversi rahasia RGB dari browser */
+:root[data-theme="dark"] .modern-table td div[style*="#2563eb"],
+:root[data-theme="dark"] .modern-table td div[style*="rgb(37, 99, 235)"],
+:root[data-theme="dark"] .modern-table td div[style*="rgb(37,99,235)"] {
+    color: #60a5fa !important; /* Biru terang */
+}
+
+/* 3. Teks & Ikon Centang (Riwayat Scan) */
+:root[data-theme="dark"] .modern-table td div[style*="#64748b"],
+:root[data-theme="dark"] .modern-table td div[style*="rgb(100, 116, 139)"],
+:root[data-theme="dark"] .modern-table td div[style*="rgb(100,116,139)"] {
+    color: var(--text-muted) !important;
+}
+
+/* 4. TOMBOL "Stop Scan" (Merah) */
+/* Sangat presisi: menembak langsung nama fungsi onclick-nya! */
+:root[data-theme="dark"] .modern-table td button[onclick*="stopActiveScan"] {
+    color: #f87171 !important; 
+    border-color: #f87171 !important;
+    background-color: rgba(239, 68, 68, 0.05) !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    font-weight: 500 !important;
+}
+:root[data-theme="dark"] .modern-table td button[onclick*="stopActiveScan"]:hover {
+    background-color: #ef4444 !important;
+    color: #ffffff !important;
+    border-color: #ef4444 !important;
+    transform: translateY(-1px) !important; /* Efek gerak melayang */
+    box-shadow: 0 4px 10px rgba(239, 68, 68, 0.25) !important;
+}
+
+/* 5. TOMBOL "View Report" (Netral Slate/Silver) */
+/* Sangat presisi: menembak langsung nama fungsi onclick-nya! */
+:root[data-theme="dark"] .modern-table td button[onclick*="openScanModalIndex"] {
+    color: var(--text-muted) !important; /* Warna teks abu-abu elegan */
+    border-color: var(--border-color) !important; /* Garis batas netral */
+    background-color: transparent !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    font-weight: 500 !important;
+}
+:root[data-theme="dark"] .modern-table td button[onclick*="openScanModalIndex"]:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important; /* Latar belakang cerah tipis saat dihover */
+    color: var(--text-main) !important; /* Teks berubah jadi putih terang */
+    border-color: var(--text-muted) !important; /* Garis batas sedikit lebih tegas */
+    transform: translateY(-1px) !important; /* Efek gerak melayang */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* 6. TOMBOL "Cancel" di Modal Generate Report (Netral Slate/Silver) */
+[data-theme="dark"] #btnCancelReport {
+    background-color: transparent !important;
+    color: var(--text-muted) !important;
+    border: 1px solid var(--border-color) !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    font-weight: 500 !important;
+}
+
+[data-theme="dark"] #btnCancelReport:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    color: var(--text-main) !important;
+    border-color: var(--text-muted) !important;
+}
+
+/* 7. TOMBOL "Inspect" di Modal Scan Details (Aksen Biru & Efek Melayang) */
+/* Menembak langsung tombol dengan fungsi openThreatModal */
+[data-theme="dark"] .modern-table td button[onclick*="openThreatModal"] {
+    color: var(--color-accent) !important;
+    border-color: var(--color-accent) !important;
+    background-color: rgba(91, 156, 255, 0.05) !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    font-weight: 500 !important;
+}
+
+[data-theme="dark"] .modern-table td button[onclick*="openThreatModal"]:hover {
+    background-color: var(--color-accent) !important;
+    color: #ffffff !important;
+    border-color: var(--color-accent) !important;
+    transform: translateY(-1px) !important; /* Efek gerak naik */
+    box-shadow: 0 4px 10px rgba(91, 156, 255, 0.25) !important;
+}
+
+/* 8. FIX: Tombol Reset (Mematikan paksa efek onmouseover dari HTML) */
+[data-theme="dark"] #vulnTrendResetBtn,
+[data-theme="dark"] #sevTrendResetBtn,
+[data-theme="dark"] #vulnTrendResetIconBtn,
+[data-theme="dark"] #sevTrendResetIconBtn,
+[data-theme="dark"] #vulnResetFilterBtn {
+    background-color: transparent !important;
+    color: var(--text-muted) !important;
+    border-color: var(--border-color) !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+[data-theme="dark"] #vulnTrendResetBtn:hover,
+[data-theme="dark"] #sevTrendResetBtn:hover,
+[data-theme="dark"] #vulnTrendResetIconBtn:hover,
+[data-theme="dark"] #sevTrendResetIconBtn:hover,
+[data-theme="dark"] #vulnResetFilterBtn:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important; /* Nyala tipis */
+    color: var(--text-main) !important; /* Teks putih terang */
+    border-color: var(--text-muted) !important;
+}
+
+/* 9. FIX: Tombol Sekunder (Filter Hari, Dropdown Utama, Perbesar Grafik, & Pagination) -> Netral Slate */
+[data-theme="dark"] .quick-date-btn,
+[data-theme="dark"] .multi-select-btn,
+[data-theme="dark"] #vulnTrendEnlargeBtn,
+[data-theme="dark"] #sevTrendEnlargeBtn,
+[data-theme="dark"] .pagination-right .btn-outline {
+    background-color: transparent !important;
+    color: var(--text-muted) !important; /* Warna abu-abu elegan saat diam */
+    border-color: var(--border-color) !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+[data-theme="dark"] .quick-date-btn:hover,
+[data-theme="dark"] .multi-select-btn:hover,
+[data-theme="dark"] #vulnTrendEnlargeBtn:hover,
+[data-theme="dark"] #sevTrendEnlargeBtn:hover,
+[data-theme="dark"] .pagination-right .btn-outline:hover:not(:disabled) {
+    background-color: rgba(255, 255, 255, 0.05) !important; /* Efek nyala tipis */
+    color: var(--text-main) !important; /* Teks menyala putih saat disorot */
+    border-color: var(--text-muted) !important; /* Garis batas lebih tegas */
+}
+
+/* 10. FIX: Tombol Aksi Inventory (Simpan Target, Add Domain, Import, Export) -> Hover Silver */
+[data-theme="dark"] #saveTargetsBtn,
+[data-theme="dark"] #addDomainBtn,
+[data-theme="dark"] #importDomainsBtn,
+[data-theme="dark"] #exportDropdown .btn-outline {
+    color: var(--text-muted) !important;
+    border-color: var(--border-color) !important;
+    background-color: transparent !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    font-weight: 500 !important;
+}
+
+[data-theme="dark"] #saveTargetsBtn:hover,
+[data-theme="dark"] #addDomainBtn:hover,
+[data-theme="dark"] #importDomainsBtn:hover,
+[data-theme="dark"] #exportDropdown .btn-outline:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important; /* Nyala silver tipis */
+    color: var(--text-main) !important; /* Teks menyala putih */
+    border-color: var(--text-muted) !important; /* Garis batas lebih tegas */
+    transform: translateY(-1px) !important; /* Efek gerak melayang */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15) !important; /* Bayangan halus */
+}
