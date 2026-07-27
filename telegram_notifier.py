@@ -114,8 +114,11 @@ async def notify_failed_login(username: str, ip_address: str = "N/A"):
 
 async def notify_high_risk_scan(domain: str, risk_level: str):
     """
-    Mengirim notifikasi ke Telegram jika hasil scan menunjukkan risiko MEDIUM, HIGH, atau CRITICAL.
+    Mengirim notifikasi ke Telegram jika hasil scan menunjukkan risiko HIGH atau CRITICAL.
     """
+    if str(risk_level).upper() not in ["HIGH", "CRITICAL"]:
+        return
+
     waktu = _format_waktu_wib()
     
     # Emoji based on risk
@@ -131,3 +134,4 @@ async def notify_high_risk_scan(domain: str, risk_level: str):
         "Segera periksa dashboard untuk detail lebih lanjut dan lakukan mitigasi."
     )
     await send_telegram_message(text)
+
