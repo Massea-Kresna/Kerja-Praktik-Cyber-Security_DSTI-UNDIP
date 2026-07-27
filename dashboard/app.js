@@ -912,6 +912,7 @@ window.renderVulnTrendChart = function () {
                         const clickedValue = vulnChartInstance.data.datasets[datasetIndex].data[index];
 
                         if (rawTrendData && rawTrendData.raw_labels) {
+                            const scanId = rawTrendData.scan_ids ? rawTrendData.scan_ids[index] : null;
                             let activeCount = 0;
                             let lastActiveLabel = null;
                             vulnChartInstance.data.datasets.forEach(ds => {
@@ -923,11 +924,12 @@ window.renderVulnTrendChart = function () {
                             });
 
                             if (activeCount === 1) {
-                                jumpToScanDetail(rawTrendData.raw_labels[index], lastActiveLabel);
+                                jumpToScanDetail(rawTrendData.raw_labels[index], lastActiveLabel, false, scanId);
                             } else if (activeCount > 1) {
                                 showChartDetailModal(vulnChartInstance, index, "Vulnerabilities", rawTrendData.raw_labels[index], false, clickedValue);
                             }
                         }
+
                     }
                 },
                 responsive: true,
@@ -1102,6 +1104,7 @@ window.renderSevTrendChart = function () {
                         const clickedValue = sevChartInstance.data.datasets[datasetIndex].data[index];
 
                         if (rawSevTrendData && rawSevTrendData.raw_labels) {
+                            const scanId = rawSevTrendData.scan_ids ? rawSevTrendData.scan_ids[index] : null;
                             let itemBreakdown = [];
                             sevChartInstance.data.datasets.forEach(ds => {
                                 const val = ds.data[index] || 0;
@@ -1132,14 +1135,15 @@ window.renderSevTrendChart = function () {
                             if (itemBreakdown.length === 1) {
                                 const item = itemBreakdown[0];
                                 if (item.domain) {
-                                    jumpToScanDetail(rawSevTrendData.raw_labels[index], item.domain, false);
+                                    jumpToScanDetail(rawSevTrendData.raw_labels[index], item.domain, false, scanId);
                                 } else {
-                                    jumpToScanDetail(rawSevTrendData.raw_labels[index], item.severity, true);
+                                    jumpToScanDetail(rawSevTrendData.raw_labels[index], item.severity, true, scanId);
                                 }
                             } else if (itemBreakdown.length > 1) {
                                 showSeverityDetailModal(itemBreakdown, sevChartInstance.data.labels[index], rawSevTrendData.raw_labels[index]);
                             }
                         }
+
                     }
                 },
                 responsive: true,
@@ -4991,14 +4995,48 @@ window.closeChartDetailModal = function () {
 };
 
 // --- Chart Click Detail Redirect ---
-function jumpToScanDetail(isoDateString, targetName, isSeverity = false) {
+function jumpToScanDetail(isoDateString, targetName, isSeverity = false, scanId = null) {
+    if (!isoDateString && !scanId) {
+        showToast("Info", "Data riwayat scan belum termuat.", "ℹ️");
+        return;
+    }
+
+    // 1. Cari berdasarkan scanId persis jika ada
+    if (scanId && typeof allVulns !== 'undefined' && allVulns) {
+        const foundById = allVulns.find(s => String(s.id) === String(scanId));
+        if (foundById) {
+            openScanModal(foundById);
+            return;
+        }
+    }
+
+    // 2. Jika scanId tidak ada / belum di allVulns, fetch spesifik scan oleh API
+    if (scanId) {
+        fetch(`${API_BASE}/api/scan-history/${scanId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success' && data.data) {
+                    openScanModal(data.data);
+                } else {
+                    jumpToScanDetailByDate(isoDateString, targetName, isSeverity);
+                }
+            })
+            .catch(() => {
+                jumpToScanDetailByDate(isoDateString, targetName, isSeverity);
+            });
+        return;
+    }
+
+    jumpToScanDetailByDate(isoDateString, targetName, isSeverity);
+}
+
+function jumpToScanDetailByDate(isoDateString, targetName, isSeverity = false) {
     if (!isoDateString || typeof allVulns === 'undefined' || !allVulns) {
         showToast("Info", "Data riwayat scan belum termuat.", "ℹ️");
         return;
     }
 
     const targetTime = new Date(isoDateString).getTime();
-
     let closestScan = null;
     let minDiff = Infinity;
 
@@ -5031,6 +5069,7 @@ function jumpToScanDetail(isoDateString, targetName, isSeverity = false) {
         showToast("Info", "Tidak ada detail scan spesifik yang ditemukan untuk titik ini.", "ℹ️");
     }
 }
+
 
 // Global modal background click-to-close
 document.addEventListener('click', (e) => {
