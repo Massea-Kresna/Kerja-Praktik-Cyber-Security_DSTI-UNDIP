@@ -1177,3 +1177,81 @@ def get_vulnerabilities_list(severity=None, limit=50):
         return []
     finally:
         conn.close()
+
+def get_overnight_high_critical_scans(limit=20):
+    """
+    Mengambil riwayat scan yang memiliki temuan risk HIGH atau CRITICAL.
+    Biasanya dipakai untuk notifikasi auto-scan malam hari (jam 07:00 WIB).
+    """
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT sh.id, sh.risk_score, sh.risk_level, sh.scan_date, sh.raw_json, 
+                       sh.domain_id, d.domain_name, d.ip_address
+                FROM scan_history sh
+                JOIN domains d ON sh.domain_id = d.id
+                WHERE UPPER(sh.risk_level) IN ('HIGH', 'CRITICAL')
+                  AND DATE(sh.scan_date) = (
+                      SELECT DATE(scan_date) 
+                      FROM scan_history 
+                      WHERE UPPER(risk_level) IN ('HIGH', 'CRITICAL')
+                      ORDER BY scan_date DESC LIMIT 1
+                  )
+                ORDER BY sh.scan_date DESC
+                LIMIT %s
+            """, (limit,))
+
+
+            h_res = cur.fetchall()
+            if not h_res: return []
+
+            
+            h_ids = tuple([h['id'] for h in h_res])
+            cur.execute('SELECT history_id, title, severity, check_type, description, recommendation, epss_score, epss_percentile, cisa_kev, cve, cvss_v3, cwe, evidence FROM scan_result WHERE history_id IN %s', (h_ids,))
+            sr_res = cur.fetchall()
+            
+            sr_map = {}
+            for sr in sr_res:
+                hid = sr['history_id']
+                if hid not in sr_map: sr_map[hid] = []
+                sr_map[hid].append(dict(sr))
+                
+            result = []
+            import json
+            for h in h_res:
+                row = dict(h)
+                domain_name = row.pop('domain_name')
+                ip_address = row.pop('ip_address')
+                row['domains'] = {'domain_name': domain_name, 'ip_address': ip_address}
+                row['domain_name'] = domain_name
+                row['ip_address'] = ip_address
+                
+                if hasattr(row['scan_date'], 'isoformat'):
+                    row['scan_date'] = row['scan_date'].isoformat()
+                    
+                vulns = sr_map.get(row['id'], [])
+                raw_json = row.get('raw_json')
+                if isinstance(raw_json, str):
+                    try: raw_json = json.loads(raw_json)
+                    except: raw_json = []
+                if isinstance(raw_json, list):
+                    vulns.extend(raw_json)
+                row.pop('raw_json', None)
+                row['vulnerabilities'] = vulns
+                
+                # Hitung statistik HIGH & CRITICAL
+                crit_cnt = sum(1 for v in vulns if str(v.get('severity', '')).upper() == 'CRITICAL')
+                high_cnt = sum(1 for v in vulns if str(v.get('severity', '')).upper() == 'HIGH')
+                row['critical_count'] = crit_cnt
+                row['high_count'] = high_cnt
+                row['total_high_critical'] = crit_cnt + high_cnt
+                
+                result.append(row)
+            return result
+    except Exception as e:
+        print(f'[-] Error get_overnight_high_critical_scans: {e}')
+        return []
+    finally:
+        conn.close()
