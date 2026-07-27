@@ -1091,11 +1091,12 @@ async def run_pentest_tools_background(domain_name: str):
             risk_level = scan.get("risk_level", "SAFE")
             break
             
-    if risk_level in ["MEDIUM", "HIGH", "CRITICAL"]:
+    if risk_level in ["HIGH", "CRITICAL"]:
         await telegram_notifier.notify_high_risk_scan(domain_name, risk_level)
 
-    if risk_level in ["MEDIUM", "HIGH", "CRITICAL"]:
+    if risk_level in ["HIGH", "CRITICAL"]:
         # 2. Siapkan notifikasi untuk WebSocket
+
         notif = {
             "id": uuid.uuid4().hex,
             "title": "Scan Selesai",
@@ -1203,10 +1204,10 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
                         risk_level = scan.get("risk_level", "SAFE")
                         break
                         
-                if risk_level in ["MEDIUM", "HIGH", "CRITICAL"]:
+                if risk_level in ["HIGH", "CRITICAL"]:
                     await telegram_notifier.notify_high_risk_scan(target, risk_level)
 
-                if risk_level in ["MEDIUM", "HIGH", "CRITICAL"]:
+                if risk_level in ["HIGH", "CRITICAL"]:
                     # 2. Siapkan notifikasi untuk WebSocket
                     notif = {
                         "id": uuid.uuid4().hex,
@@ -1249,10 +1250,10 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
                         risk_level = scan.get("risk_level", "SAFE")
                         break
                         
-                if risk_level in ["MEDIUM", "HIGH", "CRITICAL"]:
+                if risk_level in ["HIGH", "CRITICAL"]:
                     await telegram_notifier.notify_high_risk_scan(target, risk_level)
 
-                if risk_level in ["MEDIUM", "HIGH", "CRITICAL"]:
+                if risk_level in ["HIGH", "CRITICAL"]:
                     # 2. Siapkan notifikasi untuk WebSocket
                     notif = {
                         "id": uuid.uuid4().hex,
@@ -1267,6 +1268,7 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
                         "event": "new_notification",
                         "notification": notif
                     })
+
 
 class WebScanRequest(BaseModel):
     targets: List[str]
@@ -1776,7 +1778,7 @@ async def api_get_notifications():
         notifs = []
         for scan in recent_scans:
             risk = scan.get("risk_level", "SAFE")
-            if risk not in ["MEDIUM", "HIGH", "CRITICAL"]:
+            if risk not in ["HIGH", "CRITICAL"]:
                 continue
                 
             domain = scan.get("domains", {}).get("domain_name", "Unknown")
@@ -1791,6 +1793,15 @@ async def api_get_notifications():
                 "time": scan.get("scan_date")
             })
         return {"status": "success", "data": notifs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/notifications/overnight-scans")
+async def api_get_overnight_scans():
+    """Mengambil riwayat scan malam hari / dini hari yang berisiko HIGH dan CRITICAL untuk notifikasi jam 7 pagi"""
+    try:
+        overnight_scans = db_manager.get_overnight_high_critical_scans(limit=10)
+        return {"status": "success", "data": overnight_scans}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1831,22 +1842,21 @@ async def webhook_notify(req: InternalNotifyRequest, request: Request):
         }
 
         msg_upper = req.message.upper()
-        if any(risk in msg_upper for risk in ["MEDIUM", "HIGH", "CRITICAL"]):
+        if any(risk in msg_upper for risk in ["HIGH", "CRITICAL"]):
             # Mengambil nama domain dari judul (Misal: "Scan Selesai: example.com")
             domain_target = req.title.split(":")[-1].strip()
             
             # Menentukan level risiko berdasarkan isi pesan Celery
-            risk_lvl = "MEDIUM"
+            risk_lvl = "HIGH"
             if "CRITICAL" in msg_upper: 
                 risk_lvl = "CRITICAL"
-            elif "HIGH" in msg_upper: 
-                risk_lvl = "HIGH"
             
             try:
                 # Memanggil modul notifikasi Telegram
                 await telegram_notifier.notify_high_risk_scan(domain_target, risk_lvl)
             except Exception as e:
                 print(f"[-] Gagal mengirim notifikasi Telegram dari Celery: {e}")
+
         
         await manager.broadcast_to_admins({
             "event": "new_notification",

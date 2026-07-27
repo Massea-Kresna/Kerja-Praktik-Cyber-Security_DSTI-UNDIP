@@ -1669,6 +1669,81 @@ button, input, select, textarea {
     to { width: 0; }
 }
 
+@keyframes toast-progress-60s {
+    from { width: 100%; }
+    to { width: 0; }
+}
+
+.toast-notification.overnight-toast {
+    width: 380px;
+    border-left: 4px solid #dc2626;
+    background: rgba(15, 23, 42, 0.95);
+    color: #ffffff;
+    box-shadow: 0 10px 30px rgba(220, 38, 38, 0.25), 0 0 15px rgba(239, 68, 68, 0.2);
+    border-top: 1px solid rgba(239, 68, 68, 0.3);
+    animation: toast-slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toast-notification.overnight-toast .toast-title {
+    color: #f87171;
+    font-size: 14px;
+}
+
+.toast-notification.overnight-toast .toast-message {
+    color: #e2e8f0;
+    font-size: 13px;
+}
+
+.toast-notification.overnight-toast::before {
+    background: linear-gradient(90deg, #ef4444, #f97316);
+    animation: toast-progress-60s 60s linear forwards;
+}
+
+.toast-actions-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    width: 100%;
+}
+
+.toast-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.toast-btn-primary {
+    background: #ef4444;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+}
+
+.toast-btn-primary:hover {
+    background: #dc2626;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5);
+}
+
+.toast-btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.toast-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+}
+
+
 /* ==========================================================================
    GLOBAL TOPBAR & NOTIFICATION BELL
    ========================================================================== */

@@ -44,6 +44,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     checkAuth();
     setupTabs();
+    if (typeof initOvernightNotificationScheduler === 'function') {
+        initOvernightNotificationScheduler();
+    }
 
     // Pastikan filter tanggal tren di-reset pada saat dimuat (refresh)
     ['vulnTrend', 'sevTrend'].forEach(prefix => {
@@ -1306,6 +1309,12 @@ function applyVulnFilters(preservePage = false) {
         if (startDate && scanDate < startDate) return false;
         if (endDate && scanDate > endDate) return false;
 
+        // Filter khusus hasil scan berisiko HIGH & CRITICAL (aktif saat tombol Cek Detail >1 temuan diklik)
+        if (window.overnightRiskFilter) {
+            const risk = (scan.risk_level || '').toUpperCase();
+            if (!['HIGH', 'CRITICAL'].includes(risk)) return false;
+        }
+
         // Filter berdasarkan pencarian nama domain
         if (domainSearchInput) {
             const domainName = (scan.domains?.domain_name || '').toLowerCase();
@@ -1359,6 +1368,7 @@ function applyVulnFilters(preservePage = false) {
 }
 
 function resetVulnFilters() {
+    window.overnightRiskFilter = false;
     const startInput = document.getElementById('vulnStartDate');
     const endInput = document.getElementById('vulnEndDate');
     const domainSearchInput = document.getElementById('vulnDomainSearch');
@@ -1371,6 +1381,7 @@ function resetVulnFilters() {
 
     applyVulnFilters();
 }
+
 
 function renderVulnerabilitiesList() {
     const container = document.getElementById('vulnListContainer');
@@ -2669,9 +2680,14 @@ const SEV_ORDER = {
 function openScanModal(scan) {
     document.getElementById('scanModalOverlay').classList.add('active');
 
-    const domainName = scan.domains?.domain_name || '';
+    // Otomatis tandai notifikasi terkait sebagai DIBACA saat detail scan dibuka (dari history / manual / toast)
+    if (scan && scan.id) {
+        markNotificationReadByScanId(scan.id);
+    }
+
+    const domainName = scan.domains?.domain_name || scan.domain_name || '';
     document.getElementById('scanModalDomain').textContent = domainName || '-';
-    document.getElementById('scanModalIp').textContent = scan.domains?.ip_address || '-';
+    document.getElementById('scanModalIp').textContent = scan.domains?.ip_address || scan.ip_address || '-';
     document.getElementById('scanModalDate').textContent = formatDate(scan.scan_date);
     document.getElementById('scanModalRisk').textContent = scan.risk_level || 'SAFE';
     document.getElementById('scanModalRisk').className = `meta-value text-${getSeverityClass(scan.risk_level)}`;
@@ -2721,6 +2737,7 @@ function setScanFilter(sev) {
 
 function renderScanFilters() {
     const filtersContainer = document.getElementById('scanModalFilters');
+    if (!filtersContainer) return;
 
     const counts = {
         'All': currentScanVulns.length,
@@ -2760,6 +2777,7 @@ function renderScanFilters() {
 
 function renderScanVulnsTable() {
     const tbody = document.getElementById('scanModalVulnBody');
+    if (!tbody) return;
 
     let filtered = currentScanVulns;
     if (currentScanVulnsFilter !== 'All') {
@@ -2783,6 +2801,8 @@ function renderScanVulnsTable() {
         `;
     }).join('');
 }
+
+
 
 function closeScanModal() {
     document.getElementById('scanModalOverlay').classList.remove('active');
@@ -3849,6 +3869,231 @@ function showToast(title, message, icon = "🔔") {
         toast.remove();
     }, 5000);
 }
+
+// ==============================================================================
+// LOGIK NOTIFIKASI TOAST DINI HARI (07:00 WIB) & SYNC READ STATUS
+// ==============================================================================
+let activeOvernightToastTimers = {};
+
+function markNotificationReadByScanId(scanId) {
+    if (!scanId) return;
+    const strId = String(scanId);
+    const readNotifs = JSON.parse(localStorage.getItem('dsti_read_notifs') || '[]');
+    if (!readNotifs.includes(strId)) {
+        readNotifs.push(strId);
+        localStorage.setItem('dsti_read_notifs', JSON.stringify(readNotifs));
+    }
+
+    // Perbarui state lokal notifikasi di memori (jika ada)
+    if (typeof allNotifications !== 'undefined' && Array.isArray(allNotifications)) {
+        allNotifications.forEach(n => {
+            if (String(n.id) === strId) {
+                n.unread = false;
+            }
+        });
+    }
+
+    // Batalkan timer retry 5 menit jika ada
+    if (activeOvernightToastTimers[strId]) {
+        clearTimeout(activeOvernightToastTimers[strId]);
+        delete activeOvernightToastTimers[strId];
+    }
+
+    updateNotificationBadge();
+    if (typeof renderNotificationList === 'function') {
+        renderNotificationList();
+    }
+}
+
+async function checkOvernightNotifications() {
+    try {
+        const res = await fetch(`${API_BASE}/api/notifications/overnight-scans`);
+        const data = await res.json();
+        if (data.status === 'success' && data.data && data.data.length > 0) {
+            const readNotifs = JSON.parse(localStorage.getItem('dsti_read_notifs') || '[]');
+            
+            // Filter scan yang belum dibaca sama sekali
+            const unreadOvernightScans = data.data.filter(scan => !readNotifs.includes(String(scan.id)));
+
+            if (unreadOvernightScans.length > 0) {
+                showOvernightToastNotification(unreadOvernightScans);
+            }
+        }
+    } catch (e) {
+        console.error('Gagal mengecek notifikasi overnight:', e);
+    }
+}
+
+function showOvernightToastNotification(scanData) {
+    const unreadScans = Array.isArray(scanData) ? scanData : [scanData];
+    if (unreadScans.length === 0) return;
+
+    const primaryScan = unreadScans[0];
+    const scanIdStr = String(primaryScan.id);
+
+    // Hapus toast sebelumnya jika masih ada di DOM
+    const existingToast = document.getElementById(`overnight-toast-${scanIdStr}`);
+    if (existingToast) existingToast.remove();
+
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.id = `overnight-toast-${scanIdStr}`;
+    toast.className = 'toast-notification overnight-toast';
+
+    let toastMessage = '';
+    const isSingleScan = unreadScans.length === 1;
+
+    if (isSingleScan) {
+        const domainName = primaryScan.domain_name || primaryScan.domains?.domain_name || 'Target';
+        const riskLvl = (primaryScan.risk_level || 'HIGH').toUpperCase();
+        toastMessage = `Ditemukan 1 hasil scan berisiko <strong>${riskLvl}</strong> pada domain <strong>${escapeHtml(domainName)}</strong> dari auto-scan semalam. Cek detail`;
+    } else {
+        toastMessage = `Ditemukan <strong>${unreadScans.length} hasil scan</strong> berisiko HIGH & CRITICAL dari auto-scan semalam. Cek detail`;
+    }
+
+
+
+    toast.innerHTML = `
+        <div class="toast-icon">⚠️</div>
+        <div class="toast-body" style="width: 100%;">
+            <div class="toast-title">Auto Scan Dini Hari (HIGH & CRITICAL)</div>
+            <div class="toast-message">${toastMessage}</div>
+            <div class="toast-actions-row">
+                <button class="toast-btn toast-btn-primary" id="btnCekDetail-${scanIdStr}">Cek Detail</button>
+                <button class="toast-btn toast-btn-secondary" id="btnCloseNotif-${scanIdStr}">Tutup ✕</button>
+            </div>
+        </div>
+    `;
+
+    container.appendChild(toast);
+
+    // Otomatis tutup setelah 60 detik (1 menit) jika tidak diklik
+    const autoDismissTimer = setTimeout(() => {
+        if (toast.parentNode) {
+            toast.remove();
+        }
+        scheduleOvernightRetry(primaryScan);
+    }, 60000);
+
+    // Tombol "Cek Detail"
+    const btnCekDetail = document.getElementById(`btnCekDetail-${scanIdStr}`);
+    if (btnCekDetail) {
+        btnCekDetail.onclick = (e) => {
+            e.stopPropagation();
+            clearTimeout(autoDismissTimer);
+            toast.remove();
+            
+            unreadScans.forEach(s => markNotificationReadByScanId(s.id));
+
+            if (isSingleScan) {
+                // JIKA HANYA 1 SCAN: Langsung buka modal scan detail tanpa navigasi ke scan history
+                openScanModal(primaryScan);
+            } else {
+                // JIKA LEBIH DARI 1 SCAN: Pindah ke Scan History, pasang filter tanggal & filter HIGH/CRITICAL
+                window.overnightRiskFilter = true;
+
+                if (typeof switchView === 'function') {
+                    switchView('vulnerabilities');
+                }
+
+                let scanDateStr = '';
+                if (primaryScan.scan_date) {
+                    const d = new Date(primaryScan.scan_date);
+                    if (!isNaN(d.getTime())) {
+                        const year = d.getFullYear();
+                        const month = String(d.getMonth() + 1).padStart(2, '0');
+                        const day = String(d.getDate()).padStart(2, '0');
+                        scanDateStr = `${year}-${month}-${day}`;
+                    }
+                }
+
+                const startInput = document.getElementById('vulnStartDate');
+                const endInput = document.getElementById('vulnEndDate');
+                if (startInput && scanDateStr) startInput.value = scanDateStr;
+                if (endInput && scanDateStr) endInput.value = scanDateStr;
+
+                if (typeof applyVulnFilters === 'function') {
+                    applyVulnFilters();
+                }
+            }
+        };
+    }
+
+    // Tombol "Tutup ✕"
+    const btnClose = document.getElementById(`btnCloseNotif-${scanIdStr}`);
+    if (btnClose) {
+        btnClose.onclick = (e) => {
+            e.stopPropagation();
+            clearTimeout(autoDismissTimer);
+            toast.remove();
+            
+            scheduleOvernightRetry(primaryScan);
+        };
+    }
+}
+
+
+function scheduleOvernightRetry(scan) {
+    const scanIdStr = String(scan.id);
+    if (activeOvernightToastTimers[scanIdStr]) {
+        clearTimeout(activeOvernightToastTimers[scanIdStr]);
+    }
+
+    // Jadwalkan pengulangan notifikasi setelah 5 menit (300.000 ms)
+    activeOvernightToastTimers[scanIdStr] = setTimeout(() => {
+        delete activeOvernightToastTimers[scanIdStr];
+        const readNotifs = JSON.parse(localStorage.getItem('dsti_read_notifs') || '[]');
+        if (!readNotifs.includes(scanIdStr)) {
+            showOvernightToastNotification(scan);
+        }
+    }, 300000);
+}
+
+function initOvernightNotificationScheduler() {
+    // Mengecek setiap 60 detik apakah waktu lokal berada pada / setelah jam 07:00 WIB
+    setInterval(() => {
+        const now = new Date();
+        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+        const wibTime = new Date(utc + (3600000 * 7));
+        const hours = wibTime.getHours();
+        
+        if (hours >= 7) {
+            checkOvernightNotifications();
+        }
+    }, 60000);
+
+    // Cek awal saat aplikasi baru saja dibuka
+    setTimeout(() => {
+        checkOvernightNotifications();
+    }, 2000);
+}
+
+// ==============================================================================
+// HELPER PENGUJIAN INSTAN (UNTUK TESTING DI CONSOLE BROWSER KAPAN SAJA)
+// ==============================================================================
+window.testOvernightToast = function() {
+    fetch(`${API_BASE}/api/notifications/overnight-scans`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success' && data.data && data.data.length > 0) {
+                showOvernightToastNotification(data.data);
+                console.log("[TEST] Toast Notifikasi Dini Hari dipicu untuk", data.data.length, "scan.");
+            } else {
+                console.warn("[TEST] Tidak ditemukan data scan overnight berisiko HIGH/CRITICAL.");
+            }
+        });
+};
+
+
+window.resetNotificationReadStatus = function() {
+    localStorage.removeItem('dsti_read_notifs');
+    console.log("[TEST] Status baca notifikasi (dsti_read_notifs) telah di-reset.");
+    if (typeof fetchNotifications === 'function') fetchNotifications();
+};
+
+
 
 // Generate Report Modal
 function openGenerateReportModal(historyId) {
