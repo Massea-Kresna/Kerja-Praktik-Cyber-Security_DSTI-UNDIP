@@ -2882,8 +2882,9 @@ function showLoginOverlay() {
     document.getElementById('notifWrapper').style.display = 'none';
     document.getElementById('authForm').style.display = 'block';
     document.getElementById('otpForm').style.display = 'none';
-    document.getElementById('authForm').style.display = 'block';
-    document.getElementById('otpForm').style.display = 'none';
+
+    // Hapus semua toast notifikasi overnight dari DOM jika belum login / saat logout
+    document.querySelectorAll('.overnight-toast').forEach(el => el.remove());
 
     const forgotForm = document.getElementById('forgotPasswordForm');
     if(forgotForm) forgotForm.style.display = 'none';
@@ -2909,6 +2910,7 @@ function showLoginOverlay() {
 
     currentUser = null;
 }
+
 
 // ==========================================
 // LOGIKA LUPA PASSWORD
@@ -2993,7 +2995,9 @@ function handleSuccessfulLogin(user) {
         if (navNetworkScanner) navNetworkScanner.style.display = 'flex';
 
         fetchNotifications();
+        checkOvernightNotifications();
     } else {
+
         roleEl.innerHTML = `<span class="badge-user-role">User</span>`;
         document.getElementById('nav-admin').style.display = 'none';
         document.getElementById('notifWrapper').style.display = 'none';
@@ -3910,6 +3914,7 @@ function markNotificationReadByScanId(scanId) {
 }
 
 async function checkOvernightNotifications() {
+    if (!currentUser) return; // Jangan jalankan atau tampilkan toast jika pengguna belum login
     try {
         const res = await fetch(`${API_BASE}/api/notifications/overnight-scans`);
         const data = await res.json();
@@ -3929,8 +3934,10 @@ async function checkOvernightNotifications() {
 }
 
 function showOvernightToastNotification(scanData) {
+    if (!currentUser) return; // Jangan tampilkan toast jika pengguna belum login
     const unreadScans = Array.isArray(scanData) ? scanData : [scanData];
     if (unreadScans.length === 0) return;
+
 
     const primaryScan = unreadScans[0];
     const scanIdStr = String(primaryScan.id);

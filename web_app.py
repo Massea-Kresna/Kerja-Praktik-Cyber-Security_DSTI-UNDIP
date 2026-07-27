@@ -66,7 +66,7 @@ def send_otp_email(to_email: str, otp: str):
         
     msg = MIMEMultipart()
     # Mengatur nama pengirim agar terlihat profesional
-    msg['From'] = f"UNDIP Security Dashboard <{config.SMTP_USERNAME}>"
+    msg['From'] = f"Pentest-UNDIP <{config.SMTP_USERNAME}>"
     msg['To'] = to_email
     msg['Subject'] = "Kode OTP Login Pentest Dashboard"
     
@@ -105,7 +105,7 @@ def send_reset_email(to_email: str, reset_token: str, base_url: str):
         return False
         
     msg = MIMEMultipart()
-    msg['From'] = f"UNDIP Security Dashboard <{config.SMTP_USERNAME}>"
+    msg['From'] = f"Pentest-UNDIP <{config.SMTP_USERNAME}>"
     msg['To'] = to_email
     msg['Subject'] = "Reset Password - Pentest Dashboard"
     
@@ -637,88 +637,42 @@ def get_dashboard_stats(current_user = Depends(get_current_user)):
 # ===================================================================
 @app.get("/api/trend-stats")
 def get_trend_stats(start_date: str | None = Query(None), end_date: str | None = Query(None), current_user = Depends(get_current_user)):
-    """Mengambil data tren kerentanan per domain"""
+    """Mengambil data tren kerentanan per domain (rekap 1-per-1 tiap eksekusi scan)"""
     if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
 
     try:
-        import math
         wib_tz = timezone(timedelta(hours=7))
         now_utc = datetime.now(timezone.utc)
         now_wib = now_utc.astimezone(wib_tz)
         
         if not start_date or not end_date:
-            days_diff = 1
-            interval_minutes = 30
-            num_buckets = 48
-            minute_snapped = 30 if now_wib.minute >= 30 else 0
-            end_snapped_wib = now_wib.replace(minute=minute_snapped, second=0, microsecond=0)
-            start_snapped_wib = end_snapped_wib - timedelta(hours=24)
-            date_format = "%H:%M"
+            start_dt = now_wib - timedelta(hours=24)
+            end_dt = now_wib
+
         else:
             try:
                 start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=wib_tz)
                 end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=wib_tz)
-                if end_dt > now_wib:
-                    end_dt = now_wib
-                    
-                delta = end_dt - start_dt
-                days_diff = delta.total_seconds() / 86400
-                
-                if days_diff <= 1:
-                    interval_minutes = 30
-                    date_format = "%H:%M"
-                elif days_diff <= 3:
-                    interval_minutes = 60
-                    date_format = "%d %b %H:%M"
-                elif days_diff <= 7:
-                    interval_minutes = 4 * 60
-                    date_format = "%d %b %H:%M"
-                elif days_diff <= 14:
-                    interval_minutes = 12 * 60
-                    date_format = "%d %b %H:%M"
-                else:
-                    interval_minutes = 24 * 60
-                    date_format = "%d %b %Y"
-
-                if days_diff <= 14:
-                    num_buckets = int(math.ceil((days_diff * 24 * 60) / interval_minutes))
-                    if interval_minutes < 60:
-                        minute_snapped = 30 if end_dt.minute >= 30 else 0
-                        end_snapped_wib = end_dt.replace(minute=minute_snapped, second=0, microsecond=0)
-                        end_snapped_wib += timedelta(minutes=interval_minutes)
-                    else:
-                        hour_interval = interval_minutes // 60
-                        hour_snapped = (end_dt.hour // hour_interval) * hour_interval
-                        end_snapped_wib = end_dt.replace(hour=hour_snapped, minute=0, second=0, microsecond=0)
-                        end_snapped_wib += timedelta(hours=hour_interval)
-                    start_snapped_wib = end_snapped_wib - timedelta(minutes=num_buckets * interval_minutes)
-                else:
-                    num_buckets = max(1, math.ceil(days_diff))
-                    end_snapped_wib = end_dt.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-                    start_snapped_wib = end_snapped_wib - timedelta(days=num_buckets)
             except ValueError:
                 raise HTTPException(status_code=400, detail="Format tanggal tidak valid. Gunakan YYYY-MM-DD.")
         
-        start_time_iso = start_snapped_wib.astimezone(timezone.utc).isoformat()
-        end_time_iso = end_snapped_wib.astimezone(timezone.utc).isoformat()
+        start_time_iso = start_dt.astimezone(timezone.utc).isoformat()
+        end_time_iso = end_dt.astimezone(timezone.utc).isoformat()
         
         scans = db_manager.get_trend_scans(start_time_iso, end_time_iso)
         
         labels = []
         raw_labels = []
-        for i in range(num_buckets + 1):
-            bucket_time_wib = start_snapped_wib + timedelta(minutes=i*interval_minutes)
-            labels.append(bucket_time_wib.strftime(date_format))
-            raw_labels.append(bucket_time_wib.isoformat())
-            
+        scan_ids = []
+        
         all_domains = [d.get("domain_name") for d in db_manager.get_all_domains()]
-            
-        domains_data = {domain: [0] * (num_buckets + 1) for domain in all_domains}
+        domains_data = {domain: [] for domain in all_domains}
         
         for scan in scans:
             domain_name = scan.get("domains", {}).get("domain_name", "Unknown")
             scan_date_str = scan.get("scan_date")
+            scan_id = scan.get("id")
             if not scan_date_str:
                 continue
             try:
@@ -727,25 +681,31 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
             except Exception:
                 continue
                 
-            delta = scan_date_wib - start_snapped_wib
-            bucket_index = int(delta.total_seconds() // (interval_minutes * 60))
+            labels.append(scan_date_wib.strftime("%d %b %H:%M"))
+            raw_labels.append(scan_date_str)
+            scan_ids.append(scan_id)
             
-            if 0 <= bucket_index <= num_buckets:
-                if domain_name not in domains_data:
-                    domains_data[domain_name] = [0] * (num_buckets + 1)
+            vulns = scan.get("scan_result") or []
+            raw_json = scan.get("raw_json")
+            vuln_count = len(vulns)
+            if isinstance(raw_json, list):
+                vuln_count += len(raw_json)
+            elif isinstance(raw_json, dict) and isinstance(raw_json.get("low_info_vulns"), list):
+                vuln_count += len(raw_json["low_info_vulns"])
                 
-                vuln_count = len(scan.get("scan_result") or [])
-                raw_json = scan.get("raw_json")
-                if isinstance(raw_json, list):
-                    vuln_count += len(raw_json)
-                elif isinstance(raw_json, dict) and isinstance(raw_json.get("low_info_vulns"), list):
-                    vuln_count += len(raw_json["low_info_vulns"])
-                domains_data[domain_name][bucket_index] += vuln_count
+            for d in all_domains:
+                if d not in domains_data:
+                    domains_data[d] = []
+                if d == domain_name:
+                    domains_data[d].append(vuln_count)
+                else:
+                    domains_data[d].append(0)
 
         return {
             "source": "postgresql",
             "labels": labels,
             "raw_labels": raw_labels,
+            "scan_ids": scan_ids,
             "datasets": [
                 {
                     "label": domain,
@@ -763,100 +723,43 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
 # ===================================================================
 @app.get("/api/severity-trend-stats")
 def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str | None = Query(None), current_user = Depends(get_current_user)):
-    """Mengambil data tren kerentanan berdasarkan severity"""
+    """Mengambil data tren kerentanan berdasarkan severity (rekap 1-per-1 tiap eksekusi scan)"""
     if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
 
     try:
-        import math
         wib_tz = timezone(timedelta(hours=7))
         now_utc = datetime.now(timezone.utc)
         now_wib = now_utc.astimezone(wib_tz)
         
         if not start_date or not end_date:
-            days_diff = 1
-            interval_minutes = 30
-            num_buckets = 48
-            minute_snapped = 30 if now_wib.minute >= 30 else 0
-            end_snapped_wib = now_wib.replace(minute=minute_snapped, second=0, microsecond=0)
-            start_snapped_wib = end_snapped_wib - timedelta(hours=24)
-            date_format = "%H:%M"
+            start_dt = now_wib - timedelta(hours=24)
+            end_dt = now_wib
+
         else:
             try:
                 start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=wib_tz)
                 end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=wib_tz)
-                if end_dt > now_wib:
-                    end_dt = now_wib
-                    
-                delta = end_dt - start_dt
-                days_diff = delta.total_seconds() / 86400
-                
-                if days_diff <= 1:
-                    interval_minutes = 30
-                    date_format = "%H:%M"
-                elif days_diff <= 3:
-                    interval_minutes = 60
-                    date_format = "%d %b %H:%M"
-                elif days_diff <= 7:
-                    interval_minutes = 4 * 60
-                    date_format = "%d %b %H:%M"
-                elif days_diff <= 14:
-                    interval_minutes = 12 * 60
-                    date_format = "%d %b %H:%M"
-                else:
-                    interval_minutes = 24 * 60
-                    date_format = "%d %b %Y"
-
-                if days_diff <= 14:
-                    num_buckets = int(math.ceil((days_diff * 24 * 60) / interval_minutes))
-                    if interval_minutes < 60:
-                        minute_snapped = 30 if end_dt.minute >= 30 else 0
-                        end_snapped_wib = end_dt.replace(minute=minute_snapped, second=0, microsecond=0)
-                        end_snapped_wib += timedelta(minutes=interval_minutes)
-                    else:
-                        hour_interval = interval_minutes // 60
-                        hour_snapped = (end_dt.hour // hour_interval) * hour_interval
-                        end_snapped_wib = end_dt.replace(hour=hour_snapped, minute=0, second=0, microsecond=0)
-                        end_snapped_wib += timedelta(hours=hour_interval)
-                    start_snapped_wib = end_snapped_wib - timedelta(minutes=num_buckets * interval_minutes)
-                else:
-                    num_buckets = max(1, math.ceil(days_diff))
-                    end_snapped_wib = end_dt.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-                    start_snapped_wib = end_snapped_wib - timedelta(days=num_buckets)
             except ValueError:
                 raise HTTPException(status_code=400, detail="Format tanggal tidak valid. Gunakan YYYY-MM-DD.")
         
-        start_time_iso = start_snapped_wib.astimezone(timezone.utc).isoformat()
-        end_time_iso = end_snapped_wib.astimezone(timezone.utc).isoformat()
+        start_time_iso = start_dt.astimezone(timezone.utc).isoformat()
+        end_time_iso = end_dt.astimezone(timezone.utc).isoformat()
         
         scans = db_manager.get_trend_scans(start_time_iso, end_time_iso)
         
         labels = []
         raw_labels = []
-        for i in range(num_buckets + 1):
-            bucket_time_wib = start_snapped_wib + timedelta(minutes=i*interval_minutes)
-            labels.append(bucket_time_wib.strftime(date_format))
-            raw_labels.append(bucket_time_wib.isoformat())
-            
-        severities_data = {
-            "CRITICAL": [0] * (num_buckets + 1),
-            "HIGH": [0] * (num_buckets + 1),
-            "MEDIUM": [0] * (num_buckets + 1),
-            "LOW": [0] * (num_buckets + 1),
-            "INFO": [0] * (num_buckets + 1),
-        }
+        scan_ids = []
         
-        domains_by_sev = {
-            "CRITICAL": [{} for _ in range(num_buckets + 1)],
-            "HIGH": [{} for _ in range(num_buckets + 1)],
-            "MEDIUM": [{} for _ in range(num_buckets + 1)],
-            "LOW": [{} for _ in range(num_buckets + 1)],
-            "INFO": [{} for _ in range(num_buckets + 1)],
-        }
+        severities = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+        severities_data = {sev: [] for sev in severities}
+        domains_by_sev = {sev: [] for sev in severities}
         
         for scan in scans:
             domain_name = scan.get("domains", {}).get("domain_name", "Unknown")
             scan_date_str = scan.get("scan_date")
+            scan_id = scan.get("id")
             if not scan_date_str:
                 continue
             try:
@@ -865,41 +768,46 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
             except Exception:
                 continue
                 
-            delta = scan_date_wib - start_snapped_wib
-            bucket_index = int(delta.total_seconds() // (interval_minutes * 60))
+            labels.append(scan_date_wib.strftime("%d %b %H:%M"))
+            raw_labels.append(scan_date_str)
+            scan_ids.append(scan_id)
             
-            if 0 <= bucket_index <= num_buckets:
-                vulns = scan.get("scan_result") or []
-                for v in vulns:
-                    sev = (v.get("severity") or "").upper()
-                    if sev in severities_data:
-                        severities_data[sev][bucket_index] += 1
-                        domains_by_sev[sev][bucket_index][domain_name] = domains_by_sev[sev][bucket_index].get(domain_name, 0) + 1
-                        
-                raw_json = scan.get("raw_json")
-                low_info_list = []
-                if isinstance(raw_json, list):
-                    low_info_list = raw_json
-                elif isinstance(raw_json, dict) and isinstance(raw_json.get("low_info_vulns"), list):
-                    low_info_list = raw_json["low_info_vulns"]
+            vulns = scan.get("scan_result") or []
+            raw_json = scan.get("raw_json")
+            vulns_list = list(vulns)
+            if isinstance(raw_json, list):
+                vulns_list.extend(raw_json)
+            elif isinstance(raw_json, dict) and isinstance(raw_json.get("low_info_vulns"), list):
+                vulns_list.extend(raw_json["low_info_vulns"])
+                
+            sev_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
+            for v in vulns_list:
+                s = str(v.get("severity", "")).upper()
+                if s in sev_counts:
+                    sev_counts[s] += 1
+                elif s == "INFORMATION":
+                    sev_counts["INFO"] += 1
                     
-                for v in low_info_list:
-                    sev = (v.get("severity") or "").upper()
-                    if sev in severities_data:
-                        severities_data[sev][bucket_index] += 1
-                        domains_by_sev[sev][bucket_index][domain_name] = domains_by_sev[sev][bucket_index].get(domain_name, 0) + 1
+            for s in severities:
+                cnt = sev_counts[s]
+                severities_data[s].append(cnt)
+                if cnt > 0:
+                    domains_by_sev[s].append({domain_name: cnt})
+                else:
+                    domains_by_sev[s].append({})
 
         return {
             "source": "postgresql",
             "labels": labels,
             "raw_labels": raw_labels,
+            "scan_ids": scan_ids,
             "datasets": [
                 {
                     "label": sev.capitalize(),
-                    "data": data,
+                    "data": severities_data[sev],
                     "domains": domains_by_sev[sev]
                 }
-                for sev, data in severities_data.items()
+                for sev in severities
             ]
         }
     except Exception as e:
@@ -908,7 +816,6 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
 
 # ===================================================================
 # API: Daftar Semua Domain (dari Supabase)
-# ===================================================================
 @app.get("/api/domains")
 def get_domains(search: Optional[str] = Query(None, description="Filter domain by name"), current_user = Depends(get_current_user)):
     """Mengambil daftar semua domain dari database"""
@@ -1718,7 +1625,7 @@ async def share_report_endpoint(req: ShareReportRequest, current_user = Depends(
         
         # Siapkan email
         msg = MIMEMultipart()
-        msg['From'] = f"UNDIP Security Dashboard <{config.SMTP_USERNAME}>"
+        msg['From'] = f"Pentest-UNDIP <{config.SMTP_USERNAME}>"
         msg['To'] = ", ".join(req.emails)
         msg['Subject'] = f"Security Scan Report - UNDIP CSIRT"
         
