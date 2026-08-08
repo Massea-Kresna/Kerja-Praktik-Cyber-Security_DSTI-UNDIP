@@ -3732,13 +3732,30 @@ async function fetchNotifications() {
 
             renderNotificationList();
             
+            // === TAMBAHAN KODE: BATAS WAKTU 24 JAM ===
+            const now = new Date();
+            const ONE_DAY_MS = 24 * 60 * 60 * 1000; // 24 jam dalam satuan milidetik
+
             allNotifications.forEach(n => {
-                if (n.type === 'scan_finished' && n.unread) {
+                let isRecent = true;
+                
+                // Periksa usia notifikasi
+                if (n.timestamp) {
+                    const notifDate = new Date(n.timestamp);
+                    // Jika selisih waktu sekarang dan waktu notifikasi lebih dari 1 hari, tandai false
+                    if (!isNaN(notifDate.getTime()) && (now - notifDate) > ONE_DAY_MS) {
+                        isRecent = false;
+                    }
+                }
+
+                // Tampilkan pop-up HANYA jika statusnya unread DAN usianya di bawah 24 jam
+                if (n.type === 'scan_finished' && n.unread && isRecent) {
                     showScanFinishedToast(n);
-                } else if (n.type === 'domain_found' && n.unread) {
+                } else if (n.type === 'domain_found' && n.unread && isRecent) {
                     showDomainFoundToast(n); 
                 }
             });
+            // =========================================
         }
     } catch (e) {
         console.error('Gagal fetch notifikasi', e);
