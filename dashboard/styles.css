@@ -1394,6 +1394,20 @@ button, input, select, textarea {
 }
 
 /* ===== BADGE ROLE: DEFAULT UNTUK TABEL (BACKGROUND PUTIH) ===== */
+.badge-superadmin-role {
+    background-color: rgba(147, 51, 234, 0.12); 
+    color: #7e22ce;
+    border: 1px solid rgba(147, 51, 234, 0.35);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    display: inline-block;
+}
+
 .badge-admin-role {
     background-color: rgba(37, 99, 235, 0.1); 
     color: #1d4ed8; /* Biru tua yang sangat kontras di atas putih */
@@ -1424,6 +1438,12 @@ button, input, select, textarea {
 
 /* ===== OVERRIDE KHUSUS UNTUK SIDEBAR (BACKGROUND GELAP) ===== */
 /* Saat badge berada di dalam sidebar, teks otomatis menjadi terang */
+#sidebar-user-role .badge-superadmin-role {
+    background-color: rgba(168, 85, 247, 0.25);
+    color: #c084fc;
+    border-color: rgba(168, 85, 247, 0.45);
+}
+
 #sidebar-user-role .badge-admin-role {
     background-color: rgba(37, 99, 235, 0.25);
     color: #93c5fd; /* Biru muda terang agar menyala di area gelap */
@@ -2421,7 +2441,7 @@ input[type=number] {
 
 /* Paksa semua teks dalam div/span di tabel jadi terang (kecuali badge/status warna) */
 [data-theme="dark"] .modern-table td div,
-[data-theme="dark"] .modern-table td span:not(.badge):not(.status-indicator):not(.badge-admin-role):not(.badge-user-role):not([style*="background"]):not(.sev-dot) {
+[data-theme="dark"] .modern-table td span:not(.badge):not(.status-indicator):not(.badge-superadmin-role):not(.badge-admin-role):not(.badge-user-role):not([style*="background"]):not(.sev-dot) {
     color: var(--text-main) !important;
 }
 
@@ -2597,6 +2617,11 @@ input[type=number] {
 
 /* 11. Badge role (Admin/User) di dalam tabel: background rgba tipis
    di atas baris gelap membuat teks birunya nyaris tak berkontras */
+[data-theme="dark"] .badge-superadmin-role {
+    background-color: rgba(168, 85, 247, 0.2) !important;
+    color: #c084fc !important;
+    border-color: rgba(168, 85, 247, 0.45) !important;
+}
 [data-theme="dark"] .badge-admin-role {
     background-color: rgba(59, 130, 246, 0.18) !important;
     color: #93c5fd !important;

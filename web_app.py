@@ -174,7 +174,7 @@ class ConnectionManager:
     async def broadcast_to_admins(self, message: dict):
         for conn in list(self.active_connections):
             info = self.user_info.get(conn)
-            if info and info.get("role") == "admin":
+            if info and info.get("role") in ["admin", "superadmin"]:
                 try:
                     await conn.send_json(message)
                 except Exception:
@@ -271,8 +271,13 @@ def get_current_user(request: Request):
     return user
 
 def get_current_admin(user = Depends(get_current_user)):
-    if user.get("role") != "admin":
+    if user.get("role") not in ["admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Akses ditolak. Endpoint ini hanya untuk Admin.")
+    return user
+
+def get_current_superadmin(user = Depends(get_current_user)):
+    if user.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Akses ditolak. Endpoint ini hanya untuk Super Admin.")
     return user
 
 
@@ -305,13 +310,23 @@ def _get_supabase_or_none():
 @app.post("/api/auth/register")
 def register_user(user_data: UserRegister, admin_user = Depends(get_current_admin)):
     """Mendaftarkan user baru"""
+    target_role = user_data.role.lower() if user_data.role else "user"
+    caller_role = admin_user.get("role")
+    
+    if target_role == "admin" and caller_role != "superadmin":
+        raise HTTPException(status_code=403, detail="Hanya Super Admin yang dapat mendaftarkan akun Admin.")
+    if target_role == "superadmin" and caller_role != "superadmin":
+        raise HTTPException(status_code=403, detail="Hanya Super Admin yang dapat mendaftarkan akun Super Admin.")
+    if target_role not in ["superadmin", "admin", "user"]:
+        raise HTTPException(status_code=400, detail="Role tidak valid.")
+
     # Cek apakah username sudah ada
     existing = db_manager.get_user_by_username(user_data.username)
     if existing:
         raise HTTPException(status_code=400, detail="Username sudah terdaftar.")
         
     try:
-        db_manager.create_user(user_data.username, user_data.password, user_data.role)
+        db_manager.create_user(user_data.username, user_data.password, target_role)
         return {"status": "ok", "message": "Pendaftaran berhasil."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal melakukan registrasi: {str(e)}")
@@ -363,9 +378,9 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
             raise he
         except Exception:
             pass
-    # 4. Cek Role. OTP hanya untuk admin
+    # 4. Cek Role. OTP hanya untuk admin dan superadmin
     user_role = user.get("role", "user")
-    if user_role == "admin":
+    if user_role in ["admin", "superadmin"]:
         # 5a. Generate OTP untuk Admin
         otp_code = str(random.randint(100000, 999999))
         OTP_STORE[credentials.username] = {
@@ -513,11 +528,22 @@ def reset_password(req: ResetPasswordRequest):
 def get_users(admin_user = Depends(get_current_admin)):
     """Mendapatkan daftar seluruh user untuk Admin Page"""
     users = db_manager.list_all_users()
+    if admin_user.get("role") != "superadmin":
+        users = [u for u in users if u.get("role") != "superadmin"]
     return {"status": "ok", "data": users}
+
+def check_target_user_protection(target_username: str, caller: dict):
+    target_user = db_manager.get_user_by_username(target_username)
+    if not target_user:
+        raise HTTPException(status_code=404, detail=f"User '{target_username}' tidak ditemukan.")
+    if target_user.get("role") == "superadmin" and caller.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Admin tidak memiliki izin untuk melakukan aksi ini terhadap Super Admin.")
+    return target_user
 
 @app.post("/api/admin/users/{target_username}/force-logout")
 async def force_logout(target_username: str, admin_user = Depends(get_current_admin)):
     """Memaksa logout salah satu user"""
+    check_target_user_protection(target_username, admin_user)
     db_manager.update_user_session(target_username, None, False)
     await manager.kick_user(target_username, "force_logout")
     
@@ -526,6 +552,7 @@ async def force_logout(target_username: str, admin_user = Depends(get_current_ad
 @app.post("/api/admin/users/{target_username}/timeout")
 async def put_user_timeout(target_username: str, req: TimeoutRequest, admin_user = Depends(get_current_admin)):
     """Menangguhkan user selama rentang waktu tertentu"""
+    check_target_user_protection(target_username, admin_user)
     timeout_time = (datetime.now(timezone.utc) + timedelta(minutes=req.minutes)).isoformat()
     db_manager.update_user_timeout(target_username, timeout_time)
     await manager.kick_user(target_username, "timeout")
@@ -535,12 +562,14 @@ async def put_user_timeout(target_username: str, req: TimeoutRequest, admin_user
 @app.post("/api/admin/users/{target_username}/remove-timeout")
 def remove_user_timeout(target_username: str, admin_user = Depends(get_current_admin)):
     """Mencabut penangguhan (timeout) user"""
+    check_target_user_protection(target_username, admin_user)
     db_manager.update_user_timeout(target_username, None)
     return {"status": "ok", "message": f"Timeout untuk user '{target_username}' berhasil dicabut."}
 
 @app.delete("/api/admin/users/{target_username}")
 async def delete_user_endpoint(target_username: str, admin_user = Depends(get_current_admin)):
     """Menghapus user secara permanen"""
+    check_target_user_protection(target_username, admin_user)
     if target_username == admin_user["username"]:
         raise HTTPException(status_code=400, detail="Anda tidak dapat menghapus akun Anda sendiri.")
         
@@ -1271,7 +1300,7 @@ async def trigger_web_scan(
     background_tasks: BackgroundTasks, 
     current_user = Depends(get_current_user)
 ):
-    if current_user.get("role") != "admin":
+    if current_user.get("role") not in ["admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk melakukan aksi ini.")
 
     if not payload.targets:
@@ -1351,7 +1380,7 @@ class StopScanRequest(BaseModel):
 @app.post("/api/scans/stop")
 async def stop_active_scan(req: StopScanRequest, current_user = Depends(get_current_user)):
     """Menghentikan scan yang sedang berjalan di Pentest-Tools."""
-    if current_user.get("role") != "admin":
+    if current_user.get("role") not in ["admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk melakukan aksi ini.")
     
     scan_id = req.scan_id
@@ -1376,7 +1405,7 @@ async def stop_active_scan(req: StopScanRequest, current_user = Depends(get_curr
 @app.get("/dashboard/reports/{filename}")
 async def get_pdf_report(filename: str, current_user = Depends(get_current_user)):
     """Melayani file PDF report, atau membuatnya secara dinamis jika belum ada."""
-    if current_user.get("role") != "admin":
+    if current_user.get("role") not in ["admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk melakukan aksi ini.")
     
     reports_dir = os.path.join(DASHBOARD_PATH, "reports")

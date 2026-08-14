@@ -2051,7 +2051,10 @@ window.exportDomains = function (format) {
 
     const exportData = allDomains.map(d => ({
         domain_name: d.domain_name,
-        ip_address: d.ip_address || ''
+        ip_address: d.ip_address || '',
+        last_scan_type: d.last_scan_type || '',
+        last_scan_status: d.last_scan_status || 'Belum Scan',
+        last_scan_date: d.last_scan_date || null
     }));
 
     content = JSON.stringify(exportData, null, 2);
@@ -2102,7 +2105,7 @@ function renderInventoryList() {
 
     // Perbaikan Bug: Render UI Kosong dengan benar jika tidak ada data dari backend
     if (!allDomains || allDomains.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No domains found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No domains found.</td></tr>`;
         if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
@@ -2149,7 +2152,7 @@ function renderInventoryList() {
     // ==========================================================
 
     if (filteredDomains.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No domains match your search.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No domains match your search.</td></tr>`;
         if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
@@ -2169,6 +2172,21 @@ function renderInventoryList() {
     tbody.innerHTML = paginatedDomains.map(d => {
         // Cek apakah domain ini ada di memori yang tersimpan
         const isChecked = selectedDomains.has(d.domain_name) ? 'checked' : '';
+        
+        let lastScanCell = `<span class="badge badge-inactive">BELUM SCAN</span>`;
+        if (d.last_scan_date && d.last_scan_status) {
+            const sevClass = getSeverityClass(d.last_scan_status);
+            const formattedDate = formatDate(d.last_scan_date);
+            const scanTypeHtml = d.last_scan_type ? `<span style="font-size: 12px; font-weight: 500; color: var(--text-primary);">${escapeHtml(d.last_scan_type)}</span>` : '';
+            lastScanCell = `<div style="display: flex; flex-direction: column; gap: 2px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="badge badge-${sevClass}">${escapeHtml(d.last_scan_status.toUpperCase())}</span>
+                    ${scanTypeHtml}
+                </div>
+                <small style="color:var(--text-secondary); font-size: 11px;">${escapeHtml(formattedDate)}</small>
+            </div>`;
+        }
+
         return `
         <tr>
             <td style="text-align: center;">
@@ -2179,6 +2197,7 @@ function renderInventoryList() {
             </td>
             <td style="font-family:var(--font-mono); color:var(--text-secondary)">${escapeHtml(d.ip_address || '-')}</td>
             <td><span class="badge ${d.is_active ? 'badge-active' : 'badge-inactive'}">${d.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+            <td>${lastScanCell}</td>
             <td style="text-align: center;">
                 <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
                     <button class="icon-btn action-edit" onclick='openEditDomainModal(${JSON.stringify(d).replace(/'/g, "&#39;")})' title="Edit">
@@ -2741,7 +2760,7 @@ function openScanModal(scan) {
     }
 
     const btnDownload = document.getElementById('btnDownloadReport');
-    if (btnDownload && domainName && currentUser && currentUser.role === 'admin') {
+    if (btnDownload && domainName && currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) {
         // Open Generate Report Modal instead of directly downloading
         btnDownload.removeAttribute('href');
         btnDownload.removeAttribute('target');
@@ -3009,15 +3028,21 @@ function handleSuccessfulLogin(user) {
     // Setup Topbar User Profile
     const topbarProfile = document.getElementById('topbar-user-profile');
     if (topbarProfile) {
-        if (user.role === 'admin') {
+        if (user.role === 'superadmin') {
+            topbarProfile.textContent = 'Super Admin';
+        } else if (user.role === 'admin') {
             topbarProfile.textContent = 'Admin DSTI';
         } else {
             topbarProfile.textContent = user.username;
         }
     }
     const roleEl = document.getElementById('sidebar-user-role');
-    if (user.role === 'admin') {
-        document.getElementById('sidebar-user-role').innerHTML = `<span class="badge-admin-role">ADMIN</span>`;
+    if (user.role === 'superadmin' || user.role === 'admin') {
+        if (user.role === 'superadmin') {
+            roleEl.innerHTML = `<span class="badge-superadmin-role">SUPER ADMIN</span>`;
+        } else {
+            roleEl.innerHTML = `<span class="badge-admin-role">ADMIN</span>`;
+        }
         document.getElementById('nav-admin').style.display = 'flex';
         document.getElementById('notifWrapper').style.display = 'block';
 
@@ -3227,13 +3252,27 @@ function openCreateUserModal() {
         return;
     }
     overlay.classList.add('active');
-    console.log("[Debug] added 'active' to #createUserModalOverlay. Class list is now:", overlay.className);
 
     const errorMsg = document.getElementById('createUserErrorMsg');
     if (errorMsg) {
         errorMsg.style.display = 'none';
-    } else {
-        console.warn("[Debug] Element #createUserErrorMsg not found.");
+    }
+
+    const roleSelect = document.getElementById('createUserRole');
+    if (roleSelect) {
+        if (currentUser && currentUser.role === 'superadmin') {
+            roleSelect.innerHTML = `
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+            `;
+            roleSelect.disabled = false;
+        } else {
+            roleSelect.innerHTML = `
+                <option value="user">User</option>
+            `;
+            roleSelect.value = 'user';
+            roleSelect.disabled = true;
+        }
     }
 }
 
@@ -3249,7 +3288,8 @@ async function handleCreateUserSubmit(e) {
     const username = document.getElementById('createUsername').value.trim();
     const password = document.getElementById('createPassword').value;
     const confirmPassword = document.getElementById('createConfirmPassword').value;
-    const role = "user";
+    const roleSelect = document.getElementById('createUserRole');
+    const role = roleSelect ? roleSelect.value : "user";
     const errMsg = document.getElementById('createUserErrorMsg');
 
     errMsg.style.display = 'none';
@@ -3319,13 +3359,15 @@ window.applyUserFilters = function (preservePage = false) {
     });
 
     // Sort logic: 
-    // 1. Role: 'admin' > 'user'
+    // 1. Role: 'superadmin' > 'admin' > 'user'
     // 2. Status: online > offline
     // 3. Last Active: recent > older
     // 4. Username: A-Z
+    const roleRank = { 'superadmin': 1, 'admin': 2, 'user': 3 };
     filteredAdminUsers.sort((a, b) => {
-        if (a.role === 'admin' && b.role !== 'admin') return -1;
-        if (a.role !== 'admin' && b.role === 'admin') return 1;
+        const rankA = roleRank[a.role] || 4;
+        const rankB = roleRank[b.role] || 4;
+        if (rankA !== rankB) return rankA - rankB;
 
         const aOnline = a.is_online ? 1 : 0;
         const bOnline = b.is_online ? 1 : 0;
@@ -3420,9 +3462,14 @@ function renderUserTable() {
 
     tbody.innerHTML = paginatedUsers.map(u => {
         const isSelf = u.username === currentUser.username;
-        const roleBadge = u.role === 'admin'
-            ? `<span class="badge-admin-role">Admin</span>`
-            : `<span class="badge-user-role">User</span>`;
+        const isProtectedSuperAdmin = u.role === 'superadmin' && currentUser.role !== 'superadmin';
+        
+        let roleBadge = `<span class="badge-user-role">User</span>`;
+        if (u.role === 'superadmin') {
+            roleBadge = `<span class="badge-superadmin-role">Super Admin</span>`;
+        } else if (u.role === 'admin') {
+            roleBadge = `<span class="badge-admin-role">Admin</span>`;
+        }
 
         const isOnline = u.is_online;
         const lastActiveText = u.is_online ? "Baru saja" : formatRelativeTime(u.last_online);
@@ -3454,6 +3501,8 @@ function renderUserTable() {
         let actionButtons = '';
         if (isSelf) {
             actionButtons = `<span style="color:var(--text-tertiary); font-style:italic;">Akun Anda</span>`;
+        } else if (isProtectedSuperAdmin) {
+            actionButtons = `<span style="color: #c084fc; font-weight: 600; font-size: 12px; font-style: italic;">Super Admin (Terproteksi)</span>`;
         } else if (isTimedOut) {
             actionButtons = `
                 <div style="display: flex; flex-direction: column; gap: 4px; justify-content: center;">
@@ -3878,7 +3927,7 @@ function connectLiveWebSocket(sessionId) {
             const data = JSON.parse(event.data);
 
             if (data.event === 'new_notification') {
-                if (currentUser && currentUser.role === 'admin') {
+                if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) {
                     if (data.notification.type === 'scan_finished') {
                         showScanFinishedToast(data.notification);
                     } else if (data.notification.type === 'domain_found' || data.notification.type === 'info') {
@@ -3899,7 +3948,7 @@ function connectLiveWebSocket(sessionId) {
                     fetchNotifications();
                 }
             } else if (data.event === 'user_login') {
-                if (currentUser && currentUser.role === 'admin' && data.username !== currentUser.username) {
+                if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin') && data.username !== currentUser.username) {
                     const activeNav = document.querySelector('.sidebar-nav .nav-item.active');
                     if (activeNav && activeNav.getAttribute('onclick').includes('admin')) {
                         loadAdminUsers();

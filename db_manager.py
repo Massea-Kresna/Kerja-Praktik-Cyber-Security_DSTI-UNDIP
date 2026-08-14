@@ -769,7 +769,32 @@ def get_all_domains():
     if not conn: return []
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute('SELECT id, domain_name, ip_address, is_active FROM domains ORDER BY domain_name ASC')
+            cur.execute("""
+                SELECT 
+                    d.id, 
+                    d.domain_name, 
+                    d.ip_address, 
+                    d.is_active,
+                    sh.scan_date AS last_scan_date,
+                    sh.risk_level AS last_scan_status,
+                    sh.risk_score AS last_risk_score,
+                    sr.check_type AS last_scan_type
+                FROM domains d
+                LEFT JOIN LATERAL (
+                    SELECT id, scan_date, risk_level, risk_score
+                    FROM scan_history
+                    WHERE domain_id = d.id
+                    ORDER BY scan_date DESC, id DESC
+                    LIMIT 1
+                ) sh ON true
+                LEFT JOIN LATERAL (
+                    SELECT check_type
+                    FROM scan_result
+                    WHERE history_id = sh.id AND check_type IS NOT NULL
+                    LIMIT 1
+                ) sr ON true
+                ORDER BY d.domain_name ASC
+            """)
             res = cur.fetchall()
             return [dict(row) for row in res]
     except Exception as e:
@@ -1078,10 +1103,37 @@ def get_domains_list(search=None):
     if not conn: return []
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            query = """
+                SELECT 
+                    d.id, 
+                    d.domain_name, 
+                    d.ip_address, 
+                    d.is_active,
+                    sh.scan_date AS last_scan_date,
+                    sh.risk_level AS last_scan_status,
+                    sh.risk_score AS last_risk_score,
+                    sr.check_type AS last_scan_type
+                FROM domains d
+                LEFT JOIN LATERAL (
+                    SELECT id, scan_date, risk_level, risk_score
+                    FROM scan_history
+                    WHERE domain_id = d.id
+                    ORDER BY scan_date DESC, id DESC
+                    LIMIT 1
+                ) sh ON true
+                LEFT JOIN LATERAL (
+                    SELECT check_type
+                    FROM scan_result
+                    WHERE history_id = sh.id AND check_type IS NOT NULL
+                    LIMIT 1
+                ) sr ON true
+            """
             if search:
-                cur.execute('SELECT id, domain_name, ip_address, is_active FROM domains WHERE domain_name ILIKE %s ORDER BY domain_name ASC', (f'%{search}%',))
+                query += " WHERE d.domain_name ILIKE %s ORDER BY d.domain_name ASC"
+                cur.execute(query, (f'%{search}%',))
             else:
-                cur.execute('SELECT id, domain_name, ip_address, is_active FROM domains ORDER BY domain_name ASC')
+                query += " ORDER BY d.domain_name ASC"
+                cur.execute(query)
             res = cur.fetchall()
             return [dict(row) for row in res]
     except Exception as e:
