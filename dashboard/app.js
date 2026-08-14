@@ -2051,7 +2051,10 @@ window.exportDomains = function (format) {
 
     const exportData = allDomains.map(d => ({
         domain_name: d.domain_name,
-        ip_address: d.ip_address || ''
+        ip_address: d.ip_address || '',
+        last_scan_type: d.last_scan_type || '',
+        last_scan_status: d.last_scan_status || 'Belum Scan',
+        last_scan_date: d.last_scan_date || null
     }));
 
     content = JSON.stringify(exportData, null, 2);
@@ -2102,7 +2105,7 @@ function renderInventoryList() {
 
     // Perbaikan Bug: Render UI Kosong dengan benar jika tidak ada data dari backend
     if (!allDomains || allDomains.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No domains found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No domains found.</td></tr>`;
         if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
@@ -2149,7 +2152,7 @@ function renderInventoryList() {
     // ==========================================================
 
     if (filteredDomains.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No domains match your search.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No domains match your search.</td></tr>`;
         if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
@@ -2169,6 +2172,21 @@ function renderInventoryList() {
     tbody.innerHTML = paginatedDomains.map(d => {
         // Cek apakah domain ini ada di memori yang tersimpan
         const isChecked = selectedDomains.has(d.domain_name) ? 'checked' : '';
+        
+        let lastScanCell = `<span class="badge badge-inactive">BELUM SCAN</span>`;
+        if (d.last_scan_date && d.last_scan_status) {
+            const sevClass = getSeverityClass(d.last_scan_status);
+            const formattedDate = formatDate(d.last_scan_date);
+            const scanTypeHtml = d.last_scan_type ? `<span style="font-size: 12px; font-weight: 500; color: var(--text-primary);">${escapeHtml(d.last_scan_type)}</span>` : '';
+            lastScanCell = `<div style="display: flex; flex-direction: column; gap: 2px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="badge badge-${sevClass}">${escapeHtml(d.last_scan_status.toUpperCase())}</span>
+                    ${scanTypeHtml}
+                </div>
+                <small style="color:var(--text-secondary); font-size: 11px;">${escapeHtml(formattedDate)}</small>
+            </div>`;
+        }
+
         return `
         <tr>
             <td style="text-align: center;">
@@ -2179,6 +2197,7 @@ function renderInventoryList() {
             </td>
             <td style="font-family:var(--font-mono); color:var(--text-secondary)">${escapeHtml(d.ip_address || '-')}</td>
             <td><span class="badge ${d.is_active ? 'badge-active' : 'badge-inactive'}">${d.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+            <td>${lastScanCell}</td>
             <td style="text-align: center;">
                 <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
                     <button class="icon-btn action-edit" onclick='openEditDomainModal(${JSON.stringify(d).replace(/'/g, "&#39;")})' title="Edit">
