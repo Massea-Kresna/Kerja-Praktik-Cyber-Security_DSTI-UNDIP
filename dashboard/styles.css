@@ -538,6 +538,18 @@ button, input, select, textarea {
     border: 1px solid #EA580C;
 }
 
+.badge-unscanned {
+    background: #64748B;
+    color: #FFFFFF;
+    border: 1px solid #475569;
+}
+
+:root[data-theme="dark"] .badge-unscanned {
+    background: #475569;
+    color: #F8FAFC;
+    border: 1px solid #64748B;
+}
+
 /* MODALS */
 .modal-overlay {
     position: fixed;
@@ -2908,4 +2920,65 @@ input[type=number] {
             drop-shadow(0px 1px 0px rgba(255, 255, 255, 0.9)) 
             drop-shadow(0px -1px 0px rgba(255, 255, 255, 0.9))
             drop-shadow(0px 4px 10px rgba(255, 255, 255, 0.15)) !important;
+}
+
+/* Clickable Role Badge Styling */
+.clickable-role-badge {
+    cursor: pointer !important;
+    user-select: none;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-flex;
+    align-items: center;
+}
+
+.clickable-role-badge:hover {
+    transform: translateY(-1px) scale(1.04);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+    filter: brightness(1.08);
+}
+
+/* Domain Approval Badge & Action Buttons */
+.badge-pending-approval {
+    background: #FEF3C7;
+    color: #92400E;
+    border: 1px solid #FDE68A;
+    font-weight: 600;
+}
+
+:root[data-theme="dark"] .badge-pending-approval {
+    background: rgba(146, 64, 14, 0.35);
+    color: #FDE68A;
+    border: 1px solid rgba(253, 230, 138, 0.3);
+}
+
+.btn-approve-domain {
+    background: #22c55e;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-approve-domain:hover {
+    background: #16a34a;
+}
+
+.btn-reject-domain {
+    background: #ef4444;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-reject-domain:hover {
+    background: #dc2626;
 }
