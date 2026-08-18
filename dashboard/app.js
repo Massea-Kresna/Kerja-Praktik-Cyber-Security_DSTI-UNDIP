@@ -4055,20 +4055,33 @@ function markNotificationReadByScanId(scanId) {
         renderNotificationList();
     }
 }
+let lastOvernightCheckTime = 0;
 
 async function checkOvernightNotifications() {
-    if (!currentUser) return; // Jangan jalankan atau tampilkan toast jika pengguna belum login
+    if (!currentUser) return; 
+
+    const now = Date.now();
+    if (now - lastOvernightCheckTime < 10000) return;
+    lastOvernightCheckTime = now;
+
     try {
         const res = await fetch(`${API_BASE}/api/notifications/overnight-scans`);
         const data = await res.json();
+        
         if (data.status === 'success' && data.data && data.data.length > 0) {
             const readNotifs = JSON.parse(localStorage.getItem('dsti_read_notifs') || '[]');
             
-            // Filter scan yang belum dibaca sama sekali
             const unreadOvernightScans = data.data.filter(scan => !readNotifs.includes(String(scan.id)));
 
             if (unreadOvernightScans.length > 0) {
-                showOvernightToastNotification(unreadOvernightScans);
+                const primaryScan = unreadOvernightScans[0];
+                const scanIdStr = String(primaryScan.id);
+
+                const isCurrentlyOnScreen = document.getElementById(`overnight-toast-${scanIdStr}`);
+
+                if (!activeOvernightToastTimers[scanIdStr] && !isCurrentlyOnScreen) {
+                    showOvernightToastNotification(unreadOvernightScans);
+                }
             }
         }
     } catch (e) {
