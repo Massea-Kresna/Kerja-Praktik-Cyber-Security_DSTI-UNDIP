@@ -24,10 +24,29 @@ def get_db_connection():
         print(f'[!] Warning: Gagal menginisialisasi PostgreSQL. Detail: {e}')
         return None
 
+def ensure_domain_approval_columns():
+    conn = get_db_connection()
+    if not conn: return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("ALTER TABLE public.domains ADD COLUMN IF NOT EXISTS approval_status VARCHAR(50) DEFAULT 'approved'")
+            cur.execute("ALTER TABLE public.domains ADD COLUMN IF NOT EXISTS requested_by TEXT")
+            cur.execute("UPDATE public.domains SET approval_status = 'approved' WHERE approval_status IS NULL")
+            try:
+                cur.execute("SELECT setval('domains_id_seq', COALESCE((SELECT MAX(id) FROM domains), 1))")
+            except Exception:
+                pass
+            conn.commit()
+    except Exception as e:
+        if conn: conn.rollback()
+    finally:
+        conn.close()
+
 def check_db_connection():
     conn = get_db_connection()
     if conn:
         conn.close()
+        ensure_domain_approval_columns()
         return True
     return False
 
@@ -187,7 +206,7 @@ def get_user_by_username(username: str):
             return u
     return None
 
-def create_user(username: str, password_plain: str, role: str):
+def create_user(username: str, password_plain: str, role: str, created_by: str = None):
     hashed_pw = hash_password(password_plain)
     
     conn = get_db_connection()
@@ -199,8 +218,8 @@ def create_user(username: str, password_plain: str, role: str):
                     raise Exception('Username sudah digunakan')
                     
                 cur.execute(
-                    'INSERT INTO users (username, password, role, is_online) VALUES (%s, %s, %s, %s) RETURNING *',
-                    (username, hashed_pw, role, False)
+                    'INSERT INTO users (username, password, role, is_online, created_by) VALUES (%s, %s, %s, %s, %s) RETURNING *',
+                    (username, hashed_pw, role, False, created_by)
                 )
                 res = cur.fetchone()
                 conn.commit()
@@ -226,7 +245,8 @@ def create_user(username: str, password_plain: str, role: str):
         'last_online': None,
         'timeout_until': None,
         'session_id': None,
-        'created_at': datetime.now(timezone.utc).isoformat()
+        'created_at': datetime.now(timezone.utc).isoformat(),
+        'created_by': created_by
     }
     users.append(new_user)
     _write_local_users(users)
@@ -343,7 +363,7 @@ def list_all_users():
     if conn:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute('SELECT id, username, role, is_online, last_online, timeout_until, created_at FROM users ORDER BY username ASC')
+                cur.execute('SELECT id, username, role, is_online, last_online, timeout_until, created_at, created_by FROM users ORDER BY username ASC')
                 res = cur.fetchall()
                 if res:
                     return [dict(row) for row in res]
@@ -361,7 +381,8 @@ def list_all_users():
             'is_online': u['is_online'],
             'last_online': u.get('last_online'),
             'timeout_until': u.get('timeout_until'),
-            'created_at': u.get('created_at')
+            'created_at': u.get('created_at'),
+            'created_by': u.get('created_by')
         })
     return sorted(filtered, key=lambda x: x['username'])
 
@@ -831,14 +852,22 @@ def get_domain_by_name(domain_name):
     finally:
         conn.close()
 
-def create_domain(domain_name, ip_address):
+def create_domain(domain_name, ip_address, approval_status='approved', requested_by=None):
     conn = get_db_connection()
     if not conn: return None
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            try:
+                cur.execute("ALTER TABLE public.domains ADD COLUMN IF NOT EXISTS approval_status VARCHAR(50) DEFAULT 'approved'")
+                cur.execute("ALTER TABLE public.domains ADD COLUMN IF NOT EXISTS requested_by TEXT")
+                conn.commit()
+            except Exception:
+                if conn: conn.rollback()
+
+            is_active_val = True if approval_status == 'approved' else False
             cur.execute(
-                'INSERT INTO domains (domain_name, ip_address, is_active) VALUES (%s, %s, %s) RETURNING *',
-                (domain_name, ip_address, False)
+                'INSERT INTO domains (domain_name, ip_address, is_active, approval_status, requested_by) VALUES (%s, %s, %s, %s, %s) RETURNING *',
+                (domain_name, ip_address, is_active_val, approval_status, requested_by)
             )
             res = cur.fetchone()
             conn.commit()
@@ -847,6 +876,57 @@ def create_domain(domain_name, ip_address):
         print(f'[-] Error create_domain: {e}')
         if conn: conn.rollback()
         return None
+    finally:
+        conn.close()
+
+def approve_domain(domain_id: int):
+    conn = get_db_connection()
+    if not conn: return None
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "UPDATE domains SET approval_status = 'approved', is_active = True WHERE id = %s RETURNING *",
+                (domain_id,)
+            )
+            res = cur.fetchone()
+            conn.commit()
+            return dict(res) if res else None
+    except Exception as e:
+        print(f'[-] Error approve_domain: {e}')
+        if conn: conn.rollback()
+        return None
+    finally:
+        conn.close()
+
+def reject_domain(domain_id: int):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM domains WHERE id = %s RETURNING id", (domain_id,))
+            res = cur.fetchone()
+            conn.commit()
+            return bool(res)
+    except Exception as e:
+        print(f'[-] Error reject_domain: {e}')
+        if conn: conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+def get_pending_domain_requests():
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, domain_name, ip_address, requested_by, discovered_at FROM domains WHERE approval_status = 'pending' ORDER BY discovered_at DESC"
+            )
+            res = cur.fetchall()
+            return [dict(r) for r in res]
+    except Exception as e:
+        print(f'[-] Error get_pending_domain_requests: {e}')
+        return []
     finally:
         conn.close()
 
@@ -1109,6 +1189,8 @@ def get_domains_list(search=None):
                     d.domain_name, 
                     d.ip_address, 
                     d.is_active,
+                    COALESCE(d.approval_status, 'approved') AS approval_status,
+                    d.requested_by,
                     sh.scan_date AS last_scan_date,
                     sh.risk_level AS last_scan_status,
                     sh.risk_score AS last_risk_score,
@@ -1138,9 +1220,118 @@ def get_domains_list(search=None):
             return [dict(row) for row in res]
     except Exception as e:
         print(f'[-] Error get_domains_list: {e}')
+        ensure_domain_approval_columns()
+        try:
+            conn_fallback = get_db_connection()
+            if conn_fallback:
+                with conn_fallback.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("SELECT id, domain_name, ip_address, is_active, 'approved' AS approval_status, requested_by FROM domains ORDER BY domain_name ASC")
+                    res = cur.fetchall()
+                    conn_fallback.close()
+                    return [dict(row) for row in res]
+        except Exception as ex:
+            print(f'[-] Error fallback get_domains_list: {ex}')
         return []
     finally:
+        if conn: conn.close()
+
+def get_domain_by_id(domain_id: int):
+    conn = get_db_connection()
+    if not conn: return None
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM domains WHERE id = %s LIMIT 1", (domain_id,))
+            res = cur.fetchone()
+            return dict(res) if res else None
+    except Exception as e:
+        print(f"[-] Error get_domain_by_id: {e}")
+        return None
+    finally:
         conn.close()
+
+SYSTEM_NOTIFS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'notifications_db.json')
+
+def _read_local_notifs():
+    if not os.path.exists(SYSTEM_NOTIFS_FILE):
+        return []
+    try:
+        with open(SYSTEM_NOTIFS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def _write_local_notifs(notifs):
+    try:
+        with open(SYSTEM_NOTIFS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(notifs, f, indent=4, default=str)
+        return True
+    except Exception:
+        return False
+
+def add_system_notification(title: str, message: str, notif_type: str = 'info', target_user: str = None):
+    conn = get_db_connection()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS public.system_notifications (
+                        id SERIAL PRIMARY KEY,
+                        title TEXT NOT NULL,
+                        message TEXT NOT NULL,
+                        notif_type VARCHAR(50) DEFAULT 'info',
+                        target_user TEXT,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        is_read BOOLEAN DEFAULT false
+                    )
+                """)
+                cur.execute(
+                    "INSERT INTO system_notifications (title, message, notif_type, target_user) VALUES (%s, %s, %s, %s)",
+                    (title, message, notif_type, target_user)
+                )
+                conn.commit()
+        except Exception as e:
+            print(f"[-] Error add_system_notification PG: {e}")
+            if conn: conn.rollback()
+        finally:
+            conn.close()
+
+    # Backup lokal JSON
+    notifs = _read_local_notifs()
+    new_n = {
+        "id": f"notif_{uuid.uuid4().hex[:8]}",
+        "title": title,
+        "message": message,
+        "type": notif_type,
+        "target_user": target_user,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "is_read": False
+    }
+    notifs.insert(0, new_n)
+    _write_local_notifs(notifs[:50])
+    return new_n
+
+def get_system_notifications(limit=20):
+    conn = get_db_connection()
+    if conn:
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT id, title, message, notif_type as type, created_at, is_read FROM system_notifications ORDER BY created_at DESC LIMIT %s", (limit,))
+                res = cur.fetchall()
+                if res:
+                    out = []
+                    for r in res:
+                        d = dict(r)
+                        if hasattr(d['created_at'], 'isoformat'):
+                            d['created_at'] = d['created_at'].isoformat()
+                        d['id'] = str(d['id'])
+                        out.append(d)
+                    return out
+        except Exception as e:
+            print(f"[-] Error get_system_notifications PG: {e}")
+        finally:
+            conn.close()
+
+    return _read_local_notifs()
 
 def get_scan_history_list(limit=20):
     conn = get_db_connection()

@@ -11,7 +11,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=74">
+    <link rel="stylesheet" href="styles.css?v=100">
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <!-- Chart.js -->
@@ -691,6 +691,11 @@
                                 <button id="addDomainBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white; cursor: pointer;">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                     Add Domain
+                                </button>
+                                
+                                <button id="pendingDomainRequestsBtn" class="btn btn-outline" style="display: none; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; cursor: pointer;" onclick="openPendingDomainsModal()">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                    <span id="pendingDomainBadgeLabel">Persetujuan Domain (0)</span>
                                 </button>
                                 
                                 <button id="importDomainsBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white; cursor: pointer;">
@@ -1580,7 +1585,63 @@
         </div>
     </div>
 
-    <script src="app.js?v=94"></script>
+    <!-- User Role Info Detail Modal -->
+    <div class="modal-overlay" id="userRoleInfoModalOverlay" style="z-index: 1050;">
+        <div class="modal-dialog" style="max-width: 620px; width: 90%;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--color-border); padding: 16px 24px;">
+                <div class="modal-title-group" style="display: flex; align-items: center; gap: 10px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <h2 id="userRoleInfoModalTitle" style="font-size: 1.15rem; font-weight: 600; color: var(--color-ink); margin: 0;">Informasi Role User</h2>
+                </div>
+                <div class="modal-actions">
+                    <button class="icon-btn" onclick="closeRoleInfoModal()" style="border:none; background:transparent; cursor:pointer; font-size: 16px; color: var(--color-muted);">✕</button>
+                </div>
+            </div>
+            <div class="modal-body" style="padding: 20px 24px;">
+                <p id="userRoleInfoModalSub" style="font-size: 13px; color: var(--color-muted-light); margin-bottom: 16px;"></p>
+                <div id="userRoleInfoContainer" style="max-height: 380px; overflow-y: auto;">
+                    <!-- Diisi dari JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 12px 24px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-outline btn-sm" onclick="closeRoleInfoModal()" style="padding: 8px 16px; border-radius: 6px;">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Domain Requests Modal (Superadmin) -->
+    <div class="modal-overlay" id="pendingDomainsModalOverlay" style="z-index: 1050;">
+        <div class="modal-dialog" style="max-width: 680px; width: 90%;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--color-border); padding: 16px 24px;">
+                <div class="modal-title-group" style="display: flex; align-items: center; gap: 10px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    <h2 style="font-size: 1.15rem; font-weight: 600; color: var(--color-ink); margin: 0;">Permintaan Persetujuan Domain</h2>
+                </div>
+                <div class="modal-actions">
+                    <button class="icon-btn" onclick="closePendingDomainsModal()" style="border:none; background:transparent; cursor:pointer; font-size: 16px; color: var(--color-muted);">✕</button>
+                </div>
+            </div>
+            <div class="modal-body" style="padding: 20px 24px;">
+                <p style="font-size: 13px; color: var(--color-muted-light); margin-bottom: 16px;">
+                    Daftar domain baru yang diajukan oleh Admin dan membutuhkan persetujuan Super Admin:
+                </p>
+                <div id="pendingDomainsContainer" style="max-height: 400px; overflow-y: auto;">
+                    <!-- Diisi dari JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 12px 24px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-outline btn-sm" onclick="closePendingDomainsModal()" style="padding: 8px 16px; border-radius: 6px;">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=100"></script>
 </body>
 
 </html>
