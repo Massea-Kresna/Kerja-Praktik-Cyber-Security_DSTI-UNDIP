@@ -582,6 +582,14 @@ def check_target_user_protection(target_username: str, caller: dict):
         
     return target_user
 
+def check_target_user_protection(target_username: str, caller: dict):
+    target_user = db_manager.get_user_by_username(target_username)
+    if not target_user:
+        raise HTTPException(status_code=404, detail=f"User '{target_username}' tidak ditemukan.")
+    if target_user.get("role") == "superadmin" and caller.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Admin tidak memiliki izin untuk melakukan aksi ini terhadap Super Admin.")
+    return target_user
+
 @app.post("/api/admin/users/{target_username}/force-logout")
 async def force_logout(target_username: str, admin_user = Depends(get_current_admin)):
     """Memaksa logout salah satu user"""
