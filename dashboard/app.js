@@ -2008,7 +2008,12 @@ if (domainForm) {
             const data = await resp.json();
 
             if (resp.ok) {
-                showToast('Sukses', data.message || 'Domain berhasil disimpan', '✅');
+                const isPending = data.approval_status === 'pending';
+                showToast(
+                    isPending ? 'Permintaan Terkirim' : 'Sukses', 
+                    data.message || 'Domain berhasil disimpan', 
+                    isPending ? '⏳' : '✅'
+                );
                 domainModalOverlay.classList.remove('active');
                 loadDomains();
             } else {
@@ -2082,6 +2087,20 @@ async function loadDomains(preservePage = false) {
         const resp = await fetch(`${API_BASE}/api/domains`);
         const data = await resp.json();
         allDomains = data.data || [];
+
+        // Update pending domain requests badge for Superadmin
+        const pendingBtn = document.getElementById('pendingDomainRequestsBtn');
+        const pendingLabel = document.getElementById('pendingDomainBadgeLabel');
+        if (pendingBtn && pendingLabel) {
+            const pendingList = allDomains.filter(d => d.approval_status === 'pending');
+            if (currentUser && currentUser.role === 'superadmin' && pendingList.length > 0) {
+                pendingLabel.textContent = `Persetujuan Domain (${pendingList.length})`;
+                pendingBtn.style.display = 'inline-flex';
+            } else {
+                pendingBtn.style.display = 'none';
+            }
+        }
+
         if (!preservePage) {
             domainCurrentPage = 1;
         }
@@ -2173,7 +2192,7 @@ function renderInventoryList() {
         // Cek apakah domain ini ada di memori yang tersimpan
         const isChecked = selectedDomains.has(d.domain_name) ? 'checked' : '';
         
-        let lastScanCell = `<span class="badge badge-inactive">BELUM SCAN</span>`;
+        let lastScanCell = `<span class="badge badge-unscanned">BELUM SCAN</span>`;
         if (d.last_scan_date && d.last_scan_status) {
             const sevClass = getSeverityClass(d.last_scan_status);
             const formattedDate = formatDate(d.last_scan_date);
@@ -2187,6 +2206,33 @@ function renderInventoryList() {
             </div>`;
         }
 
+        // Cek status approval
+        let statusBadge = `<span class="badge ${d.is_active ? 'badge-active' : 'badge-inactive'}">${d.is_active ? 'ACTIVE' : 'INACTIVE'}</span>`;
+        let actionButtons = `
+            <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
+                <button class="icon-btn action-edit" onclick='openEditDomainModal(${JSON.stringify(d).replace(/'/g, "&#39;")})' title="Edit">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                </button>
+                <button class="icon-btn action-delete" onclick="deleteDomain(${d.id})" title="Hapus">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+            </div>
+        `;
+
+        if (d.approval_status === 'pending') {
+            statusBadge = `<span class="badge badge-pending-approval" title="Menunggu persetujuan Super Admin (Diajukan oleh: ${escapeHtml(d.requested_by || 'Admin')})">MENUNGGU APPROVAL</span>`;
+            if (currentUser && currentUser.role === 'superadmin') {
+                actionButtons = `
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        <button class="btn-approve-domain" onclick="triggerApproveDomain(${d.id}, '${escapeHtml(d.domain_name)}')" title="Setujui Domain">Setujui</button>
+                        <button class="btn-reject-domain" onclick="triggerRejectDomain(${d.id}, '${escapeHtml(d.domain_name)}')" title="Tolak Domain">Tolak</button>
+                    </div>
+                `;
+            } else {
+                actionButtons = `<span style="font-size: 11px; color: #d97706; font-style: italic;">Pending Approval</span>`;
+            }
+        }
+
         return `
         <tr>
             <td style="text-align: center;">
@@ -2196,18 +2242,9 @@ function renderInventoryList() {
                 <a href="http://${escapeHtml(d.domain_name)}" target="_blank" style="text-decoration: none; color: inherit;">${escapeHtml(d.domain_name)}</a>
             </td>
             <td style="font-family:var(--font-mono); color:var(--text-secondary)">${escapeHtml(d.ip_address || '-')}</td>
-            <td><span class="badge ${d.is_active ? 'badge-active' : 'badge-inactive'}">${d.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+            <td>${statusBadge}</td>
             <td>${lastScanCell}</td>
-            <td style="text-align: center;">
-                <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
-                    <button class="icon-btn action-edit" onclick='openEditDomainModal(${JSON.stringify(d).replace(/'/g, "&#39;")})' title="Edit">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                    </button>
-                    <button class="icon-btn action-delete" onclick="deleteDomain(${d.id})" title="Hapus">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                    </button>
-                </div>
-            </td>
+            <td style="text-align: center;">${actionButtons}</td>
         </tr>
         `;
     }).join('');
@@ -2895,6 +2932,7 @@ function getSeverityClass(sev) {
     if (s === 'MEDIUM') return 'medium';
     if (s === 'LOW') return 'low';
     if (s === 'INFO') return 'info';
+    if (s.includes('BELUM SCAN') || s.includes('UNSCANNED')) return 'unscanned';
     return 'safe';
 }
 
@@ -3463,12 +3501,39 @@ function renderUserTable() {
     tbody.innerHTML = paginatedUsers.map(u => {
         const isSelf = u.username === currentUser.username;
         const isProtectedSuperAdmin = u.role === 'superadmin' && currentUser.role !== 'superadmin';
+        const isSuperAdminCaller = currentUser && currentUser.role === 'superadmin';
         
         let roleBadge = `<span class="badge-user-role">User</span>`;
         if (u.role === 'superadmin') {
-            roleBadge = `<span class="badge-superadmin-role">Super Admin</span>`;
+            if (isSuperAdminCaller) {
+                roleBadge = `
+                    <span class="badge-superadmin-role clickable-role-badge" onclick="showRoleInfoModal('${escapeHtml(u.username)}')" title="Klik untuk lihat detail Super Admin">
+                        Super Admin
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left:3px; opacity:0.85;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    </span>`;
+            } else {
+                roleBadge = `<span class="badge-superadmin-role">Super Admin</span>`;
+            }
         } else if (u.role === 'admin') {
-            roleBadge = `<span class="badge-admin-role">Admin</span>`;
+            if (isSuperAdminCaller) {
+                roleBadge = `
+                    <span class="badge-admin-role clickable-role-badge" onclick="showRoleInfoModal('${escapeHtml(u.username)}')" title="Klik untuk lihat user yang dibuat oleh admin ini">
+                        Admin
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left:3px; opacity:0.85;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    </span>`;
+            } else {
+                roleBadge = `<span class="badge-admin-role">Admin</span>`;
+            }
+        } else {
+            if (isSuperAdminCaller) {
+                roleBadge = `
+                    <span class="badge-user-role clickable-role-badge" onclick="showRoleInfoModal('${escapeHtml(u.username)}')" title="Klik untuk lihat admin pembuat user ini">
+                        User
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left:3px; opacity:0.85;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    </span>`;
+            } else {
+                roleBadge = `<span class="badge-user-role">User</span>`;
+            }
         }
 
         const isOnline = u.is_online;
@@ -3539,6 +3604,132 @@ function renderUserTable() {
 
     renderUserPagination(totalItems);
 }
+
+window.showRoleInfoModal = function(targetUsername) {
+    if (!currentUser || currentUser.role !== 'superadmin') {
+        return;
+    }
+
+    const modal = document.getElementById('userRoleInfoModalOverlay');
+    const title = document.getElementById('userRoleInfoModalTitle');
+    const sub = document.getElementById('userRoleInfoModalSub');
+    const container = document.getElementById('userRoleInfoContainer');
+    if (!modal || !container) return;
+
+    const targetUser = allAdminUsers.find(x => x.username === targetUsername);
+    if (!targetUser) return;
+
+    const role = targetUser.role;
+
+    if (role === 'admin') {
+        const createdUsers = allAdminUsers.filter(x => x.created_by === targetUsername);
+        if (title) title.textContent = `Keterangan Admin (${targetUsername})`;
+        if (sub) sub.textContent = `Daftar akun user (${createdUsers.length}) yang telah dibuat oleh Admin '${targetUsername}':`;
+
+        if (createdUsers.length === 0) {
+            container.innerHTML = `
+                <div style="text-align:center; padding:32px 16px; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0;">
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" style="margin-bottom:8px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    <p style="font-size:14px; font-weight:600; color:#475569; margin-bottom:4px;">Belum Membuat User</p>
+                    <p style="font-size:12px; color:#94a3b8; margin:0;">Admin ini belum memiliki akun user yang dibuat/didaftarkan di bawahnya.</p>
+                </div>
+            `;
+        } else {
+            container.innerHTML = `
+                <table class="modern-table" style="font-size:13px; width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+                            <th style="padding:10px 12px; text-align:left;">Username</th>
+                            <th style="padding:10px 12px; text-align:left;">Role</th>
+                            <th style="padding:10px 12px; text-align:left;">Status</th>
+                            <th style="padding:10px 12px; text-align:left;">Last Active</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${createdUsers.map(cu => {
+                            const isOnline = cu.is_online;
+                            const lastActive = isOnline ? "Baru saja" : (cu.last_online ? formatRelativeTime(cu.last_online) : "-");
+                            let stBadge = isOnline ? '<span class="status-indicator status-online">Online</span>' : '<span class="status-indicator status-offline">Offline</span>';
+                            if (cu.timeout_until && new Date(cu.timeout_until) > new Date()) {
+                                stBadge = '<span class="status-indicator status-timeout">Timeout</span>';
+                            }
+                            return `
+                                <tr style="border-bottom:1px solid #f1f5f9;">
+                                    <td style="font-weight:600; padding:10px 12px;">${escapeHtml(cu.username)}</td>
+                                    <td style="padding:10px 12px;"><span class="badge-user-role">User</span></td>
+                                    <td style="padding:10px 12px;">${stBadge}</td>
+                                    <td style="padding:10px 12px; color:var(--text-secondary);">${lastActive}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+    } else if (role === 'user') {
+        if (title) title.textContent = `Keterangan User (${targetUsername})`;
+        if (sub) sub.textContent = `Informasi pembuat akun user '${targetUsername}':`;
+
+        const creator = targetUser.created_by;
+        container.innerHTML = `
+            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:20px; display:flex; flex-direction:column; gap:16px;">
+                <div style="display:flex; align-items:center; gap:14px;">
+                    <div style="width:44px; height:44px; border-radius:50%; background:#eff6ff; border:1px solid #bfdbfe; display:flex; align-items:center; justify-content:center; color:#1d4ed8; flex-shrink:0;">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
+                    </div>
+                    <div>
+                        <div style="font-size:12px; color:#64748b; font-weight:500;">Dibuat Oleh Admin:</div>
+                        <div style="font-size:16px; font-weight:700; color:#1e293b;">
+                            ${creator ? escapeHtml(creator) : '<span style="color:#94a3b8; font-weight:normal; font-style:italic;">System / Registrasi Mandiri</span>'}
+                        </div>
+                    </div>
+                </div>
+
+                <div style="border-top:1px solid #e2e8f0; padding-top:14px; display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:13px;">
+                    <div>
+                        <span style="color:#64748b; font-size:12px;">Username User:</span>
+                        <div style="font-weight:600; color:#1e293b; margin-top:2px;">${escapeHtml(targetUser.username)}</div>
+                    </div>
+                    <div>
+                        <span style="color:#64748b; font-size:12px;">Status Akun:</span>
+                        <div style="margin-top:2px;">
+                            ${targetUser.is_online ? '<span class="status-indicator status-online">Online</span>' : '<span class="status-indicator status-offline">Offline</span>'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else if (role === 'superadmin') {
+        if (title) title.textContent = `Keterangan Super Admin (${targetUsername})`;
+        if (sub) sub.textContent = `Informasi role Super Admin:`;
+
+        container.innerHTML = `
+            <div style="background:#faf5ff; border:1px solid #e9d5ff; border-radius:8px; padding:20px; display:flex; flex-direction:column; gap:12px;">
+                <div style="display:flex; align-items:center; gap:14px;">
+                    <div style="width:44px; height:44px; border-radius:50%; background:#f3e8ff; border:1px solid #d8b4fe; display:flex; align-items:center; justify-content:center; color:#7e22ce; flex-shrink:0;">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+                    </div>
+                    <div>
+                        <div style="font-size:15px; font-weight:700; color:#581c87;">Super Admin (Akses Tertinggi)</div>
+                        <div style="font-size:12px; color:#7e22ce;">Pengelola Utama Sistem Dashboard Pentest</div>
+                    </div>
+                </div>
+                <p style="font-size:13px; color:#6b21a8; line-height:1.5; margin:0;">
+                    Akun ini merupakan Super Admin sistem yang dapat mengelola seluruh akun Admin dan User, memantau riwayat pemindaian, serta mengonfigurasi pengaturan keamanan.
+                </p>
+            </div>
+        `;
+    }
+
+    modal.classList.add('active');
+};
+
+window.closeRoleInfoModal = function() {
+    const modal = document.getElementById('userRoleInfoModalOverlay');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+};
 
 async function triggerForceLogout(username) {
     if (!confirm(`Apakah Anda yakin ingin melakukan Force Logout pada user '${username}'?`)) return;
@@ -3745,7 +3936,7 @@ async function fetchNotifications() {
         const res = await fetch(`${API_BASE}/api/notifications`);
         const data = await res.json();
         if (data.status === 'success') {
-            const allowedTypes = ['success', 'scan_complete', 'scan_finished', 'domain_found', 'info']; 
+            const allowedTypes = ['success', 'scan_complete', 'scan_finished', 'domain_found', 'info', 'domain_request', 'domain_approval_result']; 
             const deletedNotifs = JSON.parse(localStorage.getItem('dsti_deleted_notifs_v3') || '[]');
             const readNotifs = JSON.parse(localStorage.getItem('dsti_read_notifs') || '[]');
 
@@ -5929,3 +6120,102 @@ function updateThemeIcon(theme) {
 
 // Jalankan saat file dimuat
 initTheme();
+
+// =========================================================
+// 🔔 FEATURE: DOMAIN ADDITION APPROVAL (SUPERADMIN)
+// =========================================================
+window.openPendingDomainsModal = async function() {
+    const modal = document.getElementById('pendingDomainsModalOverlay');
+    const container = document.getElementById('pendingDomainsContainer');
+    if (!modal || !container) return;
+
+    container.innerHTML = `
+        <div style="text-align:center; padding:24px; color:var(--text-secondary); font-size:13px;">
+            Memuat daftar permintaan domain...
+        </div>
+    `;
+    modal.classList.add('active');
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/domains/pending-requests`);
+        const res = await resp.json();
+        const pendingList = res.data || [];
+
+        if (pendingList.length === 0) {
+            container.innerHTML = `
+                <div style="text-align:center; padding:32px; color:var(--text-secondary); font-size:13px;">
+                    Tidak ada permintaan domain yang menunggu persetujuan saat ini.
+                </div>
+            `;
+        } else {
+            container.innerHTML = `
+                <table class="modern-table" style="width:100%; font-size:13px;">
+                    <thead>
+                        <tr style="background:var(--color-surface-hover);">
+                            <th style="padding:10px 12px; text-align:left;">Domain</th>
+                            <th style="padding:10px 12px; text-align:left;">Diajukan Oleh</th>
+                            <th style="padding:10px 12px; text-align:center;">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${pendingList.map(req => `
+                            <tr style="border-bottom:1px solid var(--color-border);">
+                                <td style="font-weight:600; padding:10px 12px; color:var(--text-primary);">${escapeHtml(req.domain_name)}</td>
+                                <td style="padding:10px 12px; color:var(--text-secondary);">${escapeHtml(req.requested_by || 'Admin')}</td>
+                                <td style="padding:10px 12px; text-align:center;">
+                                    <div style="display:flex; justify-content:center; gap:6px;">
+                                        <button class="btn-approve-domain" onclick="triggerApproveDomain(${req.id}, '${escapeHtml(req.domain_name)}')">Setujui</button>
+                                        <button class="btn-reject-domain" onclick="triggerRejectDomain(${req.id}, '${escapeHtml(req.domain_name)}')">Tolak</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+    } catch (err) {
+        container.innerHTML = `<div style="text-align:center; padding:20px; color:#ef4444;">Gagal mengambil data permintaan domain.</div>`;
+    }
+};
+
+window.closePendingDomainsModal = function() {
+    const modal = document.getElementById('pendingDomainsModalOverlay');
+    if (modal) modal.classList.remove('active');
+};
+
+window.triggerApproveDomain = async function(domainId, domainName) {
+    if (!confirm(`Apakah Anda yakin ingin menyetujui domain '${domainName}'?`)) return;
+    try {
+        const resp = await fetch(`${API_BASE}/api/domains/${domainId}/approve`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.status === 200) {
+            showToast("Approval Berhasil", `Domain '${domainName}' telah disetujui dan aktif.`, "✅");
+            closePendingDomainsModal();
+            loadDomains();
+            if (typeof fetchNotifications === 'function') fetchNotifications();
+        } else {
+            showToast("Approval Gagal", data.detail || "Gagal menyetujui domain.", "❌");
+        }
+    } catch (err) {
+        showToast("Error", "Gagal menghubungi server.", "❌");
+    }
+};
+
+window.triggerRejectDomain = async function(domainId, domainName) {
+    if (!confirm(`Apakah Anda yakin ingin menolak dan menghapus permintaan domain '${domainName}'?`)) return;
+    try {
+        const resp = await fetch(`${API_BASE}/api/domains/${domainId}/reject`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.status === 200) {
+            showToast("Permintaan Ditolak", `Permintaan domain '${domainName}' telah ditolak.`, "ℹ️");
+            closePendingDomainsModal();
+            loadDomains();
+            if (typeof fetchNotifications === 'function') fetchNotifications();
+        } else {
+            showToast("Penolakan Gagal", data.detail || "Gagal menolak domain.", "❌");
+        }
+    } catch (err) {
+        showToast("Error", "Gagal menghubungi server.", "❌");
+    }
+};

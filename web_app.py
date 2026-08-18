@@ -180,6 +180,13 @@ class ConnectionManager:
                 except Exception:
                     pass
 
+    async def broadcast_to_all(self, message: dict):
+        for conn in list(self.active_connections):
+            try:
+                await conn.send_json(message)
+            except Exception:
+                pass
+
     async def kick_user(self, username: str, reason: str = "force_logout"):
         for conn in list(self.active_connections):
             info = self.user_info.get(conn)
@@ -312,6 +319,7 @@ def register_user(user_data: UserRegister, admin_user = Depends(get_current_admi
     """Mendaftarkan user baru"""
     target_role = user_data.role.lower() if user_data.role else "user"
     caller_role = admin_user.get("role")
+    caller_username = admin_user.get("username")
     
     if target_role == "admin" and caller_role != "superadmin":
         raise HTTPException(status_code=403, detail="Hanya Super Admin yang dapat mendaftarkan akun Admin.")
@@ -326,7 +334,7 @@ def register_user(user_data: UserRegister, admin_user = Depends(get_current_admi
         raise HTTPException(status_code=400, detail="Username sudah terdaftar.")
         
     try:
-        db_manager.create_user(user_data.username, user_data.password, target_role)
+        db_manager.create_user(user_data.username, user_data.password, target_role, created_by=caller_username)
         return {"status": "ok", "message": "Pendaftaran berhasil."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal melakukan registrasi: {str(e)}")
@@ -528,9 +536,51 @@ def reset_password(req: ResetPasswordRequest):
 def get_users(admin_user = Depends(get_current_admin)):
     """Mendapatkan daftar seluruh user untuk Admin Page"""
     users = db_manager.list_all_users()
-    if admin_user.get("role") != "superadmin":
-        users = [u for u in users if u.get("role") != "superadmin"]
-    return {"status": "ok", "data": users}
+    caller_role = admin_user.get("role")
+    caller_username = admin_user.get("username")
+    
+    if caller_role == "superadmin":
+        return {"status": "ok", "data": users}
+        
+    # Admin biasa hanya melihat user ber-role 'user' yang dibuat oleh dirinya sendiri
+    filtered = [
+        u for u in users 
+        if u.get("role") == "user" and u.get("created_by") == caller_username
+    ]
+    return {"status": "ok", "data": filtered}
+
+@app.get("/api/admin/users/{admin_username}/created-users")
+def get_created_users_by_admin(admin_username: str, admin_user = Depends(get_current_admin)):
+    """Mendapatkan daftar user yang dibuat oleh admin tertentu (Hanya Super Admin & Admin Ybs)"""
+    caller_role = admin_user.get("role")
+    caller_username = admin_user.get("username")
+    
+    if caller_role != "superadmin" and caller_username != admin_username:
+        raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk melihat daftar user ini.")
+        
+    users = db_manager.list_all_users()
+    created_users = [u for u in users if u.get("created_by") == admin_username]
+    return {"status": "ok", "admin_username": admin_username, "count": len(created_users), "data": created_users}
+
+def check_target_user_protection(target_username: str, caller: dict):
+    target_user = db_manager.get_user_by_username(target_username)
+    if not target_user:
+        raise HTTPException(status_code=404, detail=f"User '{target_username}' tidak ditemukan.")
+        
+    caller_role = caller.get("role")
+    caller_username = caller.get("username")
+    target_role = target_user.get("role")
+    
+    if caller_role == "superadmin":
+        return target_user
+        
+    if target_role in ["superadmin", "admin"]:
+        raise HTTPException(status_code=403, detail="Admin tidak memiliki izin untuk mengelola akun Admin/Super Admin lain.")
+        
+    if target_user.get("created_by") != caller_username:
+        raise HTTPException(status_code=403, detail="Anda hanya dapat mengelola user yang Anda buat sendiri.")
+        
+    return target_user
 
 def check_target_user_protection(target_username: str, caller: dict):
     target_user = db_manager.get_user_by_username(target_username)
@@ -875,8 +925,8 @@ class DomainUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 @app.post("/api/domains")
-def create_domain(payload: DomainCreate, current_user = Depends(get_current_user)):
-    """Menambahkan domain baru"""
+async def create_domain(payload: DomainCreate, request: Request):
+    """Menambahkan domain baru (Admin memerlukan persetujuan Super Admin)"""
     if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
     try:
@@ -884,12 +934,124 @@ def create_domain(payload: DomainCreate, current_user = Depends(get_current_user
         if existing:
             raise HTTPException(status_code=400, detail="Domain sudah terdaftar")
             
-        new_dom = db_manager.create_domain(payload.domain_name, payload.ip_address)
-        return {"status": "ok", "message": "Domain berhasil ditambahkan", "data": new_dom}
+        current_user = None
+        session_id = request.cookies.get("session_id")
+        if session_id:
+            current_user = db_manager.get_user_by_session_id(session_id)
+
+        caller_role = current_user.get("role") if current_user else "admin"
+        caller_username = current_user.get("username") if current_user else "admin"
+
+        if caller_role == "superadmin":
+            approval_status = "approved"
+            msg = "Domain berhasil ditambahkan."
+        else:
+            approval_status = "pending"
+            msg = f"Permintaan penambahan domain '{payload.domain_name}' telah dikirim dan menunggu persetujuan Super Admin."
+
+        new_dom = db_manager.create_domain(
+            payload.domain_name, 
+            payload.ip_address, 
+            approval_status=approval_status, 
+            requested_by=caller_username
+        )
+
+        if approval_status == "pending":
+            try:
+                await manager.broadcast_to_admins({
+                    "event": "pending_domain_created",
+                    "domain_name": payload.domain_name,
+                    "requested_by": caller_username
+                })
+            except Exception as e:
+                print(f"[-] Broadcast pending domain error: {e}")
+
+        return {
+            "status": "ok", 
+            "approval_status": approval_status,
+            "message": msg, 
+            "data": new_dom
+        }
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/domains/pending-requests")
+def get_pending_domain_requests(admin_user = Depends(get_current_admin)):
+    """Mendapatkan daftar domain yang menunggu persetujuan (Hanya Super Admin)"""
+    if admin_user.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Hanya Super Admin yang dapat melihat daftar permintaan approval domain.")
+    requests = db_manager.get_pending_domain_requests()
+    return {"status": "ok", "count": len(requests), "data": requests}
+
+@app.post("/api/domains/{domain_id}/approve")
+async def approve_domain_endpoint(domain_id: int, admin_user = Depends(get_current_admin)):
+    """Menyetujui permintaan penambahan domain (Hanya Super Admin)"""
+    if admin_user.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Hanya Super Admin yang dapat menyetujui domain.")
+    
+    domain_info = db_manager.get_domain_by_id(domain_id)
+    res = db_manager.approve_domain(domain_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Domain tidak ditemukan atau gagal disetujui.")
+    
+    domain_name = res.get("domain_name")
+    requested_by = res.get("requested_by") or "Admin"
+    superadmin_name = admin_user.get("username", "Super Admin")
+
+    try:
+        await manager.broadcast_to_all({
+            "event": "domain_approval_result",
+            "action": "approved",
+            "domain_name": domain_name,
+            "requested_by": requested_by,
+            "approved_by": superadmin_name
+        })
+    except Exception as e:
+        print(f"[-] Broadcast approval error: {e}")
+
+    db_manager.add_system_notification(
+        title=f"Domain Disetujui: {domain_name}",
+        message=f"Permintaan penambahan domain '{domain_name}' oleh {requested_by} telah DISETUJUI.",
+        notif_type="domain_approval_result"
+    )
+
+    return {"status": "ok", "message": f"Domain '{domain_name}' berhasil disetujui.", "data": res}
+
+@app.post("/api/domains/{domain_id}/reject")
+async def reject_domain_endpoint(domain_id: int, admin_user = Depends(get_current_admin)):
+    """Menolak permintaan penambahan domain (Hanya Super Admin)"""
+    if admin_user.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Hanya Super Admin yang dapat menolak domain.")
+    
+    domain_info = db_manager.get_domain_by_id(domain_id)
+    domain_name = domain_info.get("domain_name") if domain_info else f"ID {domain_id}"
+    requested_by = domain_info.get("requested_by") if domain_info else "Admin"
+    superadmin_name = admin_user.get("username", "Super Admin")
+
+    success = db_manager.reject_domain(domain_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Domain tidak ditemukan atau gagal ditolak.")
+
+    try:
+        await manager.broadcast_to_all({
+            "event": "domain_approval_result",
+            "action": "rejected",
+            "domain_name": domain_name,
+            "requested_by": requested_by,
+            "rejected_by": superadmin_name
+        })
+    except Exception as e:
+        print(f"[-] Broadcast rejection error: {e}")
+
+    db_manager.add_system_notification(
+        title=f"Domain Ditolak: {domain_name}",
+        message=f"Permintaan penambahan domain '{domain_name}' oleh {requested_by} DITOLAK.",
+        notif_type="domain_approval_result"
+    )
+
+    return {"status": "ok", "message": f"Permintaan domain '{domain_name}' berhasil ditolak."}
 
 @app.put("/api/domains/{domain_id}")
 def update_domain(domain_id: int, payload: DomainUpdate, current_user = Depends(get_current_user)):
@@ -1781,10 +1943,38 @@ async def share_report_endpoint(req: ShareReportRequest, current_user = Depends(
 # ==============================================================================
 @app.get("/api/notifications")
 async def api_get_notifications():
-    """Mengambil riwayat scan terakhir sebagai notifikasi recap"""
+    """Mengambil riwayat scan, hasil approval domain, dan permintaan pending untuk notifikasi"""
     try:
         recent_scans = db_manager.get_scan_history_list(limit=10)
+        system_notifs = db_manager.get_system_notifications(limit=20)
         notifs = []
+
+        # Tambahkan notifikasi sistem (seperti hasil approval/rejection)
+        for sn in system_notifs:
+            notifs.append({
+                "id": str(sn["id"]),
+                "title": sn["title"],
+                "message": sn["message"],
+                "type": sn.get("type", "domain_approval_result"),
+                "created_at": sn.get("created_at"),
+                "is_read": sn.get("is_read", False),
+                "time": sn.get("created_at")
+            })
+
+        # Tambahkan permintaan approval domain yang pending
+        pending_domains = db_manager.get_pending_domain_requests()
+        for pd in pending_domains:
+            notifs.append({
+                "id": f"pending_dom_{pd['id']}",
+                "title": f"Permintaan Approval Domain: {pd['domain_name']}",
+                "message": f"Diajukan oleh {pd.get('requested_by') or 'Admin'}. Menunggu persetujuan Super Admin.",
+                "type": "domain_request",
+                "created_at": str(pd.get("discovered_at") or ""),
+                "is_read": False,
+                "domain": pd['domain_name'],
+                "time": str(pd.get("discovered_at") or "")
+            })
+
         for scan in recent_scans:
             risk = scan.get("risk_level", "SAFE")
             if risk not in ["HIGH", "CRITICAL"]:
