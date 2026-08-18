@@ -482,8 +482,8 @@ button, input, select, textarea {
 .badge {
     display: inline-flex;
     align-items: center;
-    padding: 4px 8px;
-    border-radius: 4px;
+    padding: 4px 10px;
+    border-radius: 6px;
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
@@ -532,16 +532,58 @@ button, input, select, textarea {
     border: 1px solid #059669;
 }
 
-.badge-inactive {
-    background: #F97316;
-    color: #FFFFFF;
-    border: 1px solid #EA580C;
+.badge-inactive,
+.badge-unscanned {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
 }
 
-.badge-unscanned {
-    background: #64748B;
-    color: #FFFFFF;
-    border: 1px solid #475569;
+/* INTERACTIVE STATUS BADGE BUTTON (ULTRA-CLEAN PILL) */
+.badge-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select: none;
+    border: 1px solid transparent;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    outline: none;
+}
+
+/* ACTIVE STATE */
+.badge-toggle-btn.is-active {
+    background: #10b981;
+    color: #ffffff;
+    border-color: #059669;
+    box-shadow: 0 1px 3px rgba(16, 185, 129, 0.25);
+}
+
+.badge-toggle-btn.is-active:hover {
+    background: #059669;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.4);
+}
+
+/* INACTIVE STATE */
+.badge-toggle-btn.is-inactive {
+    background: #f1f5f9;
+    color: #64748b;
+    border-color: #cbd5e1;
+}
+
+.badge-toggle-btn.is-inactive:hover {
+    background: #ea580c;
+    color: #ffffff;
+    border-color: #c2410c;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(234, 88, 12, 0.35);
 }
 
 :root[data-theme="dark"] .badge-unscanned {
@@ -665,6 +707,10 @@ button, input, select, textarea {
     box-shadow: 0 2px 4px rgba(0, 88, 189, 0.15) !important;
 }
 
+.icon-btn svg {
+    fill: none !important;
+}
+
 .icon-btn.action-delete {
     color: #ef4444 !important;
     border-color: #ef4444 !important;
@@ -722,6 +768,12 @@ button, input, select, textarea {
     display: none;
     flex-direction: column;
     overflow: hidden;
+}
+
+.multi-select-panel.calendar-panel,
+.multi-select-panel[style*="width: 460px"] {
+    max-height: none !important;
+    overflow: visible !important;
 }
 
 .multi-select-dropdown.open .multi-select-panel {
@@ -896,6 +948,36 @@ button, input, select, textarea {
     font-family: var(--font-mono); 
     font-size: 12px; 
     color: var(--color-muted); 
+}
+
+.domain-action-btn {
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.domain-action-btn:hover {
+    background: var(--primary);
+    color: #ffffff;
+    border-color: var(--primary);
+}
+[data-theme="dark"] .domain-action-btn {
+    background: #0f172a;
+    border-color: #334155;
+    color: #f8fafc;
+}
+[data-theme="dark"] .domain-action-btn:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #ffffff;
 }
 
 /* =========================================================
@@ -2981,4 +3063,393 @@ input[type=number] {
 
 .btn-reject-domain:hover {
     background: #dc2626;
+}
+
+/* ==========================================================================
+   Toast Notification System & Custom Confirm Dialog
+   ========================================================================== */
+
+/* Toast Container Stack */
+.toast-container {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+    max-width: 420px;
+    width: calc(100% - 48px);
+}
+
+.toast-item {
+    pointer-events: auto;
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+    border-left-width: 5px;
+    overflow: hidden;
+    animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    transition: all 0.25s ease;
+}
+
+[data-theme="dark"] .toast-item {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f8fafc;
+}
+
+.toast-item.toast-leaving {
+    animation: toastSlideOut 0.25s ease forwards;
+}
+
+@keyframes toastSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(100%) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+
+@keyframes toastSlideOut {
+    from {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100%) scale(0.9);
+    }
+}
+
+/* Toast Variants */
+.toast-item.toast-success {
+    border-left-color: #10b981;
+}
+.toast-item.toast-error {
+    border-left-color: #ef4444;
+}
+.toast-item.toast-warning {
+    border-left-color: #f59e0b;
+}
+.toast-item.toast-info {
+    border-left-color: #3b82f6;
+}
+
+.toast-icon {
+    font-size: 14px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.toast-success .toast-icon { background: #dcfce7; color: #15803d; }
+.toast-error .toast-icon { background: #fee2e2; color: #b91c1c; }
+.toast-warning .toast-icon { background: #fef3c7; color: #b45309; }
+.toast-info .toast-icon { background: #dbeafe; color: #1d4ed8; }
+
+.toast-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.toast-message {
+    font-size: 13px;
+    font-weight: 500;
+    color: #1e293b;
+    line-height: 1.4;
+}
+[data-theme="dark"] .toast-message {
+    color: #f1f5f9;
+}
+
+.toast-close-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 2px;
+    line-height: 1;
+    transition: color 0.15s;
+}
+.toast-close-btn:hover {
+    color: #475569;
+}
+
+.toast-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    width: 100%;
+    background: currentColor;
+    opacity: 0.4;
+    transform-origin: left;
+}
+
+.toast-success .toast-progress { background: #10b981; }
+.toast-error .toast-progress { background: #ef4444; }
+.toast-warning .toast-progress { background: #f59e0b; }
+.toast-info .toast-progress { background: #3b82f6; }
+
+
+/* Custom Confirm Dialog Modal */
+.custom-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 10005;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.2s;
+}
+
+.custom-modal-overlay.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.custom-modal-box {
+    background: #ffffff;
+    width: 90%;
+    max-width: 440px;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    border: 1px solid #e2e8f0;
+    transform: scale(0.92) translateY(10px);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="dark"] .custom-modal-box {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f8fafc;
+}
+
+.custom-modal-overlay.open .custom-modal-box {
+    transform: scale(1) translateY(0);
+}
+
+.custom-modal-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.custom-modal-icon-badge {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+}
+
+.custom-modal-icon-badge.danger { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
+.custom-modal-icon-badge.warning { background: #fef3c7; color: #d97706; border: 1px solid #fde68a; }
+.custom-modal-icon-badge.info { background: #dbeafe; color: #2563eb; border: 1px solid #bfdbfe; }
+.custom-modal-icon-badge.success { background: #dcfce7; color: #16a34a; border: 1px solid #bbf7d0; }
+
+.custom-modal-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 6px 0;
+    line-height: 1.3;
+}
+[data-theme="dark"] .custom-modal-title {
+    color: #f8fafc;
+}
+
+.custom-modal-message {
+    font-size: 13px;
+    color: #64748b;
+    margin: 0;
+    line-height: 1.5;
+}
+[data-theme="dark"] .custom-modal-message {
+    color: #94a3b8;
+}
+
+.custom-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 12px;
+    border-top: 1px solid #f1f5f9;
+}
+[data-theme="dark"] .custom-modal-footer {
+    border-top-color: #334155;
+}
+
+.custom-modal-btn {
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.custom-modal-btn.btn-danger-solid {
+    background: #ef4444;
+    color: #ffffff;
+    border: none;
+}
+.custom-modal-btn.btn-danger-solid:hover {
+    background: #dc2626;
+}
+
+.custom-modal-btn.btn-primary-solid {
+    background: var(--primary);
+    color: #ffffff;
+    border: none;
+}
+.custom-modal-btn.btn-primary-solid:hover {
+    background: var(--primary-dark);
+}
+
+/* --- GLOBAL DARK MODE CONTRAST REMEDIATION OVERRIDES --- */
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .custom-modal-box {
+    background-color: #1e293b !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+[data-theme="dark"] #networkScanTargetContainer label,
+[data-theme="dark"] #webScanTargetContainer label,
+[data-theme="dark"] #batchStatusTargetContainer > div {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] #networkScanTargetContainer label:hover,
+[data-theme="dark"] #webScanTargetContainer label:hover,
+[data-theme="dark"] #batchStatusTargetContainer > div:hover {
+    background-color: #1e293b !important;
+    border-color: var(--primary) !important;
+}
+
+[data-theme="dark"] #networkScanTargetContainer span,
+[data-theme="dark"] #webScanTargetContainer span {
+    color: #f8fafc;
+}
+
+[data-theme="dark"] input[type="text"],
+[data-theme="dark"] input[type="number"],
+[data-theme="dark"] select {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+[data-theme="dark"] .search-box,
+[data-theme="dark"] #networkScanSearchInput,
+[data-theme="dark"] #webScanSearchInput,
+[data-theme="dark"] #batchStatusSearchInput {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .btn-outline {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .btn-outline:hover {
+    background-color: #334155 !important;
+}
+
+[data-theme="dark"] .multi-select-panel,
+[data-theme="dark"] .dropdown-menu {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+/* --- PORT & SERVICE EXPOSURE RADAR WIDGET STYLES --- */
+.port-exposure-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    transition: all 0.15s ease;
+}
+
+.port-exposure-item:hover {
+    border-color: var(--primary);
+    transform: translateX(2px);
+}
+
+.port-number-badge {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.port-badge-green {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.port-badge-yellow {
+    background: rgba(234, 179, 8, 0.12);
+    color: #eab308;
+    border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.port-badge-red {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+[data-theme="dark"] .port-exposure-item {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
 }

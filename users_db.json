@@ -18,5 +18,16 @@
         "timeout_until": null,
         "session_id": null,
         "created_at": "2026-07-17T02:46:18.774386+00:00"
+    },
+    {
+        "username": "raffibyzan@gmail.com",
+        "password": "687a32352dc2442887cf3d534699df93$b76ad8296460935912840dc491fe840adf0b3cf10524fc1958bb3b131ffd2930",
+        "role": "user",
+        "is_online": false,
+        "last_online": null,
+        "timeout_until": null,
+        "session_id": null,
+        "created_at": "2026-08-18T18:35:16.709553+00:00",
+        "created_by": "raffibyzan01@gmail.com"
     }
 ]

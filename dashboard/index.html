@@ -11,7 +11,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=101">
+    <link rel="stylesheet" href="styles.css?v=139">
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <!-- Chart.js -->
@@ -300,6 +300,8 @@
                         </div>
                     </div>
 
+
+
                     <div class="summary-cards" style="margin-bottom: 24px;">
                         <div class="card">
                             <div class="card-title">TOTAL DOMAINS</div>
@@ -322,33 +324,76 @@
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                                     <div class="multi-select-dropdown" id="vulnTrendDateDropdown">
-                                        <button class="multi-select-btn" style="border-radius: 20px;" onclick="toggleDropdown('vulnTrendDateDropdown')">
+                                        <button class="multi-select-btn" style="border-radius: 20px;" onclick="toggleDropdown('vulnTrendDateDropdown'); renderInteractiveCalendar('vulnTrend');">
                                             <span class="multi-select-label" id="vulnTrendDateLabel">24 Jam</span>
                                             <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
                                         </button>
-                                        <div class="multi-select-panel" style="width: 250px; padding: 12px; gap: 12px; right: 0; left: auto;">
-                                            <div>
-                                                <span style="font-size: 12px; color: var(--color-ink-lighter); margin-bottom: 8px; display: block; font-weight: 500;">Pintas Waktu</span>
-                                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                                                    <button class="quick-date-btn" onclick="setQuickDate('vulnTrend', 1, 'vulnTrendDateDropdown')">24 Jam</button>
-                                                    <button class="quick-date-btn" onclick="setQuickDate('vulnTrend', 3, 'vulnTrendDateDropdown')">3 Hari</button>
-                                                    <button class="quick-date-btn" onclick="setQuickDate('vulnTrend', 7, 'vulnTrendDateDropdown')">7 Hari</button>
-                                                    <button class="quick-date-btn" onclick="setQuickDate('vulnTrend', 30, 'vulnTrendDateDropdown')">30 Hari</button>
+                                        <input type="hidden" id="vulnTrendStartDate">
+                                        <input type="hidden" id="vulnTrendEndDate">
+
+                                        <div class="multi-select-panel calendar-panel" style="width: 460px; max-height: none; overflow: visible; padding: 16px; gap: 14px; right: 0; left: auto; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1);">
+                                            <div style="display: flex; gap: 16px;">
+                                                <!-- KIRI: Pintas Cepat -->
+                                                <div style="width: 135px; border-right: 1px solid var(--color-border); padding-right: 14px; display: flex; flex-direction: column; gap: 6px;">
+                                                    <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; display: block;">Pintas Cepat</span>
+                                                    <button type="button" class="quick-date-btn" onclick="setQuickDate('vulnTrend', 1, 'vulnTrendDateDropdown')">⚡ 24 Jam</button>
+                                                    <button type="button" class="quick-date-btn" onclick="setQuickDate('vulnTrend', 3, 'vulnTrendDateDropdown')">📅 3 Hari</button>
+                                                    <button type="button" class="quick-date-btn" onclick="setQuickDate('vulnTrend', 7, 'vulnTrendDateDropdown')">📅 7 Hari</button>
+                                                    <button type="button" class="quick-date-btn" onclick="setQuickDate('vulnTrend', 30, 'vulnTrendDateDropdown')">📅 30 Hari</button>
+                                                    <button type="button" class="quick-date-btn" onclick="setQuickScanHistoryMonthForPrefix('vulnTrend')">🗓️ Bulan Ini</button>
+                                                </div>
+
+                                                <!-- KANAN: Visual Calendar Matrix & Dropdowns -->
+                                                <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+                                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 4px;">
+                                                        <button type="button" onclick="navigateCalendarMonth(-1, event, 'vulnTrend')" class="btn btn-outline btn-sm" style="padding: 2px 6px; font-size: 12px; border-radius: 4px;" title="Bulan Sebelumnya">&lt;</button>
+                                                        
+                                                        <div style="display: flex; align-items: center; gap: 4px;">
+                                                            <select id="vulnTrendCalendarMonthSelect" onchange="onCalendarHeaderDropdownChange(event, 'vulnTrend')" style="font-size: 12px; font-weight: 600; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--color-border); outline: none; cursor: pointer; color: var(--color-ink); background: var(--color-surface);">
+                                                                <option value="0">Januari</option>
+                                                                <option value="1">Februari</option>
+                                                                <option value="2">Maret</option>
+                                                                <option value="3">April</option>
+                                                                <option value="4">Mei</option>
+                                                                <option value="5">Juni</option>
+                                                                <option value="6">Juli</option>
+                                                                <option value="7">Agustus</option>
+                                                                <option value="8">September</option>
+                                                                <option value="9">Oktober</option>
+                                                                <option value="10">November</option>
+                                                                <option value="11">Desember</option>
+                                                            </select>
+
+                                                            <select id="vulnTrendCalendarYearSelect" onchange="onCalendarHeaderDropdownChange(event, 'vulnTrend')" style="font-size: 12px; font-weight: 600; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--color-border); outline: none; cursor: pointer; color: var(--color-ink); background: var(--color-surface);">
+                                                                <!-- Populated by JS -->
+                                                            </select>
+                                                        </div>
+
+                                                        <button type="button" onclick="navigateCalendarMonth(1, event, 'vulnTrend')" class="btn btn-outline btn-sm" style="padding: 2px 6px; font-size: 12px; border-radius: 4px;" title="Bulan Selanjutnya">&gt;</button>
+                                                    </div>
+
+                                                    <div id="vulnTrendCalendarDaysGrid" onmouseleave="leaveCalendarGrid('vulnTrend')" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center;">
+                                                        <!-- Generated by JS -->
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div style="border-top: 1px solid var(--color-border); padding-top: 12px;">
-                                                <span style="font-size: 12px; color: var(--color-ink-lighter); margin-bottom: 8px; display: block; font-weight: 500;">Rentang Kustom</span>
-                                                <div style="display: flex; align-items: center; gap: 8px; background: white; padding: 0 8px; height: 32px; border-radius: 6px; border: 1px solid var(--color-border); box-sizing: border-box; justify-content: space-between;">
-                                                    <input type="date" id="vulnTrendStartDate" onchange="applyCustomDate('vulnTrend', 'vulnTrendDateDropdown')" title="Mulai Tanggal" style="border: none; outline: none; background: transparent; padding: 0; font-size: 11px; color: var(--color-ink-soft); cursor: pointer; font-family: inherit; font-weight: 500; width: 45%;">
-                                                    <span style="color: #cbd5e1; font-size: 11px;">-</span>
-                                                    <input type="date" id="vulnTrendEndDate" onchange="applyCustomDate('vulnTrend', 'vulnTrendDateDropdown')" title="Sampai Tanggal" style="border: none; outline: none; background: transparent; padding: 0; font-size: 11px; color: var(--color-ink-soft); cursor: pointer; font-family: inherit; font-weight: 500; width: 45%;">
+
+                                            <!-- FOOTER: Input Manual Tanggal (DD/MM/YYYY) -->
+                                            <div style="border-top: 1px solid var(--color-border); padding-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                                                <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Isian Manual Tanggal (DD/MM/YYYY)</span>
+                                                <div style="display: flex; align-items: center; gap: 8px;">
+                                                    <div style="flex: 1; display: flex; align-items: center; gap: 4px;">
+                                                        <span style="font-size: 11px; color: #64748b; font-weight: 600;">Mulai:</span>
+                                                        <input type="text" id="vulnTrendManualStartDateInput" onfocus="onManualInputFocus('start', 'vulnTrend')" oninput="onManualDateInputChange(event, 'vulnTrend')" placeholder="DD/MM/YYYY" maxlength="10" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 6px; font-size: 11px; font-family: var(--font-mono); color: #1e293b; outline: none;">
+                                                    </div>
+                                                    <div style="flex: 1; display: flex; align-items: center; gap: 4px;">
+                                                        <span style="font-size: 11px; color: #64748b; font-weight: 600;">Sampai:</span>
+                                                        <input type="text" id="vulnTrendManualEndDateInput" onfocus="onManualInputFocus('end', 'vulnTrend')" oninput="onManualDateInputChange(event, 'vulnTrend')" placeholder="DD/MM/YYYY" maxlength="10" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 6px; font-size: 11px; font-family: var(--font-mono); color: #1e293b; outline: none;">
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div style="display: flex; gap: 8px;">
-                                                <button id="vulnTrendResetBtn" title="Reset ke 24 Jam" style="flex: 1; height: 32px; border-radius: 6px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-ink-soft); cursor: pointer; transition: all 0.2s; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0;" onmouseover="this.style.background='#f1f5f9'; this.style.color='var(--color-ink)'" onmouseout="this.style.background='var(--color-surface)'; this.style.color='var(--color-ink-soft)'">
-                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>
-                                                    Reset
-                                                </button>
+                                                <div style="display: flex; align-items: center; justify-content: center; margin-top: 2px;">
+                                                    <span id="vulnTrendCalendarSelectionStatus" style="font-size: 11px; font-weight: 600; color: var(--primary);">24 Jam</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -391,33 +436,76 @@
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                                     <div class="multi-select-dropdown" id="sevTrendDateDropdown">
-                                        <button class="multi-select-btn" style="border-radius: 20px;" onclick="toggleDropdown('sevTrendDateDropdown')">
+                                        <button class="multi-select-btn" style="border-radius: 20px;" onclick="toggleDropdown('sevTrendDateDropdown'); renderInteractiveCalendar('sevTrend');">
                                             <span class="multi-select-label" id="sevTrendDateLabel">24 Jam</span>
                                             <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
                                         </button>
-                                        <div class="multi-select-panel" style="width: 250px; padding: 12px; gap: 12px; right: 0; left: auto;">
-                                            <div>
-                                                <span style="font-size: 12px; color: var(--color-ink-lighter); margin-bottom: 8px; display: block; font-weight: 500;">Pintas Waktu</span>
-                                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                                                    <button class="quick-date-btn" onclick="setQuickDate('sevTrend', 1, 'sevTrendDateDropdown')">24 Jam</button>
-                                                    <button class="quick-date-btn" onclick="setQuickDate('sevTrend', 3, 'sevTrendDateDropdown')">3 Hari</button>
-                                                    <button class="quick-date-btn" onclick="setQuickDate('sevTrend', 7, 'sevTrendDateDropdown')">7 Hari</button>
-                                                    <button class="quick-date-btn" onclick="setQuickDate('sevTrend', 30, 'sevTrendDateDropdown')">30 Hari</button>
+                                        <input type="hidden" id="sevTrendStartDate">
+                                        <input type="hidden" id="sevTrendEndDate">
+
+                                        <div class="multi-select-panel calendar-panel" style="width: 460px; max-height: none; overflow: visible; padding: 16px; gap: 14px; right: 0; left: auto; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1);">
+                                            <div style="display: flex; gap: 16px;">
+                                                <!-- KIRI: Pintas Cepat -->
+                                                <div style="width: 135px; border-right: 1px solid var(--color-border); padding-right: 14px; display: flex; flex-direction: column; gap: 6px;">
+                                                    <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; display: block;">Pintas Cepat</span>
+                                                    <button type="button" class="quick-date-btn" onclick="setQuickDate('sevTrend', 1, 'sevTrendDateDropdown')">⚡ 24 Jam</button>
+                                                    <button type="button" class="quick-date-btn" onclick="setQuickDate('sevTrend', 3, 'sevTrendDateDropdown')">📅 3 Hari</button>
+                                                    <button type="button" class="quick-date-btn" onclick="setQuickDate('sevTrend', 7, 'sevTrendDateDropdown')">📅 7 Hari</button>
+                                                    <button type="button" class="quick-date-btn" onclick="setQuickDate('sevTrend', 30, 'sevTrendDateDropdown')">📅 30 Hari</button>
+                                                    <button type="button" class="quick-date-btn" onclick="setQuickScanHistoryMonthForPrefix('sevTrend')">🗓️ Bulan Ini</button>
+                                                </div>
+
+                                                <!-- KANAN: Visual Calendar Matrix & Dropdowns -->
+                                                <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+                                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 4px;">
+                                                        <button type="button" onclick="navigateCalendarMonth(-1, event, 'sevTrend')" class="btn btn-outline btn-sm" style="padding: 2px 6px; font-size: 12px; border-radius: 4px;" title="Bulan Sebelumnya">&lt;</button>
+                                                        
+                                                        <div style="display: flex; align-items: center; gap: 4px;">
+                                                            <select id="sevTrendCalendarMonthSelect" onchange="onCalendarHeaderDropdownChange(event, 'sevTrend')" style="font-size: 12px; font-weight: 600; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--color-border); outline: none; cursor: pointer; color: var(--color-ink); background: var(--color-surface);">
+                                                                <option value="0">Januari</option>
+                                                                <option value="1">Februari</option>
+                                                                <option value="2">Maret</option>
+                                                                <option value="3">April</option>
+                                                                <option value="4">Mei</option>
+                                                                <option value="5">Juni</option>
+                                                                <option value="6">Juli</option>
+                                                                <option value="7">Agustus</option>
+                                                                <option value="8">September</option>
+                                                                <option value="9">Oktober</option>
+                                                                <option value="10">November</option>
+                                                                <option value="11">Desember</option>
+                                                            </select>
+
+                                                            <select id="sevTrendCalendarYearSelect" onchange="onCalendarHeaderDropdownChange(event, 'sevTrend')" style="font-size: 12px; font-weight: 600; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--color-border); outline: none; cursor: pointer; color: var(--color-ink); background: var(--color-surface);">
+                                                                <!-- Populated by JS -->
+                                                            </select>
+                                                        </div>
+
+                                                        <button type="button" onclick="navigateCalendarMonth(1, event, 'sevTrend')" class="btn btn-outline btn-sm" style="padding: 2px 6px; font-size: 12px; border-radius: 4px;" title="Bulan Selanjutnya">&gt;</button>
+                                                    </div>
+
+                                                    <div id="sevTrendCalendarDaysGrid" onmouseleave="leaveCalendarGrid('sevTrend')" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center;">
+                                                        <!-- Generated by JS -->
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div style="border-top: 1px solid var(--color-border); padding-top: 12px;">
-                                                <span style="font-size: 12px; color: var(--color-ink-lighter); margin-bottom: 8px; display: block; font-weight: 500;">Rentang Kustom</span>
-                                                <div style="display: flex; align-items: center; gap: 8px; background: white; padding: 0 8px; height: 32px; border-radius: 6px; border: 1px solid var(--color-border); box-sizing: border-box; justify-content: space-between;">
-                                                    <input type="date" id="sevTrendStartDate" onchange="applyCustomDate('sevTrend', 'sevTrendDateDropdown')" title="Mulai Tanggal" style="border: none; outline: none; background: transparent; padding: 0; font-size: 11px; color: var(--color-ink-soft); cursor: pointer; font-family: inherit; font-weight: 500; width: 45%;">
-                                                    <span style="color: #cbd5e1; font-size: 11px;">-</span>
-                                                    <input type="date" id="sevTrendEndDate" onchange="applyCustomDate('sevTrend', 'sevTrendDateDropdown')" title="Sampai Tanggal" style="border: none; outline: none; background: transparent; padding: 0; font-size: 11px; color: var(--color-ink-soft); cursor: pointer; font-family: inherit; font-weight: 500; width: 45%;">
+
+                                            <!-- FOOTER: Input Manual Tanggal (DD/MM/YYYY) -->
+                                            <div style="border-top: 1px solid var(--color-border); padding-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                                                <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Isian Manual Tanggal (DD/MM/YYYY)</span>
+                                                <div style="display: flex; align-items: center; gap: 8px;">
+                                                    <div style="flex: 1; display: flex; align-items: center; gap: 4px;">
+                                                        <span style="font-size: 11px; color: #64748b; font-weight: 600;">Mulai:</span>
+                                                        <input type="text" id="sevTrendManualStartDateInput" onfocus="onManualInputFocus('start', 'sevTrend')" oninput="onManualDateInputChange(event, 'sevTrend')" placeholder="DD/MM/YYYY" maxlength="10" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 6px; font-size: 11px; font-family: var(--font-mono); color: #1e293b; outline: none;">
+                                                    </div>
+                                                    <div style="flex: 1; display: flex; align-items: center; gap: 4px;">
+                                                        <span style="font-size: 11px; color: #64748b; font-weight: 600;">Sampai:</span>
+                                                        <input type="text" id="sevTrendManualEndDateInput" onfocus="onManualInputFocus('end', 'sevTrend')" oninput="onManualDateInputChange(event, 'sevTrend')" placeholder="DD/MM/YYYY" maxlength="10" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 6px; font-size: 11px; font-family: var(--font-mono); color: #1e293b; outline: none;">
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div style="display: flex; gap: 8px;">
-                                                <button id="sevTrendResetBtn" title="Reset ke 24 Jam" style="flex: 1; height: 32px; border-radius: 6px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-ink-soft); cursor: pointer; transition: all 0.2s; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0;" onmouseover="this.style.background='#f1f5f9'; this.style.color='var(--color-ink)'" onmouseout="this.style.background='var(--color-surface)'; this.style.color='var(--color-ink-soft)'">
-                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>
-                                                    Reset
-                                                </button>
+                                                <div style="display: flex; align-items: center; justify-content: center; margin-top: 2px;">
+                                                    <span id="sevTrendCalendarSelectionStatus" style="font-size: 11px; font-weight: 600; color: var(--primary);">24 Jam</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -466,88 +554,68 @@
 
                     </div>
 
-                    <!-- BAGIAN BAWAH: Recent Critical Alerts & Monitored Domains -->
+                    <!-- BAGIAN BAWAH: Target Risk Ranking & Monitored Domains -->
                     <div class="dashboard-grid lower-grid" style="margin-top: 24px;">
 
-                        <!-- Kolom Kiri: Recent Critical Alerts -->
-                        <div class="card" style="padding: 0; overflow: hidden;">
+                        <!-- Kolom Kiri: Target Risk Ranking -->
+                        <div class="card" style="padding: 0; overflow: hidden; display: flex; flex-direction: column;">
                             <div class="card-header-row"
-                                style="padding: 20px 24px; border-bottom: 1px solid var(--color-border); margin: 0;">
-                                <h3 style="font-size: 18px;">Ranking Vulnerabilities</h3>
+                                style="padding: 18px 20px; border-bottom: 1px solid var(--color-border); margin: 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 16px;">🏆</span>
+                                    <h3 style="font-size: 16px; font-weight: 700; margin: 0;">Target Risk Ranking</h3>
+                                </div>
+                                <span class="badge badge-inactive" style="font-size: 10px; padding: 2px 8px; font-weight: 600;">
+                                    TOP AT-RISK TARGETS
+                                </span>
                             </div>
-                            <table class="modern-table">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 50px; text-align: center;">Rank</th>
-                                        <th>Target</th>
-                                        <th>Vulnerabilities</th>
-                                        <th>Severity</th>
-                                        <th>Scan Date</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="recentAlertsBody">
-                                    <tr>
-                                        <td colspan="5" class="empty-state">Loading alerts...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                            <div style="overflow-x: auto;">
+                                <table class="modern-table" style="width: 100%;">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 45px; text-align: center;">Rank</th>
+                                            <th>Target Domain</th>
+                                            <th>Vulns</th>
+                                            <th>Severity</th>
+                                            <th>Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="recentAlertsBody">
+                                        <tr>
+                                            <td colspan="5" class="empty-state">Loading rankings...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
 
-                        <!-- Kolom Kanan: Monitored Domains -->
+                        <!-- Kolom Kanan: Monitored Domains Widget -->
                         <div class="card" style="padding: 0; display: flex; flex-direction: column; overflow: hidden;">
                             <div class="card-header-row"
-                                style="padding: 20px 24px; border-bottom: 1px solid var(--color-border); margin: 0;">
-                                <h3 style="font-size: 18px;">Monitored Domains</h3>
-                                <div class="multi-select-dropdown" id="domainRiskDropdown">
-                                    <button class="icon-btn" onclick="toggleDropdown('domainRiskDropdown')"
-                                        style="width: 28px; height: 28px; border:none; background: transparent; cursor: pointer; padding: 4px; color: var(--text-secondary);">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-                                        </svg>
-                                    </button>
-                                    <div class="multi-select-panel"
-                                        style="right: 0; left: auto; width: 140px; top: 100%;">
-                                        <div class="multi-select-items" id="domainRiskItems">
-                                            <label class="multi-select-item">
-                                                <input type="radio" name="domainRisk" value="ALL" checked
-                                                    onchange="renderLowerGrid(); toggleDropdown('domainRiskDropdown');">
-                                                All Risks
-                                            </label>
-                                            <label class="multi-select-item">
-                                                <input type="radio" name="domainRisk" value="AT_RISK"
-                                                    onchange="renderLowerGrid(); toggleDropdown('domainRiskDropdown');">
-                                                <span class="sev-dot sev-high"></span> At Risk
-                                            </label>
-                                            <label class="multi-select-item">
-                                                <input type="radio" name="domainRisk" value="REVIEW"
-                                                    onchange="renderLowerGrid(); toggleDropdown('domainRiskDropdown');">
-                                                <span class="sev-dot sev-medium"></span> Review
-                                            </label>
-                                            <label class="multi-select-item">
-                                                <input type="radio" name="domainRisk" value="SECURE"
-                                                    onchange="renderLowerGrid(); toggleDropdown('domainRiskDropdown');">
-                                                <span class="sev-dot sev-low"></span> Secure
-                                            </label>
-                                        </div>
-                                    </div>
+                                style="padding: 18px 20px; border-bottom: 1px solid var(--color-border); margin: 0; display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 16px;">🌐</span>
+                                    <h3 style="font-size: 16px; font-weight: 700; margin: 0;">Monitored Domains</h3>
                                 </div>
+                                <span class="badge badge-active" style="font-size: 10px; padding: 2px 8px; font-weight: 600; background: rgba(0, 88, 189, 0.1); color: var(--primary);">
+                                    LIVE TARGETS
+                                </span>
                             </div>
 
-                            <ul class="domain-list" id="monitoredDomainsList">
-                                <li class="domain-item" style="justify-content: center;">
-                                    <span class="empty-state">Loading domains...</span>
+                            <ul class="domain-list" id="monitoredDomainsList" style="padding: 0; margin: 0; flex: 1; list-style: none;">
+                                <li class="domain-item" style="justify-content: center; padding: 20px;">
+                                    <span class="empty-state">Loading monitored domains...</span>
                                 </li>
                             </ul>
 
-                            <!-- Tombol Bawah (Sticky di bawah) -->
-                            <div
-                                style="padding: 16px; text-align: center; border-top: 1px solid var(--color-border); margin-top: auto; background: var(--color-surface);">
-                                <a href="#" class="link-action" id="manageDomainsLink"
-                                    onclick="switchView('inventory')">Manage All Domains</a>
+                            <!-- Bottom Link -->
+                            <div style="padding: 12px 20px; text-align: center; border-top: 1px solid var(--color-border); margin-top: auto; background: var(--color-surface);">
+                                <a href="#" class="link-action" onclick="switchView('inventory')" style="font-size: 12px; font-weight: 600;">
+                                    Kelola Semua Domain & Inventory &rarr;
+                                </a>
                             </div>
                         </div>
+
                     </div>
                 </div> <!-- PENUTUP VIEW OVERVIEW -->
 
@@ -578,12 +646,85 @@
                                 </select>
                             </div>
 
-                            <!-- KANAN: Tanggal dan Reset -->
+                            <!-- KANAN: Smart Date Range Picker dan Reset -->
                             <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                                <div style="display: flex; align-items: center; gap: 6px; background: white; padding: 2px; border-radius: 6px; border: 1px solid #cbd5e1;">
-                                    <input type="date" id="vulnStartDate" title="Mulai Tanggal" style="border: none; outline: none; background: transparent; padding: 4px 8px; font-size: 13px; color: #475569; cursor: pointer; font-family: inherit;">
-                                    <span style="color: #cbd5e1;">-</span>
-                                    <input type="date" id="vulnEndDate" title="Sampai Tanggal" style="border: none; outline: none; background: transparent; padding: 4px 8px; font-size: 13px; color: #475569; cursor: pointer; font-family: inherit;">
+                                <div class="multi-select-dropdown" id="scanHistoryDateDropdown">
+                                    <button class="multi-select-btn" style="border-radius: 8px; padding: 7px 14px; background: #ffffff; border: 1px solid #cbd5e1; font-weight: 500;" onclick="toggleDropdown('scanHistoryDateDropdown'); renderInteractiveCalendar();">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>
+                                        </svg>
+                                        <span class="multi-select-label" id="scanHistoryDateLabel" style="font-size: 13px; color: #1e293b;">Semua Tanggal</span>
+                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="margin-left: 6px;"><path d="M3 4.5L6 7.5L9 4.5" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                                    </button>
+                                    <input type="hidden" id="vulnStartDate">
+                                    <input type="hidden" id="vulnEndDate">
+                                    <div class="multi-select-panel calendar-panel" style="width: 460px; max-height: none; overflow: visible; padding: 16px; gap: 14px; right: 0; left: auto; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1);">
+                                        <div style="display: flex; gap: 16px;">
+                                            <!-- KIRI: Pintas Cepat -->
+                                            <div style="width: 135px; border-right: 1px solid var(--color-border); padding-right: 14px; display: flex; flex-direction: column; gap: 6px;">
+                                                <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; display: block;">Pintas Cepat</span>
+                                                <button type="button" class="quick-date-btn" onclick="setQuickScanHistoryDate(1)">⚡ 24 Jam</button>
+                                                <button type="button" class="quick-date-btn" onclick="setQuickScanHistoryDate(3)">📅 3 Hari</button>
+                                                <button type="button" class="quick-date-btn" onclick="setQuickScanHistoryDate(7)">📅 7 Hari</button>
+                                                <button type="button" class="quick-date-btn" onclick="setQuickScanHistoryDate(30)">📅 30 Hari</button>
+                                                <button type="button" class="quick-date-btn" onclick="setQuickScanHistoryMonth()">🗓️ Bulan Ini</button>
+                                                <button type="button" class="quick-date-btn" onclick="setQuickScanHistoryDate(0)">🌐 Semua</button>
+                                            </div>
+
+                                            <!-- KANAN: Visual Calendar Matrix & Dropdowns -->
+                                            <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+                                                <!-- Header Navigasi + Dropdown Bulan/Tahun -->
+                                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 4px;">
+                                                    <button type="button" onclick="navigateCalendarMonth(-1, event)" class="btn btn-outline btn-sm" style="padding: 2px 6px; font-size: 12px; border-radius: 4px;" title="Bulan Sebelumnya">&lt;</button>
+                                                    
+                                                    <div style="display: flex; align-items: center; gap: 4px;">
+                                                        <select id="calendarMonthSelect" onchange="onCalendarHeaderDropdownChange(event)" style="font-size: 12px; font-weight: 600; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--color-border); outline: none; cursor: pointer; color: var(--color-ink); background: var(--color-surface);">
+                                                            <option value="0">Januari</option>
+                                                            <option value="1">Februari</option>
+                                                            <option value="2">Maret</option>
+                                                            <option value="3">April</option>
+                                                            <option value="4">Mei</option>
+                                                            <option value="5">Juni</option>
+                                                            <option value="6">Juli</option>
+                                                            <option value="7">Agustus</option>
+                                                            <option value="8">September</option>
+                                                            <option value="9">Oktober</option>
+                                                            <option value="10">November</option>
+                                                            <option value="11">Desember</option>
+                                                        </select>
+
+                                                        <select id="calendarYearSelect" onchange="onCalendarHeaderDropdownChange(event)" style="font-size: 12px; font-weight: 600; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--color-border); outline: none; cursor: pointer; color: var(--color-ink); background: var(--color-surface);">
+                                                            <!-- Populated by JS -->
+                                                        </select>
+                                                    </div>
+
+                                                    <button type="button" onclick="navigateCalendarMonth(1, event)" class="btn btn-outline btn-sm" style="padding: 2px 6px; font-size: 12px; border-radius: 4px;" title="Bulan Selanjutnya">&gt;</button>
+                                                </div>
+
+                                                <div id="calendarDaysGrid" onmouseleave="leaveCalendarGrid('scanHistory')" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center;">
+                                                    <!-- Generated by JS -->
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- FOOTER: Input Manual Tanggal (DD/MM/YYYY) -->
+                                        <div style="border-top: 1px solid var(--color-border); padding-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                                            <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Isian Manual Tanggal (DD/MM/YYYY)</span>
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <div style="flex: 1; display: flex; align-items: center; gap: 4px;">
+                                                    <span style="font-size: 11px; color: #64748b; font-weight: 600;">Mulai:</span>
+                                                    <input type="text" id="manualStartDateInput" onfocus="onManualInputFocus('start', 'scanHistory')" oninput="onManualDateInputChange(event)" placeholder="DD/MM/YYYY" maxlength="10" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 6px; font-size: 11px; font-family: var(--font-mono); color: #1e293b; outline: none;">
+                                                </div>
+                                                <div style="flex: 1; display: flex; align-items: center; gap: 4px;">
+                                                    <span style="font-size: 11px; color: #64748b; font-weight: 600;">Sampai:</span>
+                                                    <input type="text" id="manualEndDateInput" onfocus="onManualInputFocus('end', 'scanHistory')" oninput="onManualDateInputChange(event)" placeholder="DD/MM/YYYY" maxlength="10" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 6px; font-size: 11px; font-family: var(--font-mono); color: #1e293b; outline: none;">
+                                                </div>
+                                            </div>
+                                            <div style="display: flex; align-items: center; justify-content: center; margin-top: 2px;">
+                                                <span id="calendarSelectionStatus" style="font-size: 11px; font-weight: 600; color: var(--primary);">Semua Tanggal</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <button id="vulnResetFilterBtn"
@@ -597,6 +738,11 @@
                                     Reset
                                 </button>
                             </div>
+                        </div>
+
+                        <!-- Severity Filter Chips -->
+                        <div style="padding: 10px 24px; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #ffffff;" id="vulnSeverityChipsContainer">
+                            <!-- Rendered dynamically by JS -->
                         </div>
 
                         <table class="modern-table">
@@ -656,7 +802,7 @@
                             <h1 style="margin-bottom: 4px;">Domain Inventory</h1>
                             <p style="color: #64748b; margin: 0; font-size: 13px;">Manage domain assets. Click any domain row to toggle its target status.</p>
                         </div>
-                        <button class="btn btn-primary" onclick="openWebScanModal()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <button class="btn btn-primary" onclick="openSelectScanTypeModal()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                             </svg>
@@ -700,6 +846,13 @@
 
                             <!-- KANAN: Aksi -->
                             <div style="display: flex; gap: 12px; align-items: center;">
+                                <button id="toggleSelectionModeBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white; cursor: pointer; transition: all 0.2s;" onclick="toggleSelectionMode(event)">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M3 3l7 18 3-7 7-3L3 3z"></path>
+                                    </svg>
+                                    <span id="selectionModeBtnText">Mode Seleksi</span>
+                                </button>
+                                
                                 <button id="addDomainBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white; cursor: pointer;">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                     Add Domain
@@ -742,7 +895,7 @@
                                     <th>IP Address</th>
                                     <th class="sortable" onclick="sortDomainInventory('status')" style="cursor: pointer;">Status <span class="sort-icon"></span></th>
                                     <th class="sortable" onclick="sortDomainInventory('last_scan')" style="cursor: pointer;">Last Scan <span class="sort-icon">↓</span></th>
-                                    <th style="width: 80px; text-align: center;">Action</th>
+                                    <th id="inventoryActionTh" style="width: 80px; text-align: center;">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="inventoryTableBody">
@@ -1101,9 +1254,62 @@
         </div>
     </div>
 
+    <!-- Select Scan Type Modal (Launched from Domain Inventory) -->
+    <div class="modal-overlay" id="selectScanTypeModalOverlay">
+        <div class="modal-dialog" style="max-width: 480px;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--color-border); padding: 18px 24px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(0, 88, 189, 0.1); color: var(--primary); display: flex; align-items: center; justify-content: center;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--color-ink);">Pilih Tipe Pemindaian</h2>
+                        <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--color-muted);">Pilih jenis scan manual yang ingin Anda jalankan</p>
+                    </div>
+                </div>
+                <button class="icon-btn" onclick="closeSelectScanTypeModal()" style="border:none; background:transparent; cursor:pointer;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <div style="display: flex; flex-direction: column; gap: 14px;">
+                    <!-- Opsi Website Scanner -->
+                    <div onclick="closeSelectScanTypeModal(); openWebScanModal();" 
+                         style="display: flex; align-items: center; gap: 14px; padding: 16px; border: 2px solid var(--color-border); border-radius: 10px; cursor: pointer; background: var(--color-surface); transition: all 0.2s ease;"
+                         onmouseover="this.style.borderColor='var(--color-accent)'; this.style.background='rgba(0, 88, 189, 0.04)';"
+                         onmouseout="this.style.borderColor='var(--color-border)'; this.style.background='var(--color-surface)';">
+                        <div style="width: 44px; height: 44px; border-radius: 10px; background: rgba(0, 88, 189, 0.1); color: var(--primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                        </div>
+                        <div>
+                            <div style="font-size: 14px; font-weight: 600; color: var(--color-ink);">Website Scanner</div>
+                            <div style="font-size: 12px; color: var(--color-muted); margin-top: 2px;">Pemindaian kerentanan aplikasi web (XSS, SQLi, CSRF, dll).</div>
+                        </div>
+                    </div>
+
+                    <!-- Opsi Network Scanner -->
+                    <div onclick="closeSelectScanTypeModal(); openNetworkScanModal();" 
+                         style="display: flex; align-items: center; gap: 14px; padding: 16px; border: 2px solid var(--color-border); border-radius: 10px; cursor: pointer; background: var(--color-surface); transition: all 0.2s ease;"
+                         onmouseover="this.style.borderColor='var(--color-accent)'; this.style.background='rgba(0, 88, 189, 0.04)';"
+                         onmouseout="this.style.borderColor='var(--color-border)'; this.style.background='var(--color-surface)';">
+                        <div style="width: 44px; height: 44px; border-radius: 10px; background: rgba(16, 185, 129, 0.1); color: #10b981; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6.01 18H6"/><path d="M10.01 18H10"/><path d="M15 10v4"/><path d="M17.84 7.17a4 4 0 0 0-5.66 0"/><path d="M20.66 4.34a8 8 0 0 0-11.31 0"/></svg>
+                        </div>
+                        <div>
+                            <div style="font-size: 14px; font-weight: 600; color: var(--color-ink);">Network Scanner</div>
+                            <div style="font-size: 12px; color: var(--color-muted); margin-top: 2px;">Pemindaian port terbuka & kerentanan jaringan (Nmap/Port check).</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Web Scan Launch Modal -->
     <div class="modal-overlay" id="webScanModalOverlay">
-        <div class="modal-dialog" style="max-width: 520px;">
+        <div class="modal-dialog" style="max-width: 560px;">
             <div class="modal-header">
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <div style="width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #0058bd 0%, #0071e3 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
@@ -1111,7 +1317,7 @@
                     </div>
                     <div>
                         <h2 style="margin: 0; font-size: 17px; font-weight: 600; color: var(--color-ink);">Launch New Website Scan</h2>
-                        <p style="margin: 2px 0 0 0; font-size: 13px; color: var(--color-muted);">Configure and start a vulnerability scan</p>
+                        <p style="margin: 2px 0 0 0; font-size: 13px; color: var(--color-muted);">Pilih target domain dari inventory untuk memindai kerentanan web</p>
                     </div>
                 </div>
                 <button class="icon-btn" onclick="document.getElementById('webScanModalOverlay').classList.remove('active')">
@@ -1120,11 +1326,13 @@
             </div>
             <div class="modal-body" style="padding: 24px;">
                 <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="font-size: 13px; font-weight: 500; color: var(--color-ink); margin-bottom: 6px; display: block;">Target Domain</label>
-                    <select id="webScanTargetSelect" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; color: var(--color-ink); font-family: var(--font-sans); font-size: 14px; cursor: pointer; transition: border-color 0.2s; outline: none; appearance: none; -webkit-appearance: none; background-image: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%2364748b%22 stroke-width=%222%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>'); background-repeat: no-repeat; background-position: right 12px center;">
-                        <option value="">Loading domains...</option>
-                    </select>
-                    <p style="margin: 6px 0 0; font-size: 12px; color: var(--color-muted);">Select an active domain from your inventory to scan.</p>
+                    <label style="font-size: 13px; font-weight: 600; color: var(--color-ink); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                        <span>Target Domain Inventory</span>
+                    </label>
+                    <div id="webScanTargetContainer" style="border: 1px solid var(--color-border); border-radius: 8px; padding: 12px; background: #ffffff;">
+                        <!-- Rendered by JS app.js -->
+                    </div>
+                    <p style="margin: 6px 0 0; font-size: 11px; color: var(--color-muted);">* Target status ACTIVE difokuskan untuk scan malam otomatis. Untuk scan manual, Anda dapat memilih seluruh domain inventory.</p>
                 </div>
                 <div class="form-group">
                     <label style="font-size: 13px; font-weight: 500; color: var(--color-ink); margin-bottom: 6px; display: block;">Scan Type</label>
@@ -1158,7 +1366,7 @@
 
     <!-- Network Scan Launch Modal -->
     <div class="modal-overlay" id="networkScanModalOverlay">
-        <div class="modal-dialog" style="max-width: 520px;">
+        <div class="modal-dialog" style="max-width: 560px;">
             <div class="modal-header">
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <div style="width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #0058bd 0%, #0071e3 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
@@ -1166,7 +1374,7 @@
                     </div>
                     <div>
                         <h2 style="margin: 0; font-size: 17px; font-weight: 600; color: var(--color-ink);">Launch New Network Scan</h2>
-                        <p style="margin: 2px 0 0 0; font-size: 13px; color: var(--color-muted);">Configure and start a network vulnerability scan</p>
+                        <p style="margin: 2px 0 0 0; font-size: 13px; color: var(--color-muted);">Pilih target domain dari inventory untuk memindai port & jaringan</p>
                     </div>
                 </div>
                 <button class="icon-btn" onclick="document.getElementById('networkScanModalOverlay').classList.remove('active')">
@@ -1175,11 +1383,13 @@
             </div>
             <div class="modal-body" style="padding: 24px;">
                 <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="font-size: 13px; font-weight: 500; color: var(--color-ink); margin-bottom: 6px; display: block;">Target Domain</label>
-                    <select id="networkScanTargetSelect" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; color: var(--color-ink); font-family: var(--font-sans); font-size: 14px; cursor: pointer; outline: none; appearance: none; -webkit-appearance: none; background-image: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%2364748b%22 stroke-width=%222%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>'); background-repeat: no-repeat; background-position: right 12px center;">
-                        <option value="">Loading targets...</option>
-                    </select>
-                    <p style="margin: 6px 0 0; font-size: 12px; color: var(--color-muted);">Select an active domain from your inventory to scan.</p>
+                    <label style="font-size: 13px; font-weight: 600; color: var(--color-ink); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                        <span>Target Domain Inventory</span>
+                    </label>
+                    <div id="networkScanTargetContainer" style="border: 1px solid var(--color-border); border-radius: 8px; padding: 12px; background: #ffffff;">
+                        <!-- Rendered by JS app.js -->
+                    </div>
+                    <p style="margin: 6px 0 0; font-size: 11px; color: var(--color-muted);">* Target status ACTIVE difokuskan untuk scan malam otomatis. Untuk scan manual, Anda dapat memilih seluruh domain inventory.</p>
                 </div>
                 <div class="form-group">
                     <label style="font-size: 13px; font-weight: 500; color: var(--color-ink); margin-bottom: 6px; display: block;">Scan Type</label>
@@ -1645,7 +1855,100 @@
         </div>
     </div>
 
-    <script src="app.js?v=101"></script>
+    <!-- Batch Status Management Modal -->
+    <div class="modal-overlay" id="batchStatusModalOverlay" style="z-index: 1050;">
+        <div class="modal-dialog" style="max-width: 680px; width: 92%;">
+            <div class="modal-header" style="padding: 16px 24px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--color-ink);">Kelola Status Target Domain</h3>
+                </div>
+                <button class="modal-close-btn" onclick="closeBatchStatusModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;">
+                <div>
+                    <div style="position: relative; margin-bottom: 12px;">
+                        <input type="text" id="batchStatusSearchInput" placeholder="Cari nama domain atau IP address..." oninput="onBatchStatusSearch(this.value)" style="width: 100%; padding: 8px 12px 8px 32px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; outline: none; box-sizing: border-box; background: #fff;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 10px; top: 10px;">
+                            <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; flex-wrap: wrap; gap: 10px;">
+                        <span style="font-size: 12px; font-weight: 600; color: var(--primary);" id="batchStatusResultCount">Seluruh Domain Inventory</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button type="button" onclick="triggerBatchSetStatus(true)" class="btn btn-sm" style="background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; font-size: 12px; padding: 4px 12px; border-radius: 6px; font-weight: 600; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                🟢 Aktifkan Semua Hasil
+                            </button>
+                            <button type="button" onclick="triggerBatchSetStatus(false)" class="btn btn-sm" style="background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; font-size: 12px; padding: 4px 12px; border-radius: 6px; font-weight: 600; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                ⚪ Nonaktifkan Semua Hasil
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="batchStatusListContainer" style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px;">
+                    <!-- Diisi JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 12px 24px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-primary" onclick="closeBatchStatusModal()" style="padding: 8px 20px; border-radius: 6px; font-size: 13px;">Selesai</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Bulk Action Bar for Direct Table Selection -->
+    <div id="directBulkBar" style="position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120px); opacity: 0; visibility: hidden; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); z-index: 1000; background: #0f172a; color: #ffffff; padding: 10px 20px; border-radius: 50px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4); display: flex; align-items: center; gap: 14px; border: 1px solid rgba(255, 255, 255, 0.15); flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="background: var(--primary); color: #ffffff; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 12px;" id="directBulkCount">0</span>
+            <span style="font-size: 13px; font-weight: 500;">domain terpilih</span>
+        </div>
+        <div style="height: 20px; width: 1px; background: rgba(255, 255, 255, 0.2);"></div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <button type="button" onclick="directBulkToggleActive(true)" class="btn btn-sm" style="padding: 6px 14px; font-size: 12px; border-radius: 20px; background: #059669; color: #ffffff; border: none; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                🟢 Aktifkan
+            </button>
+            <button type="button" onclick="directBulkToggleActive(false)" class="btn btn-sm" style="padding: 6px 14px; font-size: 12px; border-radius: 20px; background: #475569; color: #ffffff; border: none; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                ⚪ Menonaktifkan
+            </button>
+            <button type="button" onclick="selectAllCurrentRowsToggle()" class="btn btn-outline btn-sm" style="padding: 6px 14px; font-size: 12px; border-radius: 20px; color: #ffffff; border-color: rgba(255,255,255,0.3); font-weight: 500; cursor: pointer;">
+                Pilih Semua
+            </button>
+            <button type="button" onclick="directBulkDeleteDomains()" class="btn btn-outline btn-sm" style="padding: 6px 14px; font-size: 12px; border-radius: 20px; color: #f87171; border-color: rgba(248, 113, 113, 0.4); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                🗑️ Hapus
+            </button>
+        </div>
+        <div style="height: 20px; width: 1px; background: rgba(255, 255, 255, 0.2);"></div>
+        <button type="button" onclick="clearDirectSelection()" class="btn btn-sm" style="background: transparent; color: #cbd5e1; border: none; font-size: 16px; cursor: pointer; padding: 0 4px;" title="Batalkan Seleksi">
+            &times;
+        </button>
+    </div>
+
+    <!-- Floating Toast Notification Stack -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Custom Confirm & Alert Dialog Modal -->
+    <div id="customConfirmModal" class="custom-modal-overlay">
+        <div class="custom-modal-box">
+            <div class="custom-modal-header">
+                <div id="customModalIconBadge" class="custom-modal-icon-badge danger">
+                    <span id="customModalIcon">⚠️</span>
+                </div>
+                <div style="flex: 1;">
+                    <h3 id="customModalTitle" class="custom-modal-title">Konfirmasi Aksi</h3>
+                    <p id="customModalMessage" class="custom-modal-message">Apakah Anda yakin ingin melanjutkan tindakan ini?</p>
+                </div>
+            </div>
+            <div class="custom-modal-footer">
+                <button type="button" id="customModalCancelBtn" class="btn btn-outline custom-modal-btn">Batal</button>
+                <button type="button" id="customModalConfirmBtn" class="btn custom-modal-btn btn-danger-solid">Ya, Lanjutkan</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=144"></script>
 </body>
 
 </html>

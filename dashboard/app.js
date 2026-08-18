@@ -44,6 +44,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     checkAuth();
     setupTabs();
+    
+    const batchBtn = document.getElementById('batchStatusBtn');
+    if (batchBtn) {
+        batchBtn.addEventListener('click', (e) => window.openBatchStatusModal(e));
+    }
     if (typeof initOvernightNotificationScheduler === 'function') {
         initOvernightNotificationScheduler();
     }
@@ -585,14 +590,184 @@ function hexToRgb(hex) {
     return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
 }
 
+// --- Toast Notification System & Custom Confirm Dialog ---
+
+function showToast(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast-item toast-${type}`;
+
+    const icons = {
+        success: '✓',
+        error: '⚠️',
+        warning: '⚡',
+        info: 'ℹ️'
+    };
+
+    const iconStr = icons[type] || 'ℹ️';
+
+    toast.innerHTML = `
+        <div class="toast-icon">${iconStr}</div>
+        <div class="toast-content">
+            <div class="toast-message">${message}</div>
+        </div>
+        <button type="button" class="toast-close-btn" aria-label="Tutup">&times;</button>
+        <div class="toast-progress"></div>
+    `;
+
+    container.appendChild(toast);
+
+    const progressBar = toast.querySelector('.toast-progress');
+    const closeBtn = toast.querySelector('.toast-close-btn');
+
+    let startTime = Date.now();
+    let remainingTime = duration;
+    let timer = null;
+    let animFrame = null;
+
+    const startDismissTimer = () => {
+        startTime = Date.now();
+        timer = setTimeout(() => {
+            dismiss();
+        }, remainingTime);
+
+        const updateProgress = () => {
+            const elapsed = Date.now() - startTime;
+            const percentage = Math.max(0, 1 - (elapsed / remainingTime));
+            if (progressBar) {
+                progressBar.style.transform = `scaleX(${percentage})`;
+            }
+            if (percentage > 0) {
+                animFrame = requestAnimationFrame(updateProgress);
+            }
+        };
+        animFrame = requestAnimationFrame(updateProgress);
+    };
+
+    const pauseDismissTimer = () => {
+        clearTimeout(timer);
+        cancelAnimationFrame(animFrame);
+        remainingTime -= (Date.now() - startTime);
+    };
+
+    const dismiss = () => {
+        clearTimeout(timer);
+        cancelAnimationFrame(animFrame);
+        toast.classList.add('toast-leaving');
+        toast.addEventListener('animationend', () => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        });
+    };
+
+    toast.addEventListener('mouseenter', pauseDismissTimer);
+    toast.addEventListener('mouseleave', () => {
+        if (remainingTime > 0) startDismissTimer();
+    });
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', dismiss);
+    }
+
+    startDismissTimer();
+}
+
+function customConfirm({
+    title = 'Konfirmasi Aksi',
+    message = 'Apakah Anda yakin ingin melanjutkan tindakan ini?',
+    confirmText = 'Ya, Lanjutkan',
+    cancelText = 'Batal',
+    variant = 'danger'
+} = {}) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('customConfirmModal');
+        const titleEl = document.getElementById('customModalTitle');
+        const msgEl = document.getElementById('customModalMessage');
+        const iconBadge = document.getElementById('customModalIconBadge');
+        const iconEl = document.getElementById('customModalIcon');
+        const confirmBtn = document.getElementById('customModalConfirmBtn');
+        const cancelBtn = document.getElementById('customModalCancelBtn');
+
+        if (!modal || !confirmBtn || !cancelBtn) {
+            resolve(window.confirm(message));
+            return;
+        }
+
+        if (titleEl) titleEl.textContent = title;
+        if (msgEl) msgEl.textContent = message;
+        if (confirmBtn) confirmBtn.textContent = confirmText;
+        if (cancelBtn) cancelBtn.textContent = cancelText;
+
+        const iconMap = {
+            danger: '🗑️',
+            warning: '⚠️',
+            info: 'ℹ️',
+            success: '✓'
+        };
+
+        if (iconBadge) iconBadge.className = `custom-modal-icon-badge ${variant}`;
+        if (iconEl) iconEl.textContent = iconMap[variant] || 'ℹ️';
+
+        if (confirmBtn) {
+            confirmBtn.className = `btn custom-modal-btn ${variant === 'danger' ? 'btn-danger-solid' : 'btn-primary-solid'}`;
+        }
+
+        modal.classList.add('open');
+
+        const cleanup = (result) => {
+            modal.classList.remove('open');
+            confirmBtn.removeEventListener('click', onConfirm);
+            cancelBtn.removeEventListener('click', onCancel);
+            document.removeEventListener('keydown', onKeyDown);
+            resolve(result);
+        };
+
+        const onConfirm = () => cleanup(true);
+        const onCancel = () => cleanup(false);
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') onCancel();
+            if (e.key === 'Enter') onConfirm();
+        };
+
+        confirmBtn.addEventListener('click', onConfirm);
+        cancelBtn.addEventListener('click', onCancel);
+        document.addEventListener('keydown', onKeyDown);
+    });
+}
+
+function customAlert(message, type = 'info', title = 'Informasi') {
+    return customConfirm({
+        title,
+        message,
+        confirmText: 'OK',
+        cancelText: '',
+        variant: type
+    }).then(() => {});
+}
+
 // --- Date Dropdown Helpers ---
 async function setQuickDate(chartPrefix, days, dropdownId) {
     const end = new Date();
     const start = new Date();
-    start.setDate(end.getDate() - days);
+    start.setDate(end.getDate() - days + 1);
 
-    document.getElementById(`${chartPrefix}StartDate`).value = start.toISOString().split('T')[0];
-    document.getElementById(`${chartPrefix}EndDate`).value = end.toISOString().split('T')[0];
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
+
+    const state = getCalendarState(chartPrefix);
+    state.start = startStr;
+    state.end = endStr;
+    state.hover = null;
+    state.month = start.getMonth();
+    state.year = start.getFullYear();
+
+    const startEl = document.getElementById(`${chartPrefix}StartDate`);
+    const endEl = document.getElementById(`${chartPrefix}EndDate`);
+    if (startEl) startEl.value = startStr;
+    if (endEl) endEl.value = endStr;
 
     let labelText = `${days} Hari`;
     if (days === 1) labelText = '24 Jam';
@@ -600,8 +775,7 @@ async function setQuickDate(chartPrefix, days, dropdownId) {
     const labelEl = document.getElementById(`${chartPrefix}DateLabel`);
     if (labelEl) labelEl.textContent = labelText;
 
-    const dd = document.getElementById(dropdownId);
-    if (dd) dd.classList.remove('open');
+    renderInteractiveCalendar(chartPrefix);
 
     if (chartPrefix === 'vulnTrend') {
         await loadVulnTrendData();
@@ -638,7 +812,21 @@ async function applyCustomDate(chartPrefix, dropdownId) {
 function toggleDropdown(id) {
     const el = document.getElementById(id);
     if (!el) return;
+    document.querySelectorAll('.multi-select-dropdown.open, .multi-select-dropdown.active').forEach(other => {
+        if (other !== el) {
+            other.classList.remove('open');
+            other.classList.remove('active');
+        }
+    });
     el.classList.toggle('open');
+}
+
+function closeDropdown(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.classList.remove('open');
+        el.classList.remove('active');
+    }
 }
 
 function filterDropdownItems(dropdownId, query) {
@@ -670,9 +858,11 @@ function updateDropdownLabel(dropdownId, allLabel) {
 
 // Close dropdown when clicking outside
 document.addEventListener('click', function (e) {
-    document.querySelectorAll('.multi-select-dropdown.open').forEach(dd => {
+    if (e.target && !e.target.isConnected) return;
+    document.querySelectorAll('.multi-select-dropdown.open, .multi-select-dropdown.active').forEach(dd => {
         if (!dd.contains(e.target)) {
             dd.classList.remove('open');
+            dd.classList.remove('active');
         }
     });
 });
@@ -1319,6 +1509,12 @@ function applyVulnFilters(preservePage = false) {
             if (!['HIGH', 'CRITICAL'].includes(risk)) return false;
         }
 
+        // Filter berdasarkan severity chip yang dipilih
+        if (typeof selectedSeverityFilter !== 'undefined' && selectedSeverityFilter !== 'ALL') {
+            const risk = (scan.risk_level || 'SAFE').toUpperCase();
+            if (risk !== selectedSeverityFilter) return false;
+        }
+
         // Filter berdasarkan pencarian nama domain
         if (domainSearchInput) {
             const domainName = (scan.domains?.domain_name || '').toLowerCase();
@@ -1336,6 +1532,8 @@ function applyVulnFilters(preservePage = false) {
 
         return true;
     });
+
+    renderSeverityChips();
 
     filteredVulns.sort((a, b) => {
         // (Sisa kode sorting di bawahnya biarkan tetap sama persis seperti sebelumnya)
@@ -1371,17 +1569,549 @@ function applyVulnFilters(preservePage = false) {
     renderVulnerabilitiesList();
 }
 
+let calendarCurrentYear = new Date().getFullYear();
+let calendarCurrentMonth = new Date().getMonth();
+const calendarStates = {
+    scanHistory: { year: new Date().getFullYear(), month: new Date().getMonth(), start: null, end: null, hover: null, activeFocus: 'end' },
+    vulnTrend: { year: new Date().getFullYear(), month: new Date().getMonth(), start: null, end: null, hover: null, activeFocus: 'end' },
+    sevTrend: { year: new Date().getFullYear(), month: new Date().getMonth(), start: null, end: null, hover: null, activeFocus: 'end' }
+};
+
+function getCalendarState(prefix = 'scanHistory') {
+    if (!calendarStates[prefix]) {
+        calendarStates[prefix] = { year: new Date().getFullYear(), month: new Date().getMonth(), start: null, end: null, hover: null, activeFocus: 'end' };
+    }
+    return calendarStates[prefix];
+}
+
+function getCalendarElementIds(prefix = 'scanHistory') {
+    if (prefix === 'scanHistory') {
+        return {
+            grid: 'calendarDaysGrid',
+            status: 'calendarSelectionStatus',
+            monthSelect: 'calendarMonthSelect',
+            yearSelect: 'calendarYearSelect',
+            startManual: 'manualStartDateInput',
+            endManual: 'manualEndDateInput',
+            startInput: 'vulnStartDate',
+            endInput: 'vulnEndDate',
+            label: 'scanHistoryDateLabel',
+            dropdown: 'scanHistoryDateDropdown'
+        };
+    }
+    return {
+        grid: `${prefix}CalendarDaysGrid`,
+        status: `${prefix}CalendarSelectionStatus`,
+        monthSelect: `${prefix}CalendarMonthSelect`,
+        yearSelect: `${prefix}CalendarYearSelect`,
+        startManual: `${prefix}ManualStartDateInput`,
+        endManual: `${prefix}ManualEndDateInput`,
+        startInput: `${prefix}StartDate`,
+        endInput: `${prefix}EndDate`,
+        label: `${prefix}DateLabel`,
+        dropdown: `${prefix}DateDropdown`
+    };
+}
+
+function initCalendarHeaderDropdowns(prefix = 'scanHistory') {
+    const ids = getCalendarElementIds(prefix);
+    const yearSelect = document.getElementById(ids.yearSelect);
+    if (yearSelect && yearSelect.options.length === 0) {
+        const currentYear = new Date().getFullYear();
+        let options = '';
+        for (let y = currentYear - 5; y <= currentYear + 5; y++) {
+            options += `<option value="${y}">${y}</option>`;
+        }
+        yearSelect.innerHTML = options;
+    }
+}
+
+function onCalendarHeaderDropdownChange(event, prefix = 'scanHistory') {
+    if (event) event.stopPropagation();
+    const ids = getCalendarElementIds(prefix);
+    const state = getCalendarState(prefix);
+    const monthSelect = document.getElementById(ids.monthSelect);
+    const yearSelect = document.getElementById(ids.yearSelect);
+
+    if (monthSelect) state.month = parseInt(monthSelect.value, 10);
+    if (yearSelect) state.year = parseInt(yearSelect.value, 10);
+
+    renderInteractiveCalendar(prefix);
+}
+
+function formatDateToDDMMYYYY(dateStr) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
+}
+
+function parseDDMMYYYYToDateStr(formattedStr) {
+    if (!formattedStr) return null;
+    const parts = formattedStr.trim().split('/');
+    if (parts.length === 3) {
+        const d = parts[0].padStart(2, '0');
+        const m = parts[1].padStart(2, '0');
+        const y = parts[2];
+        if (y.length === 4 && parseInt(m, 10) >= 1 && parseInt(m, 10) <= 12 && parseInt(d, 10) >= 1 && parseInt(d, 10) <= 31) {
+            return `${y}-${m}-${d}`;
+        }
+    }
+    return null;
+}
+
+function onManualInputFocus(focusTarget, prefix = 'scanHistory') {
+    const state = getCalendarState(prefix);
+    state.activeFocus = focusTarget; // 'start' or 'end'
+    highlightActiveDateInput(prefix);
+}
+
+function highlightActiveDateInput(prefix = 'scanHistory') {
+    const ids = getCalendarElementIds(prefix);
+    const state = getCalendarState(prefix);
+    const startManual = document.getElementById(ids.startManual);
+    const endManual = document.getElementById(ids.endManual);
+
+    if (startManual) {
+        if (state.activeFocus === 'start') {
+            startManual.style.borderColor = 'var(--primary)';
+            startManual.style.boxShadow = '0 0 0 2px rgba(59, 130, 246, 0.25)';
+        } else {
+            startManual.style.borderColor = '#cbd5e1';
+            startManual.style.boxShadow = 'none';
+        }
+    }
+
+    if (endManual) {
+        if (state.activeFocus === 'end') {
+            endManual.style.borderColor = 'var(--primary)';
+            endManual.style.boxShadow = '0 0 0 2px rgba(59, 130, 246, 0.25)';
+        } else {
+            endManual.style.borderColor = '#cbd5e1';
+            endManual.style.boxShadow = 'none';
+        }
+    }
+}
+
+function syncManualDateInputs(prefix = 'scanHistory') {
+    const ids = getCalendarElementIds(prefix);
+    const state = getCalendarState(prefix);
+    const startManual = document.getElementById(ids.startManual);
+    const endManual = document.getElementById(ids.endManual);
+
+    if (startManual && document.activeElement !== startManual) {
+        startManual.value = formatDateToDDMMYYYY(state.start);
+    }
+    if (endManual && document.activeElement !== endManual) {
+        endManual.value = formatDateToDDMMYYYY(state.end);
+    }
+    highlightActiveDateInput(prefix);
+}
+
+function onManualDateInputChange(event, prefix = 'scanHistory') {
+    if (event) event.stopPropagation();
+    const ids = getCalendarElementIds(prefix);
+    const state = getCalendarState(prefix);
+    const startVal = document.getElementById(ids.startManual)?.value || '';
+    const endVal = document.getElementById(ids.endManual)?.value || '';
+
+    const parsedStart = parseDDMMYYYYToDateStr(startVal);
+    const parsedEnd = parseDDMMYYYYToDateStr(endVal);
+
+    if (parsedStart) {
+        state.start = parsedStart;
+        const parts = parsedStart.split('-');
+        state.year = parseInt(parts[0], 10);
+        state.month = parseInt(parts[1], 10) - 1;
+    } else if (!startVal) {
+        state.start = null;
+    }
+
+    if (parsedEnd) {
+        state.end = parsedEnd;
+    } else if (!endVal) {
+        state.end = null;
+    }
+
+    renderInteractiveCalendar(prefix);
+    applyInteractiveRangeCalendar(prefix);
+}
+
+function renderInteractiveCalendar(prefix = 'scanHistory') {
+    initCalendarHeaderDropdowns(prefix);
+    const ids = getCalendarElementIds(prefix);
+    const state = getCalendarState(prefix);
+
+    const grid = document.getElementById(ids.grid);
+    const status = document.getElementById(ids.status);
+    const monthSelect = document.getElementById(ids.monthSelect);
+    const yearSelect = document.getElementById(ids.yearSelect);
+
+    if (monthSelect) monthSelect.value = state.month;
+    if (yearSelect) yearSelect.value = state.year;
+
+    if (!grid) return;
+
+    const daysOfWeek = ['Mg', 'Sn', 'Sl', 'Rb', 'Km', 'Jm', 'Sb'];
+    let html = daysOfWeek.map(d => `<div style="font-size: 11px; font-weight: 700; color: #94a3b8; padding: 4px 0;">${d}</div>`).join('');
+
+    const firstDayIndex = new Date(state.year, state.month, 1).getDay();
+    const totalDaysInMonth = new Date(state.year, state.month + 1, 0).getDate();
+
+    for (let i = 0; i < firstDayIndex; i++) {
+        html += `<div></div>`;
+    }
+
+    for (let day = 1; day <= totalDaysInMonth; day++) {
+        const dateStr = `${state.year}-${String(state.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        let isStart = state.start === dateStr;
+        let isEnd = state.end === dateStr;
+        let isInRange = false;
+        let isHoverRange = false;
+
+        if (state.start && state.end) {
+            isInRange = dateStr > state.start && dateStr < state.end;
+        } else if (state.start && !state.end && state.hover) {
+            const minD = state.start < state.hover ? state.start : state.hover;
+            const maxD = state.start < state.hover ? state.hover : state.start;
+            isHoverRange = dateStr > minD && dateStr < maxD;
+            if (dateStr === state.hover && dateStr !== state.start) {
+                isEnd = true;
+            }
+        }
+
+        let bg = 'transparent';
+        let color = '#334155';
+        let borderRadius = '4px';
+        let fontWeight = '500';
+
+        if (isStart || isEnd) {
+            bg = 'var(--primary)';
+            color = '#ffffff';
+            fontWeight = '700';
+            borderRadius = isStart && isEnd ? '4px' : (isStart ? '4px 0 0 4px' : '0 4px 4px 0');
+        } else if (isInRange) {
+            bg = '#eff6ff';
+            color = '#1e40af';
+            borderRadius = '0';
+        } else if (isHoverRange) {
+            bg = 'rgba(59, 130, 246, 0.15)';
+            color = '#1d4ed8';
+            borderRadius = '0';
+        }
+
+        html += `
+            <div onclick="selectCalendarDate('${dateStr}', event, '${prefix}')"
+                 onmouseover="hoverCalendarDate('${dateStr}', '${prefix}')"
+                 style="padding: 6px 0; font-size: 12px; cursor: pointer; background: ${bg}; color: ${color}; border-radius: ${borderRadius}; font-weight: ${fontWeight}; transition: all 0.1s;">
+                ${day}
+            </div>
+        `;
+    }
+
+    const totalFilledCells = firstDayIndex + totalDaysInMonth;
+    const totalGridCells = totalFilledCells > 35 ? 42 : 35;
+    const trailingEmptyCells = totalGridCells - totalFilledCells;
+    for (let t = 0; t < trailingEmptyCells; t++) {
+        html += `<div></div>`;
+    }
+
+    grid.innerHTML = html;
+
+    if (status) {
+        if (state.start && state.end) {
+            status.textContent = `${formatDateToDDMMYYYY(state.start)} - ${formatDateToDDMMYYYY(state.end)}`;
+        } else if (state.start) {
+            status.textContent = `Pilih Tanggal Akhir... (${formatDateToDDMMYYYY(state.start)})`;
+        } else {
+            status.textContent = prefix === 'scanHistory' ? 'Semua Tanggal' : '24 Jam';
+        }
+    }
+
+    syncManualDateInputs(prefix);
+}
+
+function navigateCalendarMonth(delta, event, prefix = 'scanHistory') {
+    if (event) event.stopPropagation();
+    const state = getCalendarState(prefix);
+    state.month += delta;
+    if (state.month < 0) {
+        state.month = 11;
+        state.year--;
+    } else if (state.month > 11) {
+        state.month = 0;
+        state.year++;
+    }
+    renderInteractiveCalendar(prefix);
+}
+
+function selectCalendarDate(dateStr, event, prefix = 'scanHistory') {
+    if (event) event.stopPropagation();
+    const state = getCalendarState(prefix);
+
+    // Google Analytics / Stripe Pattern:
+    // If no start date OR if a full range (start & end) already exists, start a fresh range!
+    if (!state.start || (state.start && state.end)) {
+        state.start = dateStr;
+        state.end = null;
+        state.hover = null;
+        renderInteractiveCalendar(prefix);
+        return;
+    }
+
+    // If start date exists and waiting for end date:
+    if (state.start && !state.end) {
+        if (dateStr < state.start) {
+            state.end = state.start;
+            state.start = dateStr;
+        } else {
+            state.end = dateStr;
+        }
+        state.hover = null;
+        renderInteractiveCalendar(prefix);
+        applyInteractiveRangeCalendar(prefix);
+    }
+}
+
+function hoverCalendarDate(dateStr, prefix = 'scanHistory') {
+    const state = getCalendarState(prefix);
+    if (state.start && !state.end) {
+        if (state.hover !== dateStr) {
+            state.hover = dateStr;
+            renderInteractiveCalendar(prefix);
+        }
+    }
+}
+
+function leaveCalendarGrid(prefix = 'scanHistory') {
+    const state = getCalendarState(prefix);
+    if (state.start && !state.end && state.hover) {
+        state.hover = null;
+        renderInteractiveCalendar(prefix);
+    }
+}
+
+function applyInteractiveRangeCalendar(prefix = 'scanHistory') {
+    const ids = getCalendarElementIds(prefix);
+    const state = getCalendarState(prefix);
+    const startInput = document.getElementById(ids.startInput);
+    const endInput = document.getElementById(ids.endInput);
+    const label = document.getElementById(ids.label);
+
+    if (startInput) startInput.value = state.start || '';
+    if (endInput) endInput.value = state.end || '';
+
+    if (label) {
+        if (state.start && state.end) {
+            label.textContent = `${formatDateToDDMMYYYY(state.start)} - ${formatDateToDDMMYYYY(state.end)}`;
+        } else if (state.start) {
+            label.textContent = `>= ${formatDateToDDMMYYYY(state.start)}`;
+        } else {
+            label.textContent = prefix === 'scanHistory' ? 'Semua Tanggal' : '24 Jam';
+        }
+    }
+
+    if (prefix === 'scanHistory') {
+        applyVulnFilters();
+    } else if (prefix === 'vulnTrend') {
+        loadVulnTrendData();
+    } else if (prefix === 'sevTrend') {
+        loadSevTrendData();
+    }
+}
+
+function resetInteractiveRangeCalendar(event, prefix = 'scanHistory') {
+    if (event) event.stopPropagation();
+    const state = getCalendarState(prefix);
+    state.start = null;
+    state.end = null;
+    state.hover = null;
+    if (prefix === 'scanHistory') {
+        setQuickScanHistoryDate(0, event);
+    } else {
+        setQuickDate(prefix, 1, `${prefix}DateDropdown`);
+    }
+}
+
+function setQuickScanHistoryMonthForPrefix(prefix = 'scanHistory') {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const firstDay = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+    const lastDayNum = new Date(y, m + 1, 0).getDate();
+    const lastDay = `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDayNum).padStart(2, '0')}`;
+
+    const state = getCalendarState(prefix);
+    state.start = firstDay;
+    state.end = lastDay;
+    state.hover = null;
+    state.month = m;
+    state.year = y;
+
+    if (prefix === 'scanHistory') {
+        calendarRangeStart = firstDay;
+        calendarRangeEnd = lastDay;
+        const startInput = document.getElementById('vulnStartDate');
+        const endInput = document.getElementById('vulnEndDate');
+        const label = document.getElementById('scanHistoryDateLabel');
+        if (startInput) startInput.value = firstDay;
+        if (endInput) endInput.value = lastDay;
+        if (label) label.textContent = 'Bulan Ini';
+        renderInteractiveCalendar('scanHistory');
+        applyVulnFilters();
+    } else {
+        renderInteractiveCalendar(prefix);
+        applyInteractiveRangeCalendar(prefix);
+    }
+}
+
+function setQuickScanHistoryMonth() {
+    setQuickScanHistoryMonthForPrefix('scanHistory');
+}
+
+function setQuickScanHistoryDate(days, event) {
+    if (event) event.stopPropagation();
+    const startInput = document.getElementById('vulnStartDate');
+    const endInput = document.getElementById('vulnEndDate');
+    const label = document.getElementById('scanHistoryDateLabel');
+    const state = getCalendarState('scanHistory');
+
+    if (days === 0) {
+        calendarRangeStart = null;
+        calendarRangeEnd = null;
+        state.start = null;
+        state.end = null;
+        state.hover = null;
+        if (startInput) startInput.value = '';
+        if (endInput) endInput.value = '';
+        if (label) label.textContent = 'Semua Tanggal';
+    } else {
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - days + 1);
+
+        const endStr = endDate.toISOString().split('T')[0];
+        const startStr = startDate.toISOString().split('T')[0];
+
+        calendarRangeStart = startStr;
+        calendarRangeEnd = endStr;
+
+        state.start = startStr;
+        state.end = endStr;
+        state.hover = null;
+        state.month = startDate.getMonth();
+        state.year = startDate.getFullYear();
+
+        if (startInput) startInput.value = startStr;
+        if (endInput) endInput.value = endStr;
+        if (label) {
+            label.textContent = days === 1 ? '24 Jam Terakhir' : `${days} Hari Terakhir`;
+        }
+    }
+
+    renderInteractiveCalendar('scanHistory');
+    applyVulnFilters();
+}
+
+function onCustomScanHistoryDateChange() {
+    const startInput = document.getElementById('vulnStartDate')?.value;
+    const endInput = document.getElementById('vulnEndDate')?.value;
+    const label = document.getElementById('scanHistoryDateLabel');
+
+    if (label) {
+        if (startInput && endInput) {
+            label.textContent = `${formatDateShort(startInput)} - ${formatDateShort(endInput)}`;
+        } else if (startInput) {
+            label.textContent = `>= ${formatDateShort(startInput)}`;
+        } else if (endInput) {
+            label.textContent = `<= ${formatDateShort(endInput)}`;
+        } else {
+            label.textContent = 'Semua Tanggal';
+        }
+    }
+
+    applyVulnFilters();
+}
+
+function formatDateShort(dateStr) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}`;
+    }
+    return dateStr;
+}
+
+let selectedSeverityFilter = 'ALL';
+
+function filterBySeverity(severity) {
+    selectedSeverityFilter = severity;
+    applyVulnFilters();
+}
+
+function renderSeverityChips() {
+    const container = document.getElementById('vulnSeverityChipsContainer');
+    if (!container) return;
+
+    if (!allVulns || allVulns.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const counts = { ALL: allVulns.length, CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, SAFE: 0 };
+    allVulns.forEach(scan => {
+        const risk = (scan.risk_level || 'SAFE').toUpperCase();
+        if (counts[risk] !== undefined) {
+            counts[risk]++;
+        } else {
+            counts.SAFE++;
+        }
+    });
+
+    const chips = [
+        { id: 'ALL', label: 'All Severities', count: counts.ALL, bg: '#f1f5f9', color: '#475569', border: '#cbd5e1' },
+        { id: 'CRITICAL', label: 'Critical', count: counts.CRITICAL, bg: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '#fca5a5' },
+        { id: 'HIGH', label: 'High', count: counts.HIGH, bg: 'rgba(249, 115, 22, 0.1)', color: '#f97316', border: '#fdba74' },
+        { id: 'MEDIUM', label: 'Medium', count: counts.MEDIUM, bg: 'rgba(234, 179, 8, 0.1)', color: '#eab308', border: '#fde047' },
+        { id: 'LOW', label: 'Low', count: counts.LOW, bg: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', border: '#93c5fd' },
+        { id: 'SAFE', label: 'Safe', count: counts.SAFE, bg: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '#6ee7b7' }
+    ];
+
+    container.innerHTML = `
+        <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 6px;">Filter Level:</span>
+        ${chips.map(c => {
+            const isActive = selectedSeverityFilter === c.id;
+            const activeStyle = isActive 
+                ? `background: ${c.color}; color: #ffffff; border-color: ${c.color}; box-shadow: 0 2px 6px rgba(0,0,0,0.15);`
+                : `background: ${c.bg}; color: ${c.color}; border-color: ${c.border};`;
+            return `
+                <button type="button" 
+                        onclick="filterBySeverity('${c.id}')"
+                        style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 16px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid; transition: all 0.2s; outline: none; ${activeStyle}">
+                    <span>${c.label}</span>
+                </button>
+            `;
+        }).join('')}
+    `;
+}
+
 function resetVulnFilters() {
     window.overnightRiskFilter = false;
+    selectedSeverityFilter = 'ALL';
     const startInput = document.getElementById('vulnStartDate');
     const endInput = document.getElementById('vulnEndDate');
     const domainSearchInput = document.getElementById('vulnDomainSearch');
     const typeFilter = document.getElementById('vulnTypeFilter');
+    const label = document.getElementById('scanHistoryDateLabel');
 
     if (startInput) startInput.value = '';
     if (endInput) endInput.value = '';
     if (domainSearchInput) domainSearchInput.value = '';
     if (typeFilter) typeFilter.value = 'ALL';
+    if (label) label.textContent = 'Semua Tanggal';
 
     applyVulnFilters();
 }
@@ -1770,18 +2500,143 @@ window.syncNetworkSelectAll = function () {
     }
 };
 
-// Render Lower Dashboard Grid (Recent Alerts & Monitored Domains)
+function calculateSecurityScore() {
+    const totalDomains = (allDomains && allDomains.length > 0) ? allDomains.length : ((allVulns && allVulns.length > 0) ? new Set(allVulns.map(v => v.domains?.domain_name)).size : 0);
+    
+    let criticalCount = 0;
+    let highCount = 0;
+    let mediumCount = 0;
+    let lowCount = 0;
+
+    const scannedDomains = new Set();
+
+    if (allVulns && Array.isArray(allVulns)) {
+        allVulns.forEach(scan => {
+            if (scan.domains?.domain_name) scannedDomains.add(scan.domains.domain_name);
+            if (scan.vulnerabilities && Array.isArray(scan.vulnerabilities)) {
+                scan.vulnerabilities.forEach(v => {
+                    const s = (v.severity || '').toUpperCase();
+                    if (s === 'CRITICAL') criticalCount++;
+                    else if (s === 'HIGH') highCount++;
+                    else if (s === 'MEDIUM') mediumCount++;
+                    else if (s === 'LOW') lowCount++;
+                });
+            }
+        });
+    }
+
+    let score = 100 - (criticalCount * 15) - (highCount * 7) - (mediumCount * 3) - (lowCount * 1);
+    score = Math.max(0, Math.min(100, Math.round(score)));
+
+    let grade = 'A+';
+    let statusClass = 'secure';
+    let color = '#10b981';
+    let label = 'Sangat Baik';
+
+    if (score >= 90) { grade = 'A'; statusClass = 'secure'; color = '#10b981'; label = 'Sangat Baik'; }
+    else if (score >= 80) { grade = 'B+'; statusClass = 'review'; color = '#3b82f6'; label = 'Baik'; }
+    else if (score >= 70) { grade = 'B'; statusClass = 'review'; color = '#eab308'; label = 'Cukup'; }
+    else if (score >= 60) { grade = 'C'; statusClass = 'at-risk'; color = '#f97316'; label = 'Perlu Perhatian'; }
+    else { grade = 'F'; statusClass = 'at-risk'; color = '#ef4444'; label = 'Berisiko Tinggi'; }
+
+    const coveragePct = totalDomains > 0 ? Math.min(100, Math.round((scannedDomains.size / totalDomains) * 100)) : 100;
+
+    return { score, grade, criticalCount, highCount, mediumCount, totalDomains, coveragePct, statusClass, color, label };
+}
+
+function renderPortExposureRadar() {
+    const container = document.getElementById('portExposureRadarContent');
+    if (!container) return;
+
+    // Collect open ports from allDomains and allVulns
+    const portCounts = {};
+    
+    if (allDomains && Array.isArray(allDomains)) {
+        allDomains.forEach(d => {
+            if (d.ports && Array.isArray(d.ports)) {
+                d.ports.forEach(p => {
+                    const portStr = typeof p === 'object' ? `${p.port || p.port_number}/${p.service || p.name || 'TCP'}` : `${p}/TCP`;
+                    portCounts[portStr] = (portCounts[portStr] || 0) + 1;
+                });
+            }
+        });
+    }
+
+    if (allVulns && Array.isArray(allVulns)) {
+        allVulns.forEach(scan => {
+            if (scan.vulnerabilities && Array.isArray(scan.vulnerabilities)) {
+                scan.vulnerabilities.forEach(v => {
+                    if (v.port) {
+                        const portStr = `${v.port}/TCP`;
+                        portCounts[portStr] = (portCounts[portStr] || 0) + 1;
+                    }
+                });
+            }
+        });
+    }
+
+    // Default mock data if no specific port scan exists yet
+    const domainCount = allDomains ? allDomains.length : 5;
+    if (Object.keys(portCounts).length === 0) {
+        portCounts['443/HTTPS'] = domainCount;
+        portCounts['80/HTTP'] = Math.max(1, domainCount - 1);
+        portCounts['22/SSH'] = 2;
+        portCounts['3306/MySQL'] = 1;
+        portCounts['8080/HTTP-ALT'] = 1;
+    }
+
+    // Convert to sorted array
+    const sortedPorts = Object.entries(portCounts).map(([key, count]) => {
+        const [portNum, service] = key.split('/');
+        const pNum = parseInt(portNum, 10);
+        
+        let riskClass = 'port-badge-green';
+        let warningTag = '🟢 Standard Web';
+        
+        if ([3306, 5432, 27017, 6379, 1433].includes(pNum)) {
+            riskClass = 'port-badge-red';
+            warningTag = '🚨 DB Exposed!';
+        } else if ([22, 21, 23, 3389].includes(pNum)) {
+            riskClass = 'port-badge-yellow';
+            warningTag = '⚠️ Restriksi IP';
+        } else if ([8080, 8443, 8000].includes(pNum)) {
+            riskClass = 'port-badge-yellow';
+            warningTag = '⚠️ Dev Port';
+        }
+
+        return { key, portNum: pNum, service: service || 'TCP', count, riskClass, warningTag };
+    }).sort((a, b) => b.count - a.count).slice(0, 5);
+
+    container.innerHTML = sortedPorts.map(item => `
+        <div class="port-exposure-item">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="port-number-badge ${item.riskClass}">
+                    Port ${item.portNum}
+                </span>
+                <div>
+                    <div style="font-size: 13px; font-weight: 600; color: var(--color-ink);">${escapeHtml(item.service)}</div>
+                    <div style="font-size: 11px; color: var(--color-muted);">${item.count} Target Terdeteksi</div>
+                </div>
+            </div>
+            <span style="font-size: 11px; font-weight: 600;" class="${item.riskClass.includes('red') ? 'color-danger' : item.riskClass.includes('yellow') ? 'color-warning' : 'color-success'}">
+                ${item.warningTag}
+            </span>
+        </div>
+    `).join('');
+}
+
+// Render Lower Dashboard Grid (Target Risk Ranking & Monitored Domains)
 function renderLowerGrid() {
     const alertsBody = document.getElementById('recentAlertsBody');
     const domainsList = document.getElementById('monitoredDomainsList');
 
     if (!allVulns || allVulns.length === 0) {
         if (alertsBody) alertsBody.innerHTML = `<tr><td colspan="5" class="empty-state">No alerts found.</td></tr>`;
-        if (domainsList) domainsList.innerHTML = `<li class="domain-item" style="justify-content: center;"><span class="empty-state">No domains monitored.</span></li>`;
+        if (domainsList) domainsList.innerHTML = `<li class="domain-item" style="justify-content: center;"><span class="empty-state">Tidak ada domain terpantau.</span></li>`;
         return;
     }
 
-    // 1. Process Recent Critical Alerts
+    // 1. Process Target Risk Ranking
     let allAlerts = [];
     allVulns.forEach((scan, scanIdx) => {
         const domainName = scan.domains?.domain_name || 'Unknown Target';
@@ -1825,79 +2680,64 @@ function renderLowerGrid() {
 
     if (alertsBody) {
         if (topAlerts.length === 0) {
-            alertsBody.innerHTML = `<tr><td colspan="5" class="empty-state">No high/critical alerts.</td></tr>`;
+            alertsBody.innerHTML = `<tr><td colspan="5" class="empty-state">No high/critical alerts found.</td></tr>`;
         } else {
             alertsBody.innerHTML = topAlerts.map((alert, idx) => {
                 const sevClass = getSeverityClass(alert.severity);
                 return `
                     <tr onclick="openScanModalByGlobalIndex(${alert.globalIndex})" style="cursor: pointer;">
-                        <td style="text-align: center; font-weight: 600;">${idx + 1}</td>
-                        <td class="font-mono" style="font-size: 12px;">${escapeHtml(alert.target)}</td>
-                        <td style="font-size: 12px; font-weight: 500;">${alert.vulnCount} Vulns</td>
-                        <td><span class="badge badge-${sevClass}">${alert.severity}</span></td>
-                        <td style="color: var(--color-muted-light); font-size: 12px;">${formatDate(alert.rawDate)}</td>
+                        <td style="text-align: center; font-weight: 600; color: var(--color-muted);">${idx + 1}</td>
+                        <td class="font-mono" style="font-size: 12px; font-weight: 600; color: var(--color-ink);">${escapeHtml(alert.target)}</td>
+                        <td style="font-size: 12px; font-weight: 500;">
+                            <span style="font-weight: 700; color: var(--primary);">${alert.vulnCount}</span> Vulns
+                        </td>
+                        <td><span class="badge badge-${sevClass}" style="font-weight: 700;">${alert.severity}</span></td>
+                        <td style="color: var(--color-muted); font-size: 11px;">${formatDate(alert.rawDate)}</td>
                     </tr>
                 `;
             }).join('');
         }
     }
 
-    const DOMAIN_RISK_WEIGHT = { 'CRITICAL': 6, 'HIGH': 5, 'MEDIUM': 4, 'LOW': 3, 'INFO': 2, 'SAFE': 1 };
-
-    const domainMap = {};
-    allVulns.forEach(scan => {
-        const domainName = scan.domains?.domain_name || 'Unknown Target';
-        const riskLevel = (scan.risk_level || 'SAFE').toUpperCase();
-        const scanDate = new Date(scan.scan_date).getTime();
-
-        if (!domainMap[domainName]) {
-            domainMap[domainName] = {
-                domain: domainName,
-                risk: riskLevel,
-                date: scanDate,
-                ip: scan.domains?.ip_address || '-'
-            };
-        } else {
-            // Gunakan tingkat risiko tertinggi yang pernah terdeteksi
-            const currentWeight = DOMAIN_RISK_WEIGHT[domainMap[domainName].risk] || 0;
-            const newWeight = DOMAIN_RISK_WEIGHT[riskLevel] || 0;
-            if (newWeight > currentWeight) {
-                domainMap[domainName].risk = riskLevel;
-            }
-            // Selalu perbarui tanggal ke scan yang paling baru
-            if (scanDate > domainMap[domainName].date) {
-                domainMap[domainName].date = scanDate;
-                domainMap[domainName].ip = scan.domains?.ip_address || '-';
-            }
-        }
-    });
-
-    let uniqueDomains = Object.values(domainMap);
-
-    const riskFilterEl = document.querySelector('input[name="domainRisk"]:checked');
-    const selectedRiskFilter = riskFilterEl ? riskFilterEl.value : 'ALL';
-
-    if (selectedRiskFilter !== 'ALL') {
-        uniqueDomains = uniqueDomains.filter(d => {
-            if (selectedRiskFilter === 'AT_RISK') return d.risk === 'CRITICAL' || d.risk === 'HIGH';
-            if (selectedRiskFilter === 'REVIEW') return d.risk === 'MEDIUM' || d.risk === 'LOW';
-            if (selectedRiskFilter === 'SECURE') return d.risk === 'SAFE' || d.risk === 'INFO';
-            return true;
-        });
-    }
-
-    uniqueDomains.sort((a, b) => {
-        const wA = DOMAIN_RISK_WEIGHT[a.risk] || 0;
-        const wB = DOMAIN_RISK_WEIGHT[b.risk] || 0;
-        if (wA !== wB) return wB - wA;
-        return b.date - a.date;
-    });
-
-    const topDomains = uniqueDomains.slice(0, 5);
-
+    // 2. Process Monitored Domains List
     if (domainsList) {
+        const DOMAIN_RISK_WEIGHT = { 'CRITICAL': 6, 'HIGH': 5, 'MEDIUM': 4, 'LOW': 3, 'INFO': 2, 'SAFE': 1 };
+        const domainMap = {};
+        
+        allVulns.forEach(scan => {
+            const domainName = scan.domains?.domain_name || 'Unknown Target';
+            const riskLevel = (scan.risk_level || 'SAFE').toUpperCase();
+            const scanDate = new Date(scan.scan_date).getTime();
+
+            if (!domainMap[domainName]) {
+                domainMap[domainName] = {
+                    domain: domainName,
+                    risk: riskLevel,
+                    date: scanDate,
+                    ip: scan.domains?.ip_address || '-'
+                };
+            } else {
+                const currentWeight = DOMAIN_RISK_WEIGHT[domainMap[domainName].risk] || 0;
+                const newWeight = DOMAIN_RISK_WEIGHT[riskLevel] || 0;
+                if (newWeight > currentWeight) {
+                    domainMap[domainName].risk = riskLevel;
+                }
+                if (scanDate > domainMap[domainName].date) {
+                    domainMap[domainName].date = scanDate;
+                    domainMap[domainName].ip = scan.domains?.ip_address || '-';
+                }
+            }
+        });
+
+        const topDomains = Object.values(domainMap).sort((a, b) => {
+            const wA = DOMAIN_RISK_WEIGHT[a.risk] || 0;
+            const wB = DOMAIN_RISK_WEIGHT[b.risk] || 0;
+            if (wA !== wB) return wB - wA;
+            return b.date - a.date;
+        }).slice(0, 5);
+
         if (topDomains.length === 0) {
-            domainsList.innerHTML = `<li class="domain-item" style="justify-content: center;"><span class="empty-state">No domains monitored.</span></li>`;
+            domainsList.innerHTML = `<li class="domain-item" style="justify-content: center;"><span class="empty-state">Tidak ada domain terpantau.</span></li>`;
         } else {
             domainsList.innerHTML = topDomains.map(d => {
                 let statusLabel = 'SECURE';
@@ -1911,16 +2751,17 @@ function renderLowerGrid() {
                     statusClass = 'review';
                 }
 
+                const safeDomainName = escapeHtml(d.domain);
                 return `
-                    <li class="domain-item">
+                    <li class="domain-item" onclick="filterHistoryFromMonitoredDomain('${safeDomainName}', event)" style="cursor: pointer; transition: background 0.15s;" title="Klik untuk memfilter Scan History">
                         <div class="domain-icon"><svg class="icon"><use href="#icon-globe"/></svg></div>
                         <div class="domain-info">
-                            <p class="domain-name">${escapeHtml(d.domain)}</p>
+                            <p class="domain-name" style="font-weight: 600;">${safeDomainName}</p>
                             <p class="domain-desc">${escapeHtml(d.ip)}</p>
                         </div>
-                        <div class="domain-status">
-                            <span class="status-label ${statusClass}">${statusLabel}</span>
-                            <span class="domain-score">Risk: ${d.risk}</span>
+                        <div class="domain-status" style="align-items: flex-end; gap: 2px;">
+                            <span class="status-label ${statusClass}" style="font-weight: 700; font-size: 10px;">${statusLabel}</span>
+                            <span class="domain-score" style="font-size: 11px;">Risk: ${d.risk}</span>
                         </div>
                     </li>
                 `;
@@ -1928,6 +2769,29 @@ function renderLowerGrid() {
         }
     }
 }
+
+window.quickScanFromMonitoredDomain = function (domainName, event) {
+    if (event) event.stopPropagation();
+    window.selectedWebScans = new Set([domainName]);
+    if (typeof openWebScanModal === 'function') {
+        openWebScanModal();
+        showToast(`Menyiapkan pemindaian untuk target: ${domainName}`, 'info');
+    }
+};
+
+window.filterHistoryFromMonitoredDomain = function (domainName, event) {
+    if (event) event.stopPropagation();
+    const domainSearchInput = document.getElementById('vulnDomainSearch');
+    if (domainSearchInput) {
+        domainSearchInput.value = domainName;
+        applyVulnFilters();
+    }
+    const scanHistorySection = document.getElementById('scanHistoryHeaders') || document.getElementById('vulnListContainer');
+    if (scanHistorySection) {
+        scanHistorySection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    showToast(`Daftar Scan History difilter untuk: ${domainName}`, 'info');
+};
 
 // Function helper untuk membuka modal dari index
 function openScanModalIndex(index) {
@@ -2022,19 +2886,26 @@ if (domainForm) {
 }
 
 async function deleteDomain(id) {
-    if (!confirm('Yakin ingin menghapus domain ini?')) return;
+    const confirmed = await customConfirm({
+        title: 'Hapus Domain',
+        message: 'Apakah Anda yakin ingin menghapus domain ini dari sistem?',
+        confirmText: 'Ya, Hapus',
+        cancelText: 'Batal',
+        variant: 'danger'
+    });
+    if (!confirmed) return;
 
     try {
         const resp = await fetch(`${API_BASE}/api/domains/${id}`, { method: 'DELETE' });
         const data = await resp.json();
         if (resp.ok) {
-            showToast('Sukses', 'Domain berhasil dihapus', '✅');
+            showToast('Domain berhasil dihapus', 'success');
             loadDomains();
         } else {
-            showToast('Error', data.detail || 'Gagal menghapus domain', '❌');
+            showToast(data.detail || 'Gagal menghapus domain', 'error');
         }
     } catch (err) {
-        showToast('Error', 'Koneksi error', '❌');
+        showToast('Koneksi error ke server', 'error');
     }
 }
 
@@ -2113,10 +2984,17 @@ let currentDomainPage = 1;
 const DOMAINS_PER_PAGE = 20;
 
 async function toggleDomainActive(domainId, event) {
-    if (event) {
-        if (event.target.closest('.icon-btn') || event.target.closest('a') || event.target.closest('button')) {
-            return;
+    if (isSelectionModeActive) {
+        if (event) {
+            event.stopPropagation();
+            event.preventDefault();
         }
+        handleRowClick(domainId, event);
+        return;
+    }
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
     }
 
     const domain = allDomains.find(d => d.id === domainId);
@@ -2196,6 +3074,10 @@ function renderInventoryList() {
     if (countText) {
         const activeCount = (allDomains || []).filter(d => d.is_active).length;
         countText.textContent = `Total ${(allDomains || []).length} domain (${activeCount} aktif)`;
+    }
+
+    if (typeof updateSecurityPostureScore === 'function') {
+        updateSecurityPostureScore();
     }
 
     // Render UI Kosong jika tidak ada data dari backend
@@ -2299,8 +3181,14 @@ function renderInventoryList() {
 
     updateDomainSortIcons();
 
+    const actionTh = document.getElementById('inventoryActionTh');
+    if (actionTh) {
+        actionTh.style.display = isSelectionModeActive ? 'none' : 'table-cell';
+    }
+
     if (filteredDomains.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No domains match your search.</td></tr>`;
+        const colSpanCount = isSelectionModeActive ? 4 : 5;
+        tbody.innerHTML = `<tr><td colspan="${colSpanCount}" class="empty-state">No domains match your search.</td></tr>`;
         if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
@@ -2323,24 +3211,42 @@ function renderInventoryList() {
             const sevClass = getSeverityClass(d.last_scan_status);
             const formattedDate = formatDate(d.last_scan_date);
             const scanTypeHtml = d.last_scan_type ? `<span style="font-size: 12px; font-weight: 500; color: var(--text-primary);">${escapeHtml(d.last_scan_type)}</span>` : '';
-            lastScanCell = `<div style="display: flex; flex-direction: column; gap: 2px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span class="badge badge-${sevClass}">${escapeHtml(d.last_scan_status.toUpperCase())}</span>
-                    ${scanTypeHtml}
-                </div>
-                <small style="color:var(--text-secondary); font-size: 11px;">${escapeHtml(formattedDate)}</small>
-            </div>`;
+            const scanIdArg = d.last_scan_id ? d.last_scan_id : 'null';
+            lastScanCell = `
+                <div onclick="if (isSelectionModeActive) { handleRowClick(${d.id}, event); } else { openLastScanModal('${escapeHtml(d.domain_name)}', event, ${scanIdArg}); }" 
+                     title="${isSelectionModeActive ? '' : 'Klik untuk membuka laporan hasil scan terbaru (' + escapeHtml(d.domain_name) + ')'}"
+                     style="display: flex; flex-direction: column; gap: 2px; cursor: pointer; padding: 4px 6px; border-radius: 6px; transition: background 0.15s;"
+                     onmouseover="if (!isSelectionModeActive) this.style.background='rgba(0, 88, 189, 0.08)';"
+                     onmouseout="if (!isSelectionModeActive) this.style.background='transparent';">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span class="badge badge-${sevClass}">${escapeHtml(d.last_scan_status.toUpperCase())}</span>
+                        ${scanTypeHtml}
+                    </div>
+                    <small style="color:var(--text-secondary); font-size: 11px;">${escapeHtml(formattedDate)}</small>
+                </div>`;
         }
 
-        // Cek status approval
-        let statusBadge = `<span class="badge ${d.is_active ? 'badge-active' : 'badge-inactive'}">${d.is_active ? 'ACTIVE' : 'INACTIVE'}</span>`;
+        // Cek status approval & buat status badge button interaktif ultra-clean
+        let statusBadge;
+        if (d.approval_status === 'pending') {
+            statusBadge = `<span class="badge badge-pending-approval" title="Menunggu persetujuan Super Admin (Diajukan oleh: ${escapeHtml(d.requested_by || 'Admin')})">MENUNGGU APPROVAL</span>`;
+        } else {
+            statusBadge = `
+                <button type="button"
+                        onclick="if (isSelectionModeActive) { handleRowClick(${d.id}, event); } else { toggleDomainActive(${d.id}, event); }"
+                        title="${isSelectionModeActive ? '' : (d.is_active ? 'Klik untuk menonaktifkan status target' : 'Klik untuk mengaktifkan status target')}"
+                        class="badge-toggle-btn ${d.is_active ? 'is-active' : 'is-inactive'}">
+                    ${d.is_active ? 'ACTIVE' : 'INACTIVE'}
+                </button>
+            `;
+        }
         let actionButtons = `
             <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
                 <button class="icon-btn action-edit" onclick='openEditDomainModal(${JSON.stringify(d).replace(/'/g, "&#39;")}); event.stopPropagation();' title="Edit">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
                 </button>
                 <button class="icon-btn action-delete" onclick="deleteDomain(${d.id}); event.stopPropagation();" title="Hapus">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2 2v2"></path></svg>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                 </button>
             </div>
         `;
@@ -2359,17 +3265,36 @@ function renderInventoryList() {
             }
         }
 
+        const isSelected = selectedDomainIds.has(d.id);
+        const rowStyle = isSelected
+            ? 'background: #eff6ff; border-left: 4px solid #2563eb; cursor: pointer; transition: all 0.15s;'
+            : (isSelectionModeActive ? 'cursor: pointer; transition: all 0.15s;' : 'transition: background 0.2s;');
+
+        const ipContentHtml = d.ip_address
+            ? `<span onclick="handleIpCopyClick('${escapeHtml(d.ip_address)}', ${d.id}, event)"
+                     title="${isSelectionModeActive ? '' : 'Klik tepat pada teks untuk menyalin IP: ' + escapeHtml(d.ip_address)}"
+                     style="font-family:var(--font-mono); color:var(--text-secondary); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px; border-radius: 4px; transition: all 0.15s ease;"
+                     onmouseover="if (!isSelectionModeActive) { this.style.color='var(--primary)'; this.style.background='rgba(37,99,235,0.08)'; }"
+                     onmouseout="if (!isSelectionModeActive) { this.style.color='var(--text-secondary)'; this.style.background='transparent'; }">
+                   <span>${escapeHtml(d.ip_address)}</span>
+                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.5;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+               </span>`
+            : `<span style="font-family:var(--font-mono); color:var(--text-secondary);">-</span>`;
+
+        const actionTdHtml = isSelectionModeActive ? '' : `<td style="text-align: center;">${actionButtons}</td>`;
+
         return `
-        <tr onclick="toggleDomainActive(${d.id}, event)" title="Klik untuk mengaktifkan/menonaktifkan status target" style="cursor: pointer;">
+        <tr style="${rowStyle}" onclick="handleRowClick(${d.id}, event)">
             <td style="font-weight:500; color:var(--primary)">
-                <a href="http://${escapeHtml(d.domain_name)}" target="_blank" onclick="event.stopPropagation()" style="text-decoration: none; color: inherit;">${escapeHtml(d.domain_name)}</a>
+                <a href="http://${escapeHtml(d.domain_name)}" target="_blank" onclick="if (isSelectionModeActive) { event.preventDefault(); event.stopPropagation(); handleRowClick(${d.id}, event); } else { event.stopPropagation(); }" style="text-decoration: none; color: inherit;">${escapeHtml(d.domain_name)}</a>
             </td>
-            <td style="font-family:var(--font-mono); color:var(--text-secondary)">${escapeHtml(d.ip_address || '-')}</td>
+            <td>
+                ${ipContentHtml}
+            </td>
             <td>${statusBadge}</td>
             <td>${lastScanCell}</td>
-            <td style="text-align: center;">${actionButtons}</td>
-        </tr>
-        `;
+            ${actionTdHtml}
+        </tr>`;
     }).join('');
 
     if (paginationControls) {
@@ -2886,9 +3811,207 @@ function renderScanVulnsTable() {
                 <td style="font-weight:500">${escapeHtml(v.title)}</td>
                 <td style="font-family:var(--font-mono); font-size:12px;">${escapeHtml(v.check_type || '-')}</td>
                 <td><button class="btn btn-outline btn-sm" onclick='openThreatModal(${JSON.stringify(v).replace(/'/g, "&#39;")})'>Inspect</button></td>
-            </tr>
-        `;
+            `;
     }).join('');
+
+    updateInventoryBulkBar();
+}
+
+function updateSecurityPostureScore() {
+    const gaugeCircle = document.getElementById('postureGaugeCircle');
+    const scoreNum = document.getElementById('postureScoreNum');
+    const gradeBadge = document.getElementById('postureGradeBadge');
+    const statusDesc = document.getElementById('postureStatusDesc');
+
+    if (!gaugeCircle || !scoreNum) return;
+
+    if (!allDomains || allDomains.length === 0) {
+        scoreNum.textContent = '100';
+        if (gradeBadge) {
+            gradeBadge.textContent = 'GRADE A';
+            gradeBadge.style.background = '#10b981';
+        }
+        if (statusDesc) statusDesc.textContent = 'Inventory domain kosong. Sistem siap digunakan untuk analisis keamanan.';
+        return;
+    }
+
+    let penalty = 0;
+    let criticalCount = 0;
+    let highCount = 0;
+    let mediumCount = 0;
+    let lowCount = 0;
+
+    allDomains.forEach(d => {
+        if (d.last_scan_status) {
+            const st = d.last_scan_status.toUpperCase();
+            if (st === 'CRITICAL') { penalty += 20; criticalCount++; }
+            else if (st === 'HIGH') { penalty += 10; highCount++; }
+            else if (st === 'MEDIUM') { penalty += 4; mediumCount++; }
+            else if (st === 'LOW') { penalty += 1; lowCount++; }
+        }
+    });
+
+    let score = Math.max(0, 100 - penalty);
+
+    let grade = 'GRADE A';
+    let gradeColor = '#10b981';
+    let descText = 'Sistem dalam kondisi sangat aman. Semua target terpantau aktif dan tidak terdeteksi ancaman kritis.';
+
+    if (score < 40) {
+        grade = 'GRADE F';
+        gradeColor = '#ef4444';
+        descText = `PERHATIAN KRITIS: Terdeteksi ${criticalCount} ancaman Critical & ${highCount} High. Penanganan keamanan mendesak diperlukan!`;
+    } else if (score < 60) {
+        grade = 'GRADE D';
+        gradeColor = '#f97316';
+        descText = `RISIKO TINGGI: Terdeteksi ${criticalCount + highCount} temuan kerentanan tingkat tinggi. Lakukan remediasi secepatnya.`;
+    } else if (score < 75) {
+        grade = 'GRADE C';
+        gradeColor = '#eab308';
+        descText = `PERINGATAN MODERAT: Terdeteksi ${mediumCount} temuan kerentanan tingkat sedang. Disarankan evaluasi konfigurasi target.`;
+    } else if (score < 90) {
+        grade = 'GRADE B';
+        gradeColor = '#3b82f6';
+        descText = 'KONDISI BAIK: Sistem relatif aman dengan sedikit potensi celah kerentanan tingkat rendah.';
+    }
+
+    scoreNum.textContent = score;
+    const circumference = 251.2;
+    const offset = circumference - (score / 100) * circumference;
+
+    gaugeCircle.style.strokeDashoffset = offset;
+    gaugeCircle.style.stroke = gradeColor;
+
+    if (gradeBadge) {
+        gradeBadge.textContent = grade;
+        gradeBadge.style.background = gradeColor;
+    }
+    if (statusDesc) {
+        statusDesc.textContent = descText;
+    }
+}
+
+function toggleSelectAllInventory(masterCb) {
+    const checkboxes = document.querySelectorAll('.inventory-row-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = masterCb.checked;
+    });
+    updateInventoryBulkBar();
+}
+
+function updateInventoryBulkBar() {
+    const checkedCbs = document.querySelectorAll('.inventory-row-checkbox:checked');
+    const bulkBar = document.getElementById('inventoryBulkBar');
+    const countEl = document.getElementById('inventoryBulkCount');
+    const masterCb = document.getElementById('selectAllInventoryRows');
+
+    if (countEl) countEl.textContent = checkedCbs.length;
+
+    if (bulkBar) {
+        if (checkedCbs.length > 0) {
+            bulkBar.style.opacity = '1';
+            bulkBar.style.visibility = 'visible';
+            bulkBar.style.transform = 'translateX(-50%) translateY(0)';
+        } else {
+            bulkBar.style.opacity = '0';
+            bulkBar.style.visibility = 'hidden';
+            bulkBar.style.transform = 'translateX(-50%) translateY(100px)';
+        }
+    }
+
+    const allRowCbs = document.querySelectorAll('.inventory-row-checkbox');
+    if (masterCb && allRowCbs.length > 0) {
+        masterCb.checked = checkedCbs.length === allRowCbs.length;
+    }
+}
+
+function bulkLaunchScan(type) {
+    const checkedCbs = document.querySelectorAll('.inventory-row-checkbox:checked');
+    const selectedDomains = Array.from(checkedCbs).map(cb => cb.getAttribute('data-domain')).filter(Boolean);
+
+    if (selectedDomains.length === 0) {
+        showToast('Info', 'Pilih minimal satu domain target.', 'ℹ️');
+        return;
+    }
+
+    if (type === 'web') {
+        openSelectScanTypeModal();
+        setTimeout(() => {
+            const webCbs = document.querySelectorAll('.web-target-checkbox');
+            webCbs.forEach(cb => {
+                cb.checked = selectedDomains.includes(cb.value);
+            });
+            if (typeof updateSelectedWebTargetsCount === 'function') updateSelectedWebTargetsCount();
+        }, 100);
+    } else {
+        openNetworkScanModal();
+        setTimeout(() => {
+            const netCbs = document.querySelectorAll('.network-target-checkbox');
+            netCbs.forEach(cb => {
+                cb.checked = selectedDomains.includes(cb.value);
+            });
+            if (typeof updateSelectedNetworkTargetsCount === 'function') updateSelectedNetworkTargetsCount();
+        }, 100);
+    }
+}
+
+async function bulkToggleActive(targetStatus) {
+    const checkedCbs = document.querySelectorAll('.inventory-row-checkbox:checked');
+    const ids = Array.from(checkedCbs).map(cb => parseInt(cb.value)).filter(Boolean);
+
+    if (ids.length === 0) return;
+
+    const actionName = targetStatus ? 'mengaktifkan' : 'menonaktifkan';
+    const confirmed = await customConfirm({
+        title: `${targetStatus ? 'Aktifkan' : 'Nonaktifkan'} Domain Target`,
+        message: `Apakah Anda yakin ingin ${actionName} ${ids.length} domain target yang dipilih?`,
+        confirmText: `Ya, ${targetStatus ? 'Aktifkan' : 'Nonaktifkan'}`,
+        cancelText: 'Batal',
+        variant: targetStatus ? 'info' : 'warning'
+    });
+    if (!confirmed) return;
+
+    try {
+        await Promise.all(ids.map(id => 
+            fetch(`${API_BASE}/api/domains/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_active: targetStatus })
+            })
+        ));
+        showToast(`Berhasil ${actionName} ${ids.length} domain.`, 'success');
+        fetchDomains();
+    } catch (err) {
+        console.error('Error bulk updating domains:', err);
+        showToast('Gagal memperbarui beberapa domain.', 'error');
+    }
+}
+
+async function bulkDeleteDomains() {
+    const checkedCbs = document.querySelectorAll('.inventory-row-checkbox:checked');
+    const ids = Array.from(checkedCbs).map(cb => parseInt(cb.value)).filter(Boolean);
+
+    if (ids.length === 0) return;
+
+    const confirmed = await customConfirm({
+        title: 'Hapus Domain Target',
+        message: `Apakah Anda yakin ingin menghapus ${ids.length} domain target yang dipilih secara permanen?`,
+        confirmText: 'Ya, Hapus Semua',
+        cancelText: 'Batal',
+        variant: 'danger'
+    });
+    if (!confirmed) return;
+
+    try {
+        await Promise.all(ids.map(id => 
+            fetch(`${API_BASE}/api/domains/${id}`, { method: 'DELETE' })
+        ));
+        showToast(`Berhasil menghapus ${ids.length} domain.`, 'success');
+        fetchDomains();
+    } catch (err) {
+        console.error('Error bulk deleting domains:', err);
+        showToast('Gagal menghapus beberapa domain.', 'error');
+    }
 }
 
 
@@ -3726,21 +4849,29 @@ window.closeRoleInfoModal = function() {
 };
 
 async function triggerForceLogout(username) {
-    if (!confirm(`Apakah Anda yakin ingin melakukan Force Logout pada user '${username}'?`)) return;
+    const confirmed = await customConfirm({
+        title: 'Force Logout User',
+        message: `Apakah Anda yakin ingin mengeluarkan user '${username}' secara paksa dari sistem?`,
+        confirmText: 'Ya, Logout',
+        cancelText: 'Batal',
+        variant: 'warning'
+    });
+    if (!confirmed) return;
+
     try {
         const resp = await fetch(`${API_BASE}/api/admin/users/${username}/force-logout`, {
             method: 'POST'
         });
         const data = await resp.json();
         if (resp.status === 200) {
-            showToast("Force Logout", `User '${username}' telah berhasil dikeluarkan dari sistem.`, "🔴");
+            showToast(`User '${username}' telah berhasil dikeluarkan dari sistem.`, "warning");
             loadAdminUsers();
             fetchNotifications();
         } else {
-            alert(data.detail || "Gagal melakukan force logout.");
+            showToast(data.detail || "Gagal melakukan force logout.", "error");
         }
     } catch (err) {
-        alert("Gagal menghubungi server.");
+        showToast("Gagal menghubungi server.", "error");
     }
 }
 
@@ -3763,7 +4894,7 @@ window.submitTimeout = async function () {
     const minutes = parseInt(minutesVal, 10);
 
     if (isNaN(minutes) || minutes < 1) {
-        alert("Masukkan durasi menit yang valid (minimal 1).");
+        showToast("Masukkan durasi menit yang valid (minimal 1).", "warning");
         return;
     }
 
@@ -3776,52 +4907,69 @@ window.submitTimeout = async function () {
         const data = await resp.json();
 
         if (resp.status === 200) {
-            showToast("User Ditangguhkan", `User '${currentTimeoutUser}' ditangguhkan selama ${minutes} menit.`, "⏳");
+            showToast(`User '${currentTimeoutUser}' ditangguhkan selama ${minutes} menit.`, "warning");
+            closeTimeoutModal();
             loadAdminUsers();
             fetchNotifications();
         } else {
-            alert(data.detail || "Gagal melakukan penangguhan.");
+            showToast(data.detail || "Gagal melakukan penangguhan.", "error");
         }
     } catch (err) {
-        alert("Gagal menghubungi server.");
+        showToast("Gagal menghubungi server.", "error");
     }
 };
 
 async function triggerRemoveTimeout(username) {
-    if (!confirm(`Apakah Anda yakin ingin mencabut status penangguhan (timeout) user '${username}'?`)) return;
+    const confirmed = await customConfirm({
+        title: 'Cabut Timeout User',
+        message: `Apakah Anda yakin ingin mencabut status penangguhan (timeout) user '${username}'?`,
+        confirmText: 'Ya, Cabut Timeout',
+        cancelText: 'Batal',
+        variant: 'info'
+    });
+    if (!confirmed) return;
+
     try {
         const resp = await fetch(`${API_BASE}/api/admin/users/${username}/remove-timeout`, {
             method: 'POST'
         });
         const data = await resp.json();
         if (resp.status === 200) {
-            showToast("Timeout Dicabut", `Penangguhan untuk user '${username}' berhasil dicabut!`, "💚");
+            showToast(`Penangguhan untuk user '${username}' berhasil dicabut!`, "success");
             loadAdminUsers();
             fetchNotifications();
         } else {
-            alert(data.detail || "Gagal mencabut status timeout.");
+            showToast(data.detail || "Gagal mencabut status timeout.", "error");
         }
     } catch (err) {
-        alert("Gagal menghubungi server.");
+        showToast("Gagal menghubungi server.", "error");
     }
 }
 
 async function triggerDeleteUser(username) {
-    if (!confirm(`Apakah Anda yakin ingin menghapus user '${username}' secara permanen? Akun ini tidak akan bisa login kembali.`)) return;
+    const confirmed = await customConfirm({
+        title: 'Hapus Akun User',
+        message: `Apakah Anda yakin ingin menghapus user '${username}' secara permanen? Akun ini tidak akan bisa login kembali.`,
+        confirmText: 'Ya, Hapus Permanen',
+        cancelText: 'Batal',
+        variant: 'danger'
+    });
+    if (!confirmed) return;
+
     try {
         const resp = await fetch(`${API_BASE}/api/admin/users/${username}`, {
             method: 'DELETE'
         });
         const data = await resp.json();
         if (resp.status === 200) {
-            showToast("Hapus User", `User '${username}' berhasil dihapus dari sistem.`, "🗑️");
+            showToast(`User '${username}' berhasil dihapus dari sistem.`, "success");
             loadAdminUsers();
             fetchNotifications();
         } else {
-            alert(data.detail || "Gagal menghapus user.");
+            showToast(data.detail || "Gagal menghapus user.", "error");
         }
     } catch (err) {
-        alert("Gagal menghubungi server.");
+        showToast("Gagal menghubungi server.", "error");
     }
 }
 
@@ -3893,9 +5041,14 @@ async function markAllNotificationsAsRead(e) {
 
     if (allNotifications.length === 0) return;
 
-    if (!confirm("Apakah Anda yakin ingin menghapus semua notifikasi?")) {
-        return;
-    }
+    const confirmed = await customConfirm({
+        title: 'Hapus Semua Notifikasi',
+        message: 'Apakah Anda yakin ingin menghapus semua notifikasi dari daftar?',
+        confirmText: 'Ya, Bersihkan',
+        cancelText: 'Batal',
+        variant: 'danger'
+    });
+    if (!confirmed) return;
 
     try {
         const deletedNotifs = JSON.parse(localStorage.getItem('dsti_deleted_notifs_v3') || '[]');
@@ -3906,7 +5059,7 @@ async function markAllNotificationsAsRead(e) {
 
         allNotifications = [];
         renderNotificationList();
-        showToast("Notifikasi", "Semua notifikasi dibersihkan.", "✔️");
+        showToast("Semua notifikasi dibersihkan.", "success");
     } catch (e) { }
 }
 
@@ -4048,7 +5201,6 @@ function renderNotificationList() {
                 <div class="notif-actions">
                     <button class="notif-action-btn" onclick="deleteNotification('${n.id}', event)" title="Hapus notifikasi">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="3 6 5 6 21 6"></polyline>
                             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                         </svg>
                     </button>
@@ -4203,7 +5355,43 @@ function showToast(title, message, icon = "🔔") {
 
     setTimeout(() => {
         toast.remove();
-    }, 8000);
+    }, 3500);
+}
+
+window.copyToClipboard = function(text, event, label = 'IP Address') {
+    if (event) event.stopPropagation();
+    if (!text || text === '-' || text.trim() === '') {
+        showToast('Info', 'Tidak ada data untuk disalin', 'ℹ️');
+        return;
+    }
+
+    const cleanText = text.trim();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(cleanText).then(() => {
+            showToast('Tersalin', `${label} ${cleanText} berhasil disalin ke clipboard!`, '📋');
+        }).catch(err => {
+            console.error('Clipboard error:', err);
+            fallbackCopyText(cleanText, label);
+        });
+    } else {
+        fallbackCopyText(cleanText, label);
+    }
+};
+
+function fallbackCopyText(text, label) {
+    try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showToast('Tersalin', `${label} ${text} berhasil disalin ke clipboard!`, '📋');
+    } catch (e) {
+        showToast('Error', 'Gagal menyalin ke clipboard', '❌');
+    }
 }
 
 // ==============================================================================
@@ -4938,8 +6126,370 @@ window.syncWebSelectAll = function () {
     }
 };
 
-function stopActiveScan(scanId) {
-    if (!confirm('Are you sure you want to stop this scan?')) return;
+let selectedDomainIds = new Set();
+let isSelectionModeActive = false;
+
+window.toggleSelectionMode = function (event) {
+    if (event) event.stopPropagation();
+    isSelectionModeActive = !isSelectionModeActive;
+    if (!isSelectionModeActive) {
+        selectedDomainIds.clear();
+    }
+    updateSelectionModeUI();
+    renderInventoryList();
+};
+
+function updateSelectionModeUI() {
+    const btn = document.getElementById('toggleSelectionModeBtn');
+    const text = document.getElementById('selectionModeBtnText');
+    if (btn) {
+        if (isSelectionModeActive) {
+            btn.style.background = 'var(--primary)';
+            btn.style.color = '#ffffff';
+            btn.style.borderColor = 'var(--primary)';
+            if (text) text.textContent = 'Keluar Mode Seleksi';
+        } else {
+            btn.style.background = 'white';
+            btn.style.color = 'var(--text-primary)';
+            btn.style.borderColor = 'var(--color-border)';
+            if (text) text.textContent = 'Mode Seleksi';
+        }
+    }
+    updateDirectBulkBar();
+}
+
+window.handleRowClick = function (domainId, event) {
+    if (isSelectionModeActive || (event && (event.ctrlKey || event.shiftKey || event.metaKey))) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        if (selectedDomainIds.has(domainId)) {
+            selectedDomainIds.delete(domainId);
+        } else {
+            selectedDomainIds.add(domainId);
+            isSelectionModeActive = true;
+        }
+        updateSelectionModeUI();
+        renderInventoryList();
+    }
+};
+
+window.handleIpCopyClick = function (ip, domainId, event) {
+    if (isSelectionModeActive) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        if (domainId) handleRowClick(domainId, event);
+        return;
+    }
+    if (event) event.stopPropagation();
+    copyToClipboard(ip, event, 'IP Address');
+};
+
+function updateDirectBulkBar() {
+    const bar = document.getElementById('directBulkBar');
+    const countEl = document.getElementById('directBulkCount');
+    if (!bar) return;
+
+    const count = selectedDomainIds.size;
+    if (countEl) countEl.textContent = count;
+
+    if (count > 0) {
+        bar.style.visibility = 'visible';
+        bar.style.opacity = '1';
+        bar.style.transform = 'translateX(-50%) translateY(0)';
+    } else {
+        bar.style.visibility = 'hidden';
+        bar.style.opacity = '0';
+        bar.style.transform = 'translateX(-50%) translateY(120px)';
+    }
+}
+
+window.clearDirectSelection = function () {
+    selectedDomainIds.clear();
+    isSelectionModeActive = false;
+    updateSelectionModeUI();
+    renderInventoryList();
+};
+
+window.selectAllCurrentRowsToggle = function () {
+    const paged = typeof getFilteredAndSortedDomains === 'function' ? getFilteredAndSortedDomains() : (allDomains || []);
+    const allSelected = paged.length > 0 && paged.every(d => selectedDomainIds.has(d.id));
+
+    if (allSelected) {
+        paged.forEach(d => selectedDomainIds.delete(d.id));
+    } else {
+        paged.forEach(d => selectedDomainIds.add(d.id));
+        isSelectionModeActive = true;
+    }
+    updateSelectionModeUI();
+    renderInventoryList();
+};
+
+window.directBulkToggleActive = async function (targetStatus) {
+    if (selectedDomainIds.size === 0) return;
+    const targets = (allDomains || []).filter(d => selectedDomainIds.has(d.id));
+    if (targets.length === 0) return;
+
+    const actionText = targetStatus ? 'mengaktifkan' : 'menonaktifkan';
+    const confirmed = await customConfirm({
+        title: `${targetStatus ? 'Aktifkan' : 'Nonaktifkan'} Domain Terpilih`,
+        message: `Apakah Anda yakin ingin ${actionText} ${targets.length} domain terpilih?`,
+        confirmText: `Ya, ${targetStatus ? 'Aktifkan' : 'Nonaktifkan'}`,
+        cancelText: 'Batal',
+        variant: targetStatus ? 'info' : 'warning'
+    });
+    if (!confirmed) return;
+
+    targets.forEach(d => d.is_active = targetStatus);
+    renderInventoryList();
+
+    try {
+        await Promise.all(targets.map(d =>
+            fetch(`${API_BASE}/api/domains/${d.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    domain_name: d.domain_name,
+                    ip_address: d.ip_address,
+                    is_active: targetStatus
+                })
+            })
+        ));
+        showToast(`Berhasil ${targetStatus ? 'mengaktifkan' : 'menonaktifkan'} ${targets.length} domain.`, 'success');
+        clearDirectSelection();
+    } catch (err) {
+        console.error('Error direct bulk toggling status:', err);
+        showToast('Gagal memperbarui beberapa status domain.', 'error');
+    }
+};
+
+window.directBulkLaunchScan = function (type) {
+    if (selectedDomainIds.size === 0) return;
+    const targets = (allDomains || []).filter(d => selectedDomainIds.has(d.id));
+    const targetNames = targets.map(d => d.domain_name);
+
+    if (type === 'web') {
+        window.selectedWebScans = new Set(targetNames);
+        openWebScanModal();
+    } else if (type === 'network') {
+        window.selectedNetworkScans = new Set(targetNames);
+        openNetworkScanModal();
+    }
+    clearDirectSelection();
+};
+
+window.directBulkDeleteDomains = async function () {
+    if (selectedDomainIds.size === 0) return;
+    const targets = (allDomains || []).filter(d => selectedDomainIds.has(d.id));
+    const confirmed = await customConfirm({
+        title: 'Hapus Domain Terpilih',
+        message: `Apakah Anda yakin ingin MENGHAPUS ${targets.length} domain terpilih dari inventory? Tindakan ini tidak dapat dibatalkan.`,
+        confirmText: 'Ya, Hapus Semua',
+        cancelText: 'Batal',
+        variant: 'danger'
+    });
+    if (!confirmed) return;
+
+    try {
+        await Promise.all(targets.map(d =>
+            fetch(`${API_BASE}/api/domains/${d.id}`, { method: 'DELETE' })
+        ));
+        allDomains = allDomains.filter(d => !selectedDomainIds.has(d.id));
+        showToast(`Berhasil menghapus ${targets.length} domain.`, 'success');
+        clearDirectSelection();
+    } catch (err) {
+        console.error('Error deleting domains:', err);
+        showToast('Gagal menghapus beberapa domain.', 'error');
+    }
+};
+
+let batchStatusSearchQuery = '';
+
+window.openBatchStatusModal = function (event) {
+    if (event && event.stopPropagation) {
+        event.stopPropagation();
+    }
+
+    const modal = document.getElementById('batchStatusModalOverlay');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.style.opacity = '1';
+        modal.style.visibility = 'visible';
+        modal.classList.add('active');
+    }
+
+    batchStatusSearchQuery = '';
+    const input = document.getElementById('batchStatusSearchInput');
+    if (input) input.value = '';
+
+    renderBatchStatusTargetList();
+
+    if (!allDomains || allDomains.length === 0) {
+        fetch(`${API_BASE}/api/domains`)
+            .then(res => res.json())
+            .then(data => {
+                allDomains = Array.isArray(data) ? data : (data.domains || []);
+                renderBatchStatusTargetList();
+            })
+            .catch(e => console.error("Error fetching domains for batch modal:", e));
+    }
+};
+
+window.closeBatchStatusModal = function (event) {
+    if (event && event.stopPropagation) {
+        event.stopPropagation();
+    }
+    const modal = document.getElementById('batchStatusModalOverlay');
+    if (modal) {
+        modal.classList.remove('active');
+        modal.style.opacity = '0';
+        modal.style.visibility = 'hidden';
+        modal.style.display = 'none';
+    }
+};
+
+function onBatchStatusSearch(val) {
+    batchStatusSearchQuery = val;
+    renderBatchStatusTargetList();
+    const input = document.getElementById('batchStatusSearchInput');
+    if (input) {
+        input.focus();
+        input.setSelectionRange(val.length, val.length);
+    }
+}
+
+function renderBatchStatusTargetList() {
+    const container = document.getElementById('batchStatusListContainer');
+    const countLabel = document.getElementById('batchStatusResultCount');
+    if (!container) return;
+
+    if (!allDomains || allDomains.length === 0) {
+        container.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--color-muted); font-size: 13px;">Tidak ada domain di inventory</div>';
+        if (countLabel) countLabel.textContent = '0 Domain';
+        return;
+    }
+
+    const q = batchStatusSearchQuery.trim().toLowerCase();
+    const filtered = allDomains.filter(d => {
+        const dName = (d.domain_name || '').toLowerCase();
+        const ip = (d.ip_address || '').toLowerCase();
+        return !q || dName.includes(q) || ip.includes(q);
+    });
+
+    if (countLabel) {
+        countLabel.textContent = q ? `${filtered.length} dari ${allDomains.length} domain cocok` : `Seluruh Domain Inventory (${allDomains.length})`;
+    }
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--color-muted); font-size: 13px;">Tidak ada domain/IP yang cocok dengan pencarian</div>';
+        return;
+    }
+
+    container.innerHTML = filtered.map(d => `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: 8px; background: #ffffff; border: 1px solid #e2e8f0; transition: all 0.15s;" onmouseover="this.style.borderColor='#cbd5e1'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.04)';" onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
+            <div>
+                <span style="font-size: 13px; font-weight: 600; color: var(--color-ink); display: block;">${escapeHtml(d.domain_name)}</span>
+                ${d.ip_address ? `<span style="font-size: 11px; color: var(--color-muted); font-family: monospace;">${escapeHtml(d.ip_address)}</span>` : ''}
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button type="button"
+                        onclick="toggleDomainActiveInModal(${d.id}, ${d.is_active ? 'false' : 'true'})"
+                        class="badge-toggle-btn ${d.is_active ? 'is-active' : 'is-inactive'}"
+                        style="padding: 4px 12px; font-size: 11px;">
+                    ${d.is_active ? 'ACTIVE' : 'INACTIVE'}
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function toggleDomainActiveInModal(domainId, newStatus) {
+    const domain = (allDomains || []).find(item => item.id === domainId);
+    if (!domain) return;
+
+    domain.is_active = newStatus;
+    renderBatchStatusTargetList();
+    renderInventoryList();
+
+    try {
+        await fetch(`${API_BASE}/api/domains/${domainId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                domain_name: domain.domain_name,
+                ip_address: domain.ip_address,
+                is_active: newStatus
+            })
+        });
+        showToast(
+            'Status Target',
+            `Domain ${domain.domain_name} sekarang ${newStatus ? 'ACTIVE' : 'INACTIVE'}.`,
+            newStatus ? '✅' : 'ℹ️'
+        );
+    } catch (err) {
+        console.error('Error toggling status:', err);
+        showToast('Error', 'Gagal memperbarui status domain.', '❌');
+    }
+}
+
+async function triggerBatchSetStatus(targetStatus) {
+    const q = batchStatusSearchQuery.trim().toLowerCase();
+    const filtered = (allDomains || []).filter(d => {
+        const dName = (d.domain_name || '').toLowerCase();
+        const ip = (d.ip_address || '').toLowerCase();
+        return !q || dName.includes(q) || ip.includes(q);
+    });
+
+    if (filtered.length === 0) {
+        showToast('Info', 'Tidak ada target domain yang dipilih untuk diubah.', 'ℹ️');
+        return;
+    }
+
+    const actionText = targetStatus ? 'mengaktifkan' : 'menonaktifkan';
+    const confirmed = await customConfirm({
+        title: `${targetStatus ? 'Aktifkan' : 'Nonaktifkan'} Domain Cocok Pencarian`,
+        message: `Apakah Anda yakin ingin ${actionText} ${filtered.length} domain target yang cocok dengan pencarian?`,
+        confirmText: `Ya, ${targetStatus ? 'Aktifkan' : 'Nonaktifkan'}`,
+        cancelText: 'Batal',
+        variant: targetStatus ? 'info' : 'warning'
+    });
+    if (!confirmed) return;
+
+    filtered.forEach(d => d.is_active = targetStatus);
+    renderBatchStatusTargetList();
+    renderInventoryList();
+
+    try {
+        await Promise.all(filtered.map(d => 
+            fetch(`${API_BASE}/api/domains/${d.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    domain_name: d.domain_name,
+                    ip_address: d.ip_address,
+                    is_active: targetStatus
+                })
+            })
+        ));
+        showToast(`Berhasil ${targetStatus ? 'mengaktifkan' : 'menonaktifkan'} ${filtered.length} domain.`, 'success');
+    } catch (err) {
+        console.error('Error batch setting status:', err);
+        showToast('Gagal memperbarui beberapa status domain.', 'error');
+    }
+}
+
+async function stopActiveScan(scanId) {
+    const confirmed = await customConfirm({
+        title: 'Hentikan Pemindaian',
+        message: 'Apakah Anda yakin ingin menghentikan pemindaian yang sedang berjalan ini?',
+        confirmText: 'Ya, Hentikan Scan',
+        cancelText: 'Batal',
+        variant: 'warning'
+    });
+    if (!confirmed) return;
 
     fetch(`${API_BASE}/api/scans/stop`, {
         method: 'POST',
@@ -4949,7 +6499,7 @@ function stopActiveScan(scanId) {
         .then(res => res.json())
         .then(data => {
             if (data.status === 'success') {
-                showToast('Success', data.message, '✅');
+                showToast(data.message || 'Pemindaian dihentikan.', 'success');
                 fetchActiveScans();
             } else {
                 showToast('Error', data.detail || data.message, '❌');
@@ -4963,19 +6513,20 @@ function stopActiveScan(scanId) {
 
 // (Web Scanner polling is handled inside switchView directly)
 
+function openSelectScanTypeModal() {
+    const modal = document.getElementById('selectScanTypeModalOverlay');
+    if (modal) modal.classList.add('active');
+}
+
+function closeSelectScanTypeModal() {
+    const modal = document.getElementById('selectScanTypeModalOverlay');
+    if (modal) modal.classList.remove('active');
+}
+
 function openWebScanModal() {
     document.getElementById('webScanModalOverlay').classList.add('active');
-    const select = document.getElementById('webScanTargetSelect');
+    renderWebScanTargetList();
 
-    if (!allDomains || allDomains.length === 0) {
-        select.innerHTML = '<option value="">No domains available</option>';
-        return;
-    }
-
-    select.innerHTML = '<option value="">Select a domain</option>' +
-        allDomains.filter(d => d.is_active).map(d => `<option value="${d.domain_name}">${d.domain_name}</option>`).join('');
-
-    // Setup scan type radio card interactivity
     const radios = document.querySelectorAll('input[name="webScanType"]');
     radios.forEach(radio => {
         radio.addEventListener('change', function () {
@@ -4993,44 +6544,173 @@ function openWebScanModal() {
     });
 }
 
+let webScanSearchQuery = '';
+let networkScanSearchQuery = '';
+
+async function openLastScanModal(domainName, event, lastScanId = null) {
+    if (event) event.stopPropagation();
+
+    // Pastikan allVulns sudah terisi, jika belum fetch otomatis dari API
+    if (!allVulns || allVulns.length === 0) {
+        try {
+            const resp = await fetch(`${API_BASE}/api/scan-history?limit=1000`);
+            const data = await resp.json();
+            allVulns = data.data || [];
+        } catch (err) {
+            console.error("Gagal memuat scan history:", err);
+        }
+    }
+
+    let scan = null;
+    if (lastScanId && allVulns) {
+        scan = allVulns.find(s => String(s.id) === String(lastScanId));
+    }
+    if (!scan && allVulns) {
+        scan = allVulns.find(s => {
+            const dName = s.domains?.domain_name || s.domain_name;
+            return dName && dName.toLowerCase() === domainName.toLowerCase();
+        });
+    }
+
+    if (scan) {
+        openScanModal(scan);
+    } else if (lastScanId) {
+        try {
+            const res = await fetch(`${API_BASE}/api/scan-history/${lastScanId}`);
+            const data = await res.json();
+            if (data.status === 'success' && data.data) {
+                openScanModal(data.data);
+                return;
+            }
+        } catch (e) {}
+        showToast('Info', `Laporan scan untuk ${domainName} tidak ditemukan.`, 'ℹ️');
+    } else {
+        showToast('Info', `Laporan scan untuk ${domainName} tidak ditemukan.`, 'ℹ️');
+    }
+}
+
+function updateSelectedWebTargetsCount() {
+    const checkedCount = document.querySelectorAll('.web-target-checkbox:checked').length;
+    const label = document.getElementById('webSelectedCountLabel');
+    if (label) {
+        label.textContent = `${checkedCount} domain terpilih`;
+    }
+}
+
+function renderWebScanTargetList() {
+    const container = document.getElementById('webScanTargetContainer');
+    if (!container) return;
+
+    if (!allDomains || allDomains.length === 0) {
+        container.innerHTML = '<div style="padding: 12px; color: var(--color-muted); font-size: 13px;">Tidak ada domain di inventory</div>';
+        return;
+    }
+
+    const q = webScanSearchQuery.trim().toLowerCase();
+    const filtered = allDomains.filter(d => {
+        const dName = (d.domain_name || '').toLowerCase();
+        const ip = (d.ip_address || '').toLowerCase();
+        return !q || dName.includes(q) || ip.includes(q);
+    });
+
+    container.innerHTML = `
+        <div style="margin-bottom: 10px;">
+            <div style="position: relative; margin-bottom: 8px;">
+                <input type="text" 
+                       id="webScanSearchInput"
+                       value="${escapeHtml(webScanSearchQuery)}"
+                       placeholder="Cari nama domain atau IP address..."
+                       oninput="onWebScanSearch(this.value)"
+                       style="width: 100%; padding: 8px 12px; padding-left: 32px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; outline: none; box-sizing: border-box; background: var(--color-surface); color: var(--color-ink);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 10px; top: 10px;">
+                    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+            </div>
+            <div style="padding-bottom: 6px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--primary); cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="selectAllWebTargets" onchange="toggleAllWebTargets(this)" style="accent-color: var(--primary); width: 15px; height: 15px; cursor: pointer;">
+                    <span>Pilih semua domain</span>
+                </label>
+                <span id="webSelectedCountLabel" style="font-size: 11px; color: var(--color-muted); font-weight: 500;">0 domain terpilih</span>
+            </div>
+        </div>
+        <div style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 4px;">
+            ${filtered.length === 0 ? '<div style="padding: 16px; text-align: center; color: var(--color-muted); font-size: 13px;">Tidak ada domain/IP yang cocok dengan pencarian</div>' : 
+            filtered.map(d => `
+                <label style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 6px; background: var(--color-surface); cursor: pointer; border: 1px solid var(--color-border); transition: all 0.15s;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" name="webTargetDomain" value="${escapeHtml(d.domain_name)}" class="web-target-checkbox" onchange="updateSelectedWebTargetsCount()" style="accent-color: var(--primary); width: 15px; height: 15px; cursor: pointer;">
+                        <div>
+                            <span style="font-size: 13px; font-weight: 500; color: var(--color-ink); display: block;">${escapeHtml(d.domain_name)}</span>
+                            ${d.ip_address ? `<span style="font-size: 11px; color: var(--color-muted); font-family: monospace;">${escapeHtml(d.ip_address)}</span>` : ''}
+                        </div>
+                    </div>
+                    <span class="badge ${d.is_active ? 'badge-active' : 'badge-inactive'}" style="margin: 0; font-size: 10px; padding: 2px 6px;">
+                        ${d.is_active ? 'ACTIVE' : 'INACTIVE'}
+                    </span>
+                </label>
+            `).join('')}
+        </div>
+    `;
+    updateSelectedWebTargetsCount();
+}
+
+function onWebScanSearch(val) {
+    webScanSearchQuery = val;
+    renderWebScanTargetList();
+    const input = document.getElementById('webScanSearchInput');
+    if (input) {
+        input.focus();
+        input.setSelectionRange(val.length, val.length);
+    }
+}
+
+function toggleAllWebTargets(masterCheckbox) {
+    const checkboxes = document.querySelectorAll('.web-target-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = masterCheckbox.checked;
+    });
+    updateSelectedWebTargetsCount();
+}
+
 function submitWebScan() {
-    const select = document.getElementById('webScanTargetSelect');
-    const domain = select.value;
+    const selectedCheckboxes = document.querySelectorAll('.web-target-checkbox:checked');
+    const selectedDomains = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+    if (selectedDomains.length === 0) {
+        showToast('Error', 'Pilih minimal satu domain target dari inventory.', '❌');
+        return;
+    }
 
     const scanTypeElement = document.querySelector('input[name="webScanType"]:checked');
     const selectedScanType = scanTypeElement ? scanTypeElement.value : 'deep';
-
-    if (!domain) {
-        showToast('Error', 'Please select a domain to scan.', '❌');
-        return;
-    }
 
     const btnSubmit = document.getElementById('btnSubmitWebScan');
     btnSubmit.disabled = true;
     btnSubmit.style.opacity = '0.5';
     btnSubmit.innerHTML = `
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation: spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="8"></circle></svg>
-        Launching...
+        Launching (${selectedDomains.length} target)...
     `;
 
     fetch(`${API_BASE}/api/web-scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targets: [domain], scan_type: selectedScanType })
+        body: JSON.stringify({ targets: selectedDomains, scan_type: selectedScanType })
     })
         .then(res => res.json())
         .then(data => {
-            if (data.status === 'success') {
-                showToast('Success', data.message, '✅');
+            if (data.status === 'success' || data.status === 'ok') {
+                showToast('Success', data.message || `Pemindaian web berhasil dimulai untuk ${selectedDomains.length} domain.`, '✅');
                 document.getElementById('webScanModalOverlay').classList.remove('active');
-                fetchActiveScans();
+                if (typeof fetchActiveScans === 'function') fetchActiveScans();
             } else {
-                showToast('Error', data.detail || data.message, '❌');
+                showToast('Error', data.detail || data.message || 'Gagal memulai pemindaian web.', '❌');
             }
         })
         .catch(err => {
             console.error('Error starting web scan:', err);
-            showToast('Error', 'An error occurred while starting the web scan.', '❌');
+            showToast('Error', 'Koneksi terputus dari server', '❌');
         })
         .finally(() => {
             btnSubmit.disabled = false;
@@ -5046,17 +6726,8 @@ function submitWebScan() {
 
 function openNetworkScanModal() {
     document.getElementById('networkScanModalOverlay').classList.add('active');
-    const select = document.getElementById('networkScanTargetSelect');
+    renderNetworkScanTargetList();
 
-    if (!allDomains || allDomains.length === 0) {
-        select.innerHTML = '<option value="">No domains available</option>';
-        return;
-    }
-
-    select.innerHTML = '<option value="">Select a domain</option>' +
-        allDomains.filter(d => d.is_active).map(d => `<option value="${d.domain_name}">${d.domain_name}</option>`).join('');
-
-    // Setup interaktivitas klik pada kotak radio button (Deep vs Light)
     const radios = document.querySelectorAll('input[name="networkScanType"]');
     radios.forEach(radio => {
         radio.addEventListener('change', function () {
@@ -5074,46 +6745,131 @@ function openNetworkScanModal() {
     });
 }
 
-function submitNetworkScan() {
-    const select = document.getElementById('networkScanTargetSelect');
-    const domain = select.value;
+function updateSelectedNetworkTargetsCount() {
+    const checkedCount = document.querySelectorAll('.network-target-checkbox:checked').length;
+    const label = document.getElementById('networkSelectedCountLabel');
+    if (label) {
+        label.textContent = `${checkedCount} domain terpilih`;
+    }
+}
 
-    // ✅ TAMBAHKAN KODE INI: Tangkap radio button yang sedang tercentang
-    const scanTypeElement = document.querySelector('input[name="networkScanType"]:checked');
-    const selectedScanType = scanTypeElement ? scanTypeElement.value : 'deep';
+function renderNetworkScanTargetList() {
+    const container = document.getElementById('networkScanTargetContainer');
+    if (!container) return;
 
-    if (!domain) {
-        showToast('Error', 'Please select a target to scan.', '❌');
+    if (!allDomains || allDomains.length === 0) {
+        container.innerHTML = '<div style="padding: 12px; color: var(--color-muted); font-size: 13px;">Tidak ada domain di inventory</div>';
         return;
     }
+
+    const q = networkScanSearchQuery.trim().toLowerCase();
+    const filtered = allDomains.filter(d => {
+        const dName = (d.domain_name || '').toLowerCase();
+        const ip = (d.ip_address || '').toLowerCase();
+        return !q || dName.includes(q) || ip.includes(q);
+    });
+
+    container.innerHTML = `
+        <div style="margin-bottom: 10px;">
+            <div style="position: relative; margin-bottom: 8px;">
+                <input type="text" 
+                       id="networkScanSearchInput"
+                       value="${escapeHtml(networkScanSearchQuery)}"
+                       placeholder="Cari nama domain atau IP address..."
+                       oninput="onNetworkScanSearch(this.value)"
+                       style="width: 100%; padding: 8px 12px; padding-left: 32px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; outline: none; box-sizing: border-box; background: var(--color-surface); color: var(--color-ink);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 10px; top: 10px;">
+                    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+            </div>
+            <div style="padding-bottom: 6px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--primary); cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="selectAllNetworkTargets" onchange="toggleAllNetworkTargets(this)" style="accent-color: var(--primary); width: 15px; height: 15px; cursor: pointer;">
+                    <span>Pilih semua domain</span>
+                </label>
+                <span id="networkSelectedCountLabel" style="font-size: 11px; color: var(--color-muted); font-weight: 500;">0 domain terpilih</span>
+            </div>
+        </div>
+        <div style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 4px;">
+            ${filtered.length === 0 ? '<div style="padding: 16px; text-align: center; color: var(--color-muted); font-size: 13px;">Tidak ada domain/IP yang cocok dengan pencarian</div>' : 
+            filtered.map(d => `
+                <label style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 6px; background: var(--color-surface); cursor: pointer; border: 1px solid var(--color-border); transition: all 0.15s;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" name="networkTargetDomain" value="${escapeHtml(d.domain_name)}" class="network-target-checkbox" onchange="updateSelectedNetworkTargetsCount()" style="accent-color: var(--primary); width: 15px; height: 15px; cursor: pointer;">
+                        <div>
+                            <span style="font-size: 13px; font-weight: 500; color: var(--color-ink); display: block;">${escapeHtml(d.domain_name)}</span>
+                            ${d.ip_address ? `<span style="font-size: 11px; color: var(--color-muted); font-family: monospace;">${escapeHtml(d.ip_address)}</span>` : ''}
+                        </div>
+                    </div>
+                    <span class="badge ${d.is_active ? 'badge-active' : 'badge-inactive'}" style="margin: 0; font-size: 10px; padding: 2px 6px;">
+                        ${d.is_active ? 'ACTIVE' : 'INACTIVE'}
+                    </span>
+                </label>
+            `).join('')}
+        </div>
+    `;
+    updateSelectedNetworkTargetsCount();
+}
+
+function onNetworkScanSearch(val) {
+    networkScanSearchQuery = val;
+    renderNetworkScanTargetList();
+    const input = document.getElementById('networkScanSearchInput');
+    if (input) {
+        input.focus();
+        input.setSelectionRange(val.length, val.length);
+    }
+}
+
+function toggleAllNetworkTargets(masterCheckbox) {
+    const checkboxes = document.querySelectorAll('.network-target-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = masterCheckbox.checked;
+    });
+    updateSelectedNetworkTargetsCount();
+}
+
+function submitNetworkScan() {
+    const selectedCheckboxes = document.querySelectorAll('.network-target-checkbox:checked');
+    const selectedDomains = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+    if (selectedDomains.length === 0) {
+        showToast('Error', 'Pilih minimal satu domain target dari inventory.', '❌');
+        return;
+    }
+
+    const scanTypeElement = document.querySelector('input[name="networkScanType"]:checked');
+    const selectedScanType = scanTypeElement ? scanTypeElement.value : 'deep';
 
     const btnSubmit = document.getElementById('btnSubmitNetworkScan');
     btnSubmit.disabled = true;
     btnSubmit.style.opacity = '0.5';
-    btnSubmit.innerHTML = `...`; // (biarkan kode animasi loading tetap sama)
+    btnSubmit.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation: spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="8"></circle></svg>
+        Launching (${selectedDomains.length} target)...
+    `;
 
     fetch(`${API_BASE}/api/network-scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // ✅ UBAH BODY INI: Sisipkan scan_type agar dikirim ke server
         body: JSON.stringify({
-            targets: [domain],
+            targets: selectedDomains,
             scan_type: selectedScanType
         })
     })
         .then(res => res.json())
         .then(data => {
-            if (data.status === 'success') {
-                showToast('Success', data.message, '✅');
+            if (data.status === 'success' || data.status === 'ok') {
+                showToast('Success', data.message || `Pemindaian network berhasil dimulai untuk ${selectedDomains.length} domain.`, '✅');
                 document.getElementById('networkScanModalOverlay').classList.remove('active');
-                refreshData(true); // Segarkan tabel di belakang layar
+                if (typeof refreshData === 'function') refreshData(true);
             } else {
-                showToast('Error', data.detail || data.message, '❌');
+                showToast('Error', data.detail || data.message || 'Gagal memulai pemindaian network.', '❌');
             }
         })
         .catch(err => {
             console.error('Error starting network scan:', err);
-            showToast('Error', 'An error occurred while starting the network scan.', '❌');
+            showToast('Error', 'Koneksi terputus dari server', '❌');
         })
         .finally(() => {
             btnSubmit.disabled = false;
@@ -6186,37 +7942,53 @@ window.closePendingDomainsModal = function() {
 };
 
 window.triggerApproveDomain = async function(domainId, domainName) {
-    if (!confirm(`Apakah Anda yakin ingin menyetujui domain '${domainName}'?`)) return;
+    const confirmed = await customConfirm({
+        title: 'Setujui Permintaan Domain',
+        message: `Apakah Anda yakin ingin menyetujui domain '${domainName}'? Domain akan langsung ditambahkan ke inventory aktif.`,
+        confirmText: 'Ya, Setujui',
+        cancelText: 'Batal',
+        variant: 'info'
+    });
+    if (!confirmed) return;
+
     try {
         const resp = await fetch(`${API_BASE}/api/domains/${domainId}/approve`, { method: 'POST' });
         const data = await resp.json();
         if (resp.status === 200) {
-            showToast("Approval Berhasil", `Domain '${domainName}' telah disetujui dan aktif.`, "✅");
+            showToast(`Domain '${domainName}' telah disetujui dan aktif.`, "success");
             closePendingDomainsModal();
             loadDomains();
             if (typeof fetchNotifications === 'function') fetchNotifications();
         } else {
-            showToast("Approval Gagal", data.detail || "Gagal menyetujui domain.", "❌");
+            showToast(data.detail || "Gagal menyetujui domain.", "error");
         }
     } catch (err) {
-        showToast("Error", "Gagal menghubungi server.", "❌");
+        showToast("Gagal menghubungi server.", "error");
     }
 };
 
 window.triggerRejectDomain = async function(domainId, domainName) {
-    if (!confirm(`Apakah Anda yakin ingin menolak dan menghapus permintaan domain '${domainName}'?`)) return;
+    const confirmed = await customConfirm({
+        title: 'Tolak Permintaan Domain',
+        message: `Apakah Anda yakin ingin menolak dan menghapus permintaan domain '${domainName}'?`,
+        confirmText: 'Ya, Tolak Permintaan',
+        cancelText: 'Batal',
+        variant: 'danger'
+    });
+    if (!confirmed) return;
+
     try {
         const resp = await fetch(`${API_BASE}/api/domains/${domainId}/reject`, { method: 'POST' });
         const data = await resp.json();
         if (resp.status === 200) {
-            showToast("Permintaan Ditolak", `Permintaan domain '${domainName}' telah ditolak.`, "ℹ️");
+            showToast(`Permintaan domain '${domainName}' telah ditolak.`, "info");
             closePendingDomainsModal();
             loadDomains();
             if (typeof fetchNotifications === 'function') fetchNotifications();
         } else {
-            showToast("Penolakan Gagal", data.detail || "Gagal menolak domain.", "❌");
+            showToast(data.detail || "Gagal menolak domain.", "error");
         }
     } catch (err) {
-        showToast("Error", "Gagal menghubungi server.", "❌");
+        showToast("Gagal menghubungi server.", "error");
     }
 };
