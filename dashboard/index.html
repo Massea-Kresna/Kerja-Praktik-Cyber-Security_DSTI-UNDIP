@@ -11,7 +11,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=100">
+    <link rel="stylesheet" href="styles.css?v=101">
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <!-- Chart.js -->
@@ -652,42 +652,54 @@
                 <div id="view-inventory" class="view-container hidden">
                     <div class="view-header"
                         style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                        <h1>Domain Inventory</h1>
+                        <div>
+                            <h1 style="margin-bottom: 4px;">Domain Inventory</h1>
+                            <p style="color: #64748b; margin: 0; font-size: 13px;">Manage domain assets. Click any domain row to toggle its target status.</p>
+                        </div>
+                        <button class="btn btn-primary" onclick="openWebScanModal()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                            </svg>
+                            New Scan
+                        </button>
                     </div>
 
                     <div class="card table-card">
-                        <!-- Baris Tombol Aksi Pentest -->
+                        <!-- Baris Tombol Aksi Pentest & Filter Bar -->
                         <div
-                            style="padding: 16px 24px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; background: #fafafa;">
+                            style="padding: 16px 24px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; background: #fafafa; flex-wrap: wrap; gap: 12px;">
                             
-                            <!-- KIRI: Selected Count dan Search -->
-                            <div style="display: flex; align-items: center; gap: 16px;">
+                            <!-- KIRI: Count, Search, & Filters -->
+                            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex-grow: 1;">
                                 <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary); min-width: 120px;"
-                                    id="selectedDomainCount">0 domain dipilih</span>
+                                    id="selectedDomainCount">Total 0 domain</span>
                                 
-                                <div class="topbar-search" style="display: flex; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; width: 320px; transition: border-color 0.2s;">
+                                <div class="topbar-search" style="display: flex; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 12px; width: 220px; transition: border-color 0.2s;">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="min-width: 16px;">
                                         <circle cx="11" cy="11" r="8"></circle>
                                         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                                     </svg>
-                                    <input type="text" id="domainSearchInput" placeholder="Search domains or IP..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 14px; color: var(--text-primary); margin-left: 10px; font-family: inherit;">
+                                    <input type="text" id="domainSearchInput" placeholder="Search domains or IP..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 13px; color: var(--text-primary); margin-left: 8px; font-family: inherit;">
                                 </div>
+
+                                <select id="domainStatusFilter" onchange="domainCurrentPage = 1; renderInventoryList();" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--color-border); font-size: 13px; outline: none; background: white; color: var(--text-primary); cursor: pointer; font-family: inherit;">
+                                    <option value="ALL">All Target Status</option>
+                                    <option value="ACTIVE">Active Targets Only</option>
+                                    <option value="INACTIVE">Inactive Targets Only</option>
+                                </select>
+
+                                <select id="domainLastScanFilter" onchange="domainCurrentPage = 1; renderInventoryList();" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--color-border); font-size: 13px; outline: none; background: white; color: var(--text-primary); cursor: pointer; font-family: inherit;">
+                                    <option value="ALL">All Scan Status</option>
+                                    <option value="SCANNED">Already Scanned</option>
+                                    <option value="NOT_SCANNED">Belum Scan</option>
+                                    <option value="HIGH">Risk: HIGH / CRITICAL</option>
+                                    <option value="MEDIUM">Risk: MEDIUM</option>
+                                    <option value="SAFE">Risk: SAFE / LOW</option>
+                                </select>
                             </div>
 
                             <!-- KANAN: Aksi -->
                             <div style="display: flex; gap: 12px; align-items: center;">
-                                <button id="saveTargetsBtn" class="btn btn-outline"
-                                    style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z">
-                                        </path>
-                                        <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                                        <polyline points="7 3 7 8 15 8"></polyline>
-                                    </svg>
-                                    Simpan Target
-                                </button>
-                                
                                 <button id="addDomainBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; background: white; cursor: pointer;">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                     Add Domain
@@ -725,19 +737,17 @@
 
                         <table class="modern-table">
                             <thead>
-                                <tr>
-                                    <th style="width: 40px; text-align: center;"><input type="checkbox"
-                                            id="selectAllDomains" style="cursor: pointer;"></th>
-                                    <th>Domain</th>
+                                <tr id="inventoryTableHeaders">
+                                    <th class="sortable" onclick="sortDomainInventory('domain')" style="cursor: pointer;">Domain <span class="sort-icon"></span></th>
                                     <th>IP Address</th>
-                                    <th>Status</th>
-                                    <th>Last Scan</th>
+                                    <th class="sortable" onclick="sortDomainInventory('status')" style="cursor: pointer;">Status <span class="sort-icon"></span></th>
+                                    <th class="sortable" onclick="sortDomainInventory('last_scan')" style="cursor: pointer;">Last Scan <span class="sort-icon">↓</span></th>
                                     <th style="width: 80px; text-align: center;">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="inventoryTableBody">
                                 <tr>
-                                    <td colspan="6" class="empty-state">Loading domains...</td>
+                                    <td colspan="5" class="empty-state">Loading domains...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -806,9 +816,6 @@
                             <table class="modern-table" style="margin: 0; width: 100%; table-layout: fixed;">
                                 <thead>
                                     <tr>
-                                        <th style="width: 48px; text-align: center; padding: 12px 16px;">
-                                            <input type="checkbox" id="selectAllWebScans" onchange="window.toggleAllWebScans(this)" style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--primary);">
-                                        </th>
                                         <th id="thWebScansCount" style="width: 15%; text-align: left; padding: 12px 16px; font-size: 12px;">SCANS</th>
                                         <th style="width: 10%; text-align: left; padding: 12px 16px; font-size: 12px;">STATUS</th>
                                         <th style="width: 25%; text-align: left; padding: 12px 16px; font-size: 12px;">TARGET</th>
@@ -818,7 +825,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="webScannerTableBody">
-                                    <tr><td colspan="7" class="empty-state" style="padding: 24px; text-align: center;">Loading...</td></tr>
+                                    <tr><td colspan="6" class="empty-state" style="padding: 24px; text-align: center;">Loading...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -859,9 +866,6 @@
                             <table class="modern-table" style="margin: 0; width: 100%; table-layout: fixed;">
                                 <thead>
                                     <tr>
-                                        <th style="width: 48px; text-align: center; padding: 12px 16px;">
-                                            <input type="checkbox" id="selectAllNetworkScans" onchange="window.toggleAllNetworkScans(this)" style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--primary);">
-                                        </th>
                                         <th id="thNetworkScansCount" style="width: 15%; text-align: left; padding: 12px 16px; font-size: 12px;">SCANS</th>
                                         <th style="width: 10%; text-align: left; padding: 12px 16px; font-size: 12px;">STATUS</th>
                                         <th style="width: 25%; text-align: left; padding: 12px 16px; font-size: 12px;">TARGET</th>
@@ -871,7 +875,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="networkScansTableBody">
-                                    <tr><td colspan="7" class="empty-state" style="padding: 24px; text-align: center;">Loading...</td></tr>
+                                    <tr><td colspan="6" class="empty-state" style="padding: 24px; text-align: center;">Loading...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1641,7 +1645,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=100"></script>
+    <script src="app.js?v=101"></script>
 </body>
 
 </html>

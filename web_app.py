@@ -1059,12 +1059,29 @@ def update_domain(domain_id: int, payload: DomainUpdate, current_user = Depends(
     if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
     try:
-        if payload.domain_name is not None:
+        conn = db_manager.get_db_connection()
+        if not conn:
+            raise HTTPException(status_code=503, detail="Database connection failed")
+        try:
+            with conn.cursor(cursor_factory=db_manager.RealDictCursor) as cur:
+                cur.execute("SELECT * FROM domains WHERE id = %s", (domain_id,))
+                current_domain = cur.fetchone()
+        finally:
+            conn.close()
+
+        if not current_domain:
+            raise HTTPException(status_code=404, detail="Domain tidak ditemukan")
+
+        dom_name = payload.domain_name if payload.domain_name is not None else current_domain["domain_name"]
+        ip_addr = payload.ip_address if payload.ip_address is not None else current_domain.get("ip_address", "")
+        is_act = payload.is_active if payload.is_active is not None else current_domain.get("is_active", True)
+
+        if payload.domain_name is not None and payload.domain_name != current_domain["domain_name"]:
             existing = db_manager.get_domain_by_name(payload.domain_name)
             if existing and str(existing["id"]) != str(domain_id):
                 raise HTTPException(status_code=400, detail="Nama domain sudah digunakan")
                 
-        updated = db_manager.update_domain(domain_id, payload.domain_name, payload.ip_address, payload.is_active)
+        updated = db_manager.update_domain(domain_id, dom_name, ip_addr, is_act)
         if not updated:
             raise HTTPException(status_code=404, detail="Domain tidak ditemukan")
         return {"status": "ok", "message": "Domain berhasil diperbarui", "data": updated}

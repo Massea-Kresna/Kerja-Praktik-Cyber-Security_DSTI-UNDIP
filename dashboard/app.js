@@ -1596,9 +1596,6 @@ function renderNetworkScans() {
             // STRUKTUR HTML LIVE ROW YANG SUDAH DIRAPIKAN
             return `
                 <tr style="cursor: default; transition: background 0.2s;">
-                    <td style="text-align: center; padding: 16px;" onclick="event.stopPropagation();">
-                        <input type="checkbox" value="${uniqueScanId}" ${isChecked} onchange="window.toggleNetworkCheckbox(event, this.value)" onclick="event.stopPropagation();" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;">
-                    </td>
                     <td style="padding: 16px; min-width: 140px;">
                         <div style="display:flex; align-items:center; gap:8px; color: #2563eb; font-weight: 500; font-size: 14px;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
@@ -1659,9 +1656,6 @@ function renderNetworkScans() {
             // STRUKTUR HTML DATABASE ROW YANG SUDAH DIRAPIKAN
             return `
                <tr onclick="openScanModalIndex(${actualIndex})" style="cursor: pointer; transition: background 0.2s;">
-                    <td style="text-align: center; padding: 16px;" onclick="event.stopPropagation();">
-                        <input type="checkbox" value="${uniqueScanId}" ${isChecked} onchange="window.toggleNetworkCheckbox(event, this.value)" onclick="event.stopPropagation();" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;">
-                    </td>
                     <td style="padding: 16px; min-width: 140px;">
                         <div style="display:flex; align-items:center; gap:8px; color: #64748b; font-weight: 500; font-size: 14px;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
@@ -2118,13 +2112,95 @@ async function loadDomains(preservePage = false) {
 let currentDomainPage = 1;
 const DOMAINS_PER_PAGE = 20;
 
+async function toggleDomainActive(domainId, event) {
+    if (event) {
+        if (event.target.closest('.icon-btn') || event.target.closest('a') || event.target.closest('button')) {
+            return;
+        }
+    }
+
+    const domain = allDomains.find(d => d.id === domainId);
+    if (!domain) return;
+
+    const newStatus = !domain.is_active;
+
+    // Optimistic UI update
+    domain.is_active = newStatus;
+    renderInventoryList();
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/domains/${domainId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                domain_name: domain.domain_name,
+                ip_address: domain.ip_address,
+                is_active: newStatus
+            })
+        });
+
+        if (resp.ok) {
+            showToast(
+                'Status Target',
+                `Domain ${domain.domain_name} sekarang ${newStatus ? 'ACTIVE' : 'INACTIVE'}.`,
+                newStatus ? '✅' : 'ℹ️'
+            );
+        } else {
+            // Revert on error
+            domain.is_active = !newStatus;
+            renderInventoryList();
+            const data = await resp.json();
+            showToast('Error', data.detail || 'Gagal mengubah status domain', '❌');
+        }
+    } catch (err) {
+        console.error('Error toggling domain status:', err);
+        domain.is_active = !newStatus;
+        renderInventoryList();
+        showToast('Error', 'Koneksi terputus dari server', '❌');
+    }
+}
+
+let domainSortCol = 'last_scan';
+let domainSortDesc = true;
+
+function sortDomainInventory(col) {
+    if (domainSortCol === col) {
+        domainSortDesc = !domainSortDesc;
+    } else {
+        domainSortCol = col;
+        domainSortDesc = (col === 'last_scan');
+    }
+    renderInventoryList();
+}
+
+function updateDomainSortIcons() {
+    const activeMapping = { 'domain': 0, 'status': 2, 'last_scan': 3 };
+    const ths = document.querySelectorAll('#inventoryTableHeaders th');
+    ths.forEach(th => {
+        const icon = th.querySelector('.sort-icon');
+        if (icon) icon.innerHTML = '';
+    });
+
+    const activeIdx = activeMapping[domainSortCol];
+    if (activeIdx !== undefined && ths[activeIdx]) {
+        const icon = ths[activeIdx].querySelector('.sort-icon');
+        if (icon) icon.innerHTML = domainSortDesc ? ' ↓' : ' ↑';
+    }
+}
+
 function renderInventoryList() {
     const tbody = document.getElementById('inventoryTableBody');
     const paginationControls = document.getElementById('domainPaginationControls');
+    const countText = document.getElementById('selectedDomainCount');
 
-    // Perbaikan Bug: Render UI Kosong dengan benar jika tidak ada data dari backend
+    if (countText) {
+        const activeCount = (allDomains || []).filter(d => d.is_active).length;
+        countText.textContent = `Total ${(allDomains || []).length} domain (${activeCount} aktif)`;
+    }
+
+    // Render UI Kosong jika tidak ada data dari backend
     if (!allDomains || allDomains.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No domains found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No domains found.</td></tr>`;
         if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
@@ -2133,10 +2209,8 @@ function renderInventoryList() {
     const rawSearchVal = document.getElementById('domainSearchInput')?.value || '';
     
     if (rawSearchVal.trim() === '') {
-        // Gunakan spread operator [...] agar tidak merusak urutan data mentah (allDomains)
         filteredDomains = [...allDomains]; 
     } else {
-        // Memisahkan kata berdasarkan spasi, tapi mengelompokkan kata di dalam tanda kutip
         const searchTerms = rawSearchVal.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
         
         filteredDomains = allDomains.filter(d => {
@@ -2144,12 +2218,10 @@ function renderInventoryList() {
             const dIp = (d.ip_address || '').toLowerCase();
             
             return searchTerms.some(term => {
-                // Jika kata diapit tanda kutip (contoh: "undip.ac.id"), gunakan Exact Match
                 if (term.startsWith('"') && term.endsWith('"') && term.length >= 2) {
                     const exactTerm = term.slice(1, -1).toLowerCase();
                     return dName === exactTerm || dIp === exactTerm;
                 } else {
-                    // Jika tidak, gunakan pencarian biasa (Partial Match)
                     const lowerTerm = term.toLowerCase();
                     return dName.includes(lowerTerm) || dIp.includes(lowerTerm);
                 }
@@ -2157,21 +2229,78 @@ function renderInventoryList() {
         });
     }
 
-    // === TAMBAHAN KODE: MENGURUTKAN DOMAIN ACTIVE KE ATAS ===
+    // Filter berdasarkan Target Status (ALL, ACTIVE, INACTIVE)
+    const statusFilterVal = document.getElementById('domainStatusFilter')?.value || 'ALL';
+    if (statusFilterVal === 'ACTIVE') {
+        filteredDomains = filteredDomains.filter(d => d.is_active);
+    } else if (statusFilterVal === 'INACTIVE') {
+        filteredDomains = filteredDomains.filter(d => !d.is_active);
+    }
+
+    // Filter berdasarkan Last Scan Status (ALL, SCANNED, NOT_SCANNED, HIGH, MEDIUM, SAFE)
+    const scanFilterVal = document.getElementById('domainLastScanFilter')?.value || 'ALL';
+    if (scanFilterVal === 'SCANNED') {
+        filteredDomains = filteredDomains.filter(d => d.last_scan_date && d.last_scan_status);
+    } else if (scanFilterVal === 'NOT_SCANNED') {
+        filteredDomains = filteredDomains.filter(d => !d.last_scan_date || !d.last_scan_status);
+    } else if (scanFilterVal === 'HIGH') {
+        filteredDomains = filteredDomains.filter(d => d.last_scan_status && ['HIGH', 'CRITICAL'].includes(d.last_scan_status.toUpperCase()));
+    } else if (scanFilterVal === 'MEDIUM') {
+        filteredDomains = filteredDomains.filter(d => d.last_scan_status && d.last_scan_status.toUpperCase() === 'MEDIUM');
+    } else if (scanFilterVal === 'SAFE') {
+        filteredDomains = filteredDomains.filter(d => d.last_scan_status && ['SAFE', 'LOW', 'INFO'].includes(d.last_scan_status.toUpperCase()));
+    }
+
+    // Sort Domain Inventory (Domain, IP, Status, Last Scan)
     filteredDomains.sort((a, b) => {
-        // Jika status aktif/inaktifnya sama, urutkan berdasarkan abjad A-Z agar rapi
-        if (a.is_active === b.is_active) {
-            const nameA = (a.domain_name || '').toLowerCase();
-            const nameB = (b.domain_name || '').toLowerCase();
-            return nameA.localeCompare(nameB);
+        let valA, valB;
+
+        if (domainSortCol === 'domain') {
+            valA = (a.domain_name || '').toLowerCase();
+            valB = (b.domain_name || '').toLowerCase();
+        } else if (domainSortCol === 'ip') {
+            valA = (a.ip_address || '').toLowerCase();
+            valB = (b.ip_address || '').toLowerCase();
+        } else if (domainSortCol === 'status') {
+            valA = a.is_active ? 1 : 0;
+            valB = b.is_active ? 1 : 0;
+        } else if (domainSortCol === 'last_scan') {
+            const LAST_SCAN_SEV_WEIGHT = {
+                'CRITICAL': 6,
+                'HIGH': 5,
+                'MEDIUM': 4,
+                'LOW': 3,
+                'INFO': 3,
+                'SAFE': 2
+            };
+
+            const getWeight = (domain) => {
+                if (!domain.last_scan_date || !domain.last_scan_status) return 1; // Belum Scan
+                const st = String(domain.last_scan_status).toUpperCase();
+                return LAST_SCAN_SEV_WEIGHT[st] !== undefined ? LAST_SCAN_SEV_WEIGHT[st] : 2;
+            };
+
+            const weightA = getWeight(a);
+            const weightB = getWeight(b);
+
+            if (weightA !== weightB) {
+                valA = weightA;
+                valB = weightB;
+            } else {
+                valA = a.last_scan_date ? new Date(a.last_scan_date).getTime() : 0;
+                valB = b.last_scan_date ? new Date(b.last_scan_date).getTime() : 0;
+            }
         }
-        // Jika statusnya berbeda, lempar yang ACTIVE (true) ke urutan atas (-1)
-        return a.is_active ? -1 : 1;
+
+        if (valA < valB) return domainSortDesc ? 1 : -1;
+        if (valA > valB) return domainSortDesc ? -1 : 1;
+        return (a.domain_name || '').localeCompare(b.domain_name || '');
     });
-    // ==========================================================
+
+    updateDomainSortIcons();
 
     if (filteredDomains.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No domains match your search.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No domains match your search.</td></tr>`;
         if (paginationControls) paginationControls.style.display = 'none';
         return;
     }
@@ -2187,12 +2316,9 @@ function renderInventoryList() {
     const endIdx = Math.min(startIdx + domainRowsPerPage, totalItems);
     const paginatedDomains = filteredDomains.slice(startIdx, endIdx);
 
-    // Cetak Tabel dengan pengecekan state "selectedDomains"
+    // Cetak Tabel tanpa checkbox, klik baris untuk toggle target status
     tbody.innerHTML = paginatedDomains.map(d => {
-        // Cek apakah domain ini ada di memori yang tersimpan
-        const isChecked = selectedDomains.has(d.domain_name) ? 'checked' : '';
-        
-        let lastScanCell = `<span class="badge badge-unscanned">BELUM SCAN</span>`;
+        let lastScanCell = `<span class="badge badge-inactive">BELUM SCAN</span>`;
         if (d.last_scan_date && d.last_scan_status) {
             const sevClass = getSeverityClass(d.last_scan_status);
             const formattedDate = formatDate(d.last_scan_date);
@@ -2210,11 +2336,11 @@ function renderInventoryList() {
         let statusBadge = `<span class="badge ${d.is_active ? 'badge-active' : 'badge-inactive'}">${d.is_active ? 'ACTIVE' : 'INACTIVE'}</span>`;
         let actionButtons = `
             <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
-                <button class="icon-btn action-edit" onclick='openEditDomainModal(${JSON.stringify(d).replace(/'/g, "&#39;")})' title="Edit">
+                <button class="icon-btn action-edit" onclick='openEditDomainModal(${JSON.stringify(d).replace(/'/g, "&#39;")}); event.stopPropagation();' title="Edit">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
                 </button>
-                <button class="icon-btn action-delete" onclick="deleteDomain(${d.id})" title="Hapus">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                <button class="icon-btn action-delete" onclick="deleteDomain(${d.id}); event.stopPropagation();" title="Hapus">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2 2v2"></path></svg>
                 </button>
             </div>
         `;
@@ -2224,8 +2350,8 @@ function renderInventoryList() {
             if (currentUser && currentUser.role === 'superadmin') {
                 actionButtons = `
                     <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
-                        <button class="btn-approve-domain" onclick="triggerApproveDomain(${d.id}, '${escapeHtml(d.domain_name)}')" title="Setujui Domain">Setujui</button>
-                        <button class="btn-reject-domain" onclick="triggerRejectDomain(${d.id}, '${escapeHtml(d.domain_name)}')" title="Tolak Domain">Tolak</button>
+                        <button class="btn-approve-domain" onclick="triggerApproveDomain(${d.id}, '${escapeHtml(d.domain_name)}'); event.stopPropagation();" title="Setujui Domain">Setujui</button>
+                        <button class="btn-reject-domain" onclick="triggerRejectDomain(${d.id}, '${escapeHtml(d.domain_name)}'); event.stopPropagation();" title="Tolak Domain">Tolak</button>
                     </div>
                 `;
             } else {
@@ -2234,12 +2360,9 @@ function renderInventoryList() {
         }
 
         return `
-        <tr>
-            <td style="text-align: center;">
-                <input type="checkbox" class="domain-checkbox" value="${escapeHtml(d.domain_name)}" ${isChecked} style="cursor: pointer;">
-            </td>
+        <tr onclick="toggleDomainActive(${d.id}, event)" title="Klik untuk mengaktifkan/menonaktifkan status target" style="cursor: pointer;">
             <td style="font-weight:500; color:var(--primary)">
-                <a href="http://${escapeHtml(d.domain_name)}" target="_blank" style="text-decoration: none; color: inherit;">${escapeHtml(d.domain_name)}</a>
+                <a href="http://${escapeHtml(d.domain_name)}" target="_blank" onclick="event.stopPropagation()" style="text-decoration: none; color: inherit;">${escapeHtml(d.domain_name)}</a>
             </td>
             <td style="font-family:var(--font-mono); color:var(--text-secondary)">${escapeHtml(d.ip_address || '-')}</td>
             <td>${statusBadge}</td>
@@ -2270,139 +2393,10 @@ function renderInventoryList() {
             nextBtn.style.cursor = (domainCurrentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer';
         }
     }
-
-    if (typeof updateCheckboxLogic === 'function') {
-        updateCheckboxLogic();
-    }
 }
 
-function updateCheckboxLogic() {
-    const checkboxes = document.querySelectorAll('.domain-checkbox');
-    const selectAll = document.getElementById('selectAllDomains');
-
-    // 1. Re-bind listeners ke setiap checkbox baris
-    checkboxes.forEach(cb => {
-        cb.addEventListener('change', (e) => {
-            if (e.target.checked) {
-                // Cegah jika sudah 5 domain
-                if (selectedDomains.size >= 5) {
-                    e.target.checked = false; // Batalkan centangan otomatis
-                    showToast('Batas Maksimal', 'Anda hanya dapat memilih maksimal 5 domain sekaligus.', '⚠️');
-                    refreshCheckboxUI();
-                    return;
-                }
-                selectedDomains.add(e.target.value);
-            } else {
-                selectedDomains.delete(e.target.value);
-            }
-            refreshCheckboxUI();
-        });
-    });
-
-    // 2. Logika Select All yang disesuaikan dengan limit 5
-    if (selectAll) {
-        selectAll.onclick = (e) => {
-            const isChecked = e.target.checked;
-
-            if (isChecked) {
-                let addedCount = 0;
-                checkboxes.forEach(cb => {
-                    // Hanya centang jika belum dicentang DAN keranjang belum penuh (limit 5)
-                    if (!cb.checked && selectedDomains.size < 5) {
-                        cb.checked = true;
-                        selectedDomains.add(cb.value);
-                        addedCount++;
-                    }
-                });
-
-                // Beri tahu pengguna jika terpotong oleh limit
-                if (selectedDomains.size >= 5 && addedCount > 0) {
-                    showToast('Batas Tercapai', 'Hanya dipilih sampai batas maksimal 5 domain.', '⚠️');
-                }
-            } else {
-                // Jika Select All dihapus, buang centang dari semua domain di halaman ini
-                checkboxes.forEach(cb => {
-                    cb.checked = false;
-                    selectedDomains.delete(cb.value);
-                });
-            }
-            refreshCheckboxUI();
-        };
-    }
-
-    // Perbarui teks dan tombol UI pertama kali tabel dimuat
-    refreshCheckboxUI();
-}
-
-function refreshCheckboxUI() {
-    const countText = document.getElementById('selectedDomainCount');
-    const runBtn = document.getElementById('runScanBtn');
-    const checkboxes = document.querySelectorAll('.domain-checkbox');
-    const selectAll = document.getElementById('selectAllDomains');
-
-    const count = selectedDomains.size;
-
-    // Update teks indikator
-    if (countText) {
-        countText.textContent = `${count} dari maksimal 5 domain dipilih`;
-    }
-
-    // Update tombol "Scan Sekarang"
-    if (runBtn) {
-        if (count > 0) {
-            runBtn.disabled = false;
-            runBtn.style.opacity = '1';
-            runBtn.style.cursor = 'pointer';
-        } else {
-            runBtn.disabled = true;
-            runBtn.style.opacity = '0.5';
-            runBtn.style.cursor = 'not-allowed';
-        }
-    }
-
-    const runNetworkScanBtn = document.getElementById('runNetworkScanBtn');
-    if (runNetworkScanBtn) {
-        if (count > 0) {
-            runNetworkScanBtn.disabled = false;
-            runNetworkScanBtn.style.opacity = '1';
-            runNetworkScanBtn.style.cursor = 'pointer';
-        } else {
-            runNetworkScanBtn.disabled = true;
-            runNetworkScanBtn.style.opacity = '0.5';
-            runNetworkScanBtn.style.cursor = 'not-allowed';
-        }
-    }
-
-    // UX Enhancement: Kunci sisa checkbox jika sudah mencapai batas 5
-    checkboxes.forEach(cb => {
-        if (!cb.checked && count >= 5) {
-            cb.disabled = true;
-            cb.style.opacity = '0.4';
-            cb.style.cursor = 'not-allowed';
-        } else {
-            cb.disabled = false;
-            cb.style.opacity = '1';
-            cb.style.cursor = 'pointer';
-        }
-    });
-
-    // Sesuaikan status visual kotak centang "Select All"
-    if (selectAll) {
-        const allDisplayedChecked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
-        selectAll.checked = allDisplayedChecked;
-
-        // Matikan Select All jika keranjang sudah penuh dari halaman lain
-        if (!selectAll.checked && count >= 5) {
-            selectAll.disabled = true;
-            selectAll.style.opacity = '0.4';
-            selectAll.style.cursor = 'not-allowed';
-        } else {
-            selectAll.disabled = false;
-            selectAll.style.opacity = '1';
-            selectAll.style.cursor = 'pointer';
-        }
-    }
-}
+function updateCheckboxLogic() {}
+function refreshCheckboxUI() {}
 
 // Tabs Logic
 function setupTabs() {
@@ -4782,9 +4776,6 @@ function renderWebScannerTable() {
 
             return `
                 <tr style="cursor: default; transition: background 0.2s;">
-                    <td style="text-align: center; padding: 16px;" onclick="event.stopPropagation();">
-                        <input type="checkbox" value="${uniqueScanId}" ${isChecked} onchange="window.toggleWebCheckbox(event, this.value)" onclick="event.stopPropagation();" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;">
-                    </td>
                     <td style="padding: 16px; min-width: 140px;">
                         <div style="display:flex; align-items:center; gap:8px; color: #2563eb; font-weight: 500; font-size: 14px;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
@@ -4844,9 +4835,6 @@ function renderWebScannerTable() {
 
             return `
                 <tr onclick="openScanModalIndex(${actualIndex})" style="cursor: pointer; transition: background 0.2s;">
-                    <td style="text-align: center; padding: 16px;" onclick="event.stopPropagation();">
-                        <input type="checkbox" value="${uniqueScanId}" ${isChecked} onchange="window.toggleWebCheckbox(event, this.value)" onclick="event.stopPropagation();" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;">
-                    </td>
                     <td style="padding: 16px; min-width: 140px;">
                         <div style="display:flex; align-items:center; gap:8px; color: #64748b; font-weight: 500; font-size: 14px;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
