@@ -3278,13 +3278,13 @@ function renderInventoryList() {
                      onmouseout="if (!isSelectionModeActive) { this.style.color='var(--text-secondary)'; this.style.background='transparent'; }">
                    <span>${escapeHtml(d.ip_address)}</span>
                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.5;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-               </span>`
+                </span>`
             : `<span style="font-family:var(--font-mono); color:var(--text-secondary);">-</span>`;
 
         const actionTdHtml = isSelectionModeActive ? '' : `<td style="text-align: center;">${actionButtons}</td>`;
 
         return `
-        <tr style="${rowStyle}" onclick="handleRowClick(${d.id}, event)">
+        <tr class="${isSelected ? 'selected-row' : ''}" style="${rowStyle}" onclick="handleRowClick(${d.id}, event)">
             <td style="font-weight:500; color:var(--primary)">
                 <a href="http://${escapeHtml(d.domain_name)}" target="_blank" onclick="if (isSelectionModeActive) { event.preventDefault(); event.stopPropagation(); handleRowClick(${d.id}, event); } else { event.stopPropagation(); }" style="text-decoration: none; color: inherit;">${escapeHtml(d.domain_name)}</a>
             </td>
@@ -6389,7 +6389,7 @@ function renderBatchStatusTargetList() {
     }
 
     container.innerHTML = filtered.map(d => `
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: 8px; background: #ffffff; border: 1px solid #e2e8f0; transition: all 0.15s;" onmouseover="this.style.borderColor='#cbd5e1'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.04)';" onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: 8px; background: var(--color-surface); border: 1px solid var(--color-border); transition: all 0.15s;">
             <div>
                 <span style="font-size: 13px; font-weight: 600; color: var(--color-ink); display: block;">${escapeHtml(d.domain_name)}</span>
                 ${d.ip_address ? `<span style="font-size: 11px; color: var(--color-muted); font-family: monospace;">${escapeHtml(d.ip_address)}</span>` : ''}

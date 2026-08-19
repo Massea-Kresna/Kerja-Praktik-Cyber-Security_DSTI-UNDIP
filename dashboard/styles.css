@@ -3453,3 +3453,55 @@ input[type=number] {
     background-color: #0f172a !important;
     border-color: #334155 !important;
 }
+
+/* --- DARK MODE SELECTION & BADGE CONTRAST OVERRIDES --- */
+[data-theme="dark"] tr.selected-row,
+[data-theme="dark"] tr[style*="background: #eff6ff"],
+[data-theme="dark"] tr[style*="background:#eff6ff"],
+[data-theme="dark"] tr[style*="background-color: #eff6ff"],
+[data-theme="dark"] tr[style*="background-color:#eff6ff"] {
+    background-color: #1e3a8a !important;
+    border-left: 4px solid #60a5fa !important;
+}
+
+[data-theme="dark"] tr.selected-row td,
+[data-theme="dark"] tr[style*="background: #eff6ff"] td,
+[data-theme="dark"] tr[style*="background:#eff6ff"] td,
+[data-theme="dark"] tr.selected-row td a,
+[data-theme="dark"] tr[style*="background: #eff6ff"] td a,
+[data-theme="dark"] tr[style*="background:#eff6ff"] td a,
+[data-theme="dark"] tr.selected-row td span,
+[data-theme="dark"] tr[style*="background: #eff6ff"] td span,
+[data-theme="dark"] tr[style*="background:#eff6ff"] td span,
+[data-theme="dark"] tr.selected-row td small,
+[data-theme="dark"] tr[style*="background: #eff6ff"] td small,
+[data-theme="dark"] tr[style*="background:#eff6ff"] td small {
+    color: #ffffff !important;
+}
+
+:root[data-theme="dark"] .badge-safe {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border: 1px solid #334155 !important;
+}
+
+:root[data-theme="dark"] .badge-inactive,
+:root[data-theme="dark"] .badge-unscanned,
+:root[data-theme="dark"] .badge-toggle-btn.is-inactive {
+    background: #334155 !important;
+    color: #cbd5e1 !important;
+    border: 1px solid #475569 !important;
+}
+
+:root[data-theme="dark"] .badge-toggle-btn.is-inactive:hover {
+    background: #ea580c !important;
+    color: #ffffff !important;
+    border-color: #c2410c !important;
+}
+
+:root[data-theme="dark"] .badge-active,
+:root[data-theme="dark"] .badge-toggle-btn.is-active {
+    background: #059669 !important;
+    color: #ffffff !important;
+    border: 1px solid #10b981 !important;
+}
