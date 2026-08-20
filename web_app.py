@@ -37,6 +37,59 @@ app = FastAPI(title="DSTI UNDIP Pentest Dashboard API")
 # Seeding admin secara otomatis saat file dimuat
 db_manager.seed_default_admin()
 
+async def scheduled_scan_worker():
+    """Background worker loop yang mengeksekusi scan terjadwal saat sudah masuk waktunya."""
+    print("[*] Scheduled Scan Worker started.")
+    while True:
+        try:
+            due_scans = db_manager.get_pending_scheduled_scans_due()
+            for scan in due_scans:
+                s_id = scan['id']
+                category = scan.get('scan_category', 'web')
+                scan_type = scan.get('scan_type', 'deep')
+                targets = scan.get('targets', [])
+                if isinstance(targets, str):
+                    try: targets = json.loads(targets)
+                    except: targets = []
+
+                freq = scan.get('frequency', 'once')
+                
+                print(f"[🚀 SCHEDULED EXECUTION] Menjalankan {category.upper()} Scan (ID: {s_id}) untuk {len(targets)} target!")
+
+                # Update status running
+                db_manager.mark_scheduled_scan_running(s_id)
+
+                # Trigger scan execution background task
+                if category == 'network':
+                    asyncio.create_task(run_network_scan_background(targets, scan_type))
+                else:
+                    asyncio.create_task(run_web_scan_background(targets, scan_type))
+
+                # Update schedule recurrence or complete
+                db_manager.update_scheduled_scan_after_run(s_id, freq)
+
+                # Broadcast WebSocket notification
+                await manager.broadcast_to_admins({
+                    "event": "new_notification",
+                    "notification": {
+                        "id": uuid.uuid4().hex,
+                        "title": f"Jadwal {category.upper()} Scan Dieksekusi",
+                        "message": f"Scan terjadwal untuk {len(targets)} target telah otomatis dimulai.",
+                        "type": "scan_started",
+                        "created_at": datetime.now(config.WIB).isoformat()
+                    }
+                })
+
+        except Exception as e:
+            print(f"[-] Error in scheduled_scan_worker: {e}")
+            
+        await asyncio.sleep(10)
+
+@app.on_event("startup")
+async def startup_event():
+    db_manager.ensure_scheduled_scans_table()
+    asyncio.create_task(scheduled_scan_worker())
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -1339,6 +1392,61 @@ async def schedule_scan(payload: SchedulePayload, current_user = Depends(get_cur
     finally:
         if conn:
             conn.close()
+
+class ScheduleScanRequest(BaseModel):
+    scan_category: str  # 'web' or 'network'
+    scan_type: Optional[str] = "deep"  # 'deep' or 'light'
+    targets: List[str]
+    scheduled_at: str  # ISO string
+    frequency: Optional[str] = "once"  # 'once', 'daily', 'weekly'
+
+@app.post("/api/scans/schedule")
+async def create_scan_schedule(
+    payload: ScheduleScanRequest, 
+    current_user = Depends(get_current_user)
+):
+    """Membuat jadwal scan baru (Web atau Network) untuk dieksekusi di waktu mendatang."""
+    if current_user.get("role") not in ["admin", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk melakukan aksi ini.")
+
+    if not payload.targets:
+        raise HTTPException(status_code=400, detail="Tidak ada target yang diberikan.")
+
+    res = db_manager.create_scheduled_scan(
+        scan_category=payload.scan_category,
+        scan_type=payload.scan_type,
+        targets=payload.targets,
+        scheduled_at=payload.scheduled_at,
+        frequency=payload.frequency,
+        created_by=current_user.get("username", "Admin")
+    )
+    
+    if not res:
+        raise HTTPException(status_code=500, detail="Gagal menyimpan jadwal scan ke database.")
+
+    return {
+        "status": "success", 
+        "message": f"Jadwal {payload.scan_category.upper()} Scan berhasil disimpan untuk {len(payload.targets)} target.", 
+        "data": res
+    }
+
+@app.get("/api/scans/schedules")
+async def get_scheduled_scans(current_user = Depends(get_current_user)):
+    """Mengambil daftar jadwal scan yang aktif/pending."""
+    data = db_manager.get_scheduled_scans_list()
+    return {"status": "success", "data": data}
+
+@app.delete("/api/scans/schedules/{schedule_id}")
+async def cancel_scheduled_scan(schedule_id: int, current_user = Depends(get_current_user)):
+    """Membatalkan jadwal scan."""
+    if current_user.get("role") not in ["admin", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk melakukan aksi ini.")
+
+    success = db_manager.delete_scheduled_scan(schedule_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Jadwal scan tidak ditemukan.")
+
+    return {"status": "success", "message": "Jadwal scan berhasil dibatalkan."}
 
 @app.post("/api/trigger-pentest")
 async def trigger_pentest(domain_name: str, background_tasks: BackgroundTasks, current_user = Depends(get_current_user)):

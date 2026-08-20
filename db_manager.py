@@ -1498,3 +1498,170 @@ def get_overnight_high_critical_scans(limit=20):
         return []
     finally:
         conn.close()
+
+# ==============================================================================
+# SCHEDULED SCANS MANAGEMENT (FEAT: SCAN SCHEDULING WEB & NETWORK)
+# ==============================================================================
+
+def ensure_scheduled_scans_table():
+    conn = get_db_connection()
+    if not conn: return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS public.scheduled_scans (
+                    id SERIAL PRIMARY KEY,
+                    scan_category VARCHAR(50) NOT NULL,
+                    scan_type VARCHAR(50) NOT NULL DEFAULT 'deep',
+                    targets JSONB NOT NULL,
+                    scheduled_at TIMESTAMPTZ NOT NULL,
+                    frequency VARCHAR(50) NOT NULL DEFAULT 'once',
+                    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+                    created_by VARCHAR(100),
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    last_run_at TIMESTAMPTZ
+                )
+            """)
+            conn.commit()
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"[-] Error ensure_scheduled_scans_table: {e}")
+    finally:
+        conn.close()
+
+def create_scheduled_scan(scan_category, scan_type, targets, scheduled_at, frequency='once', created_by='Admin'):
+    ensure_scheduled_scans_table()
+    conn = get_db_connection()
+    if not conn: return None
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            targets_json = json.dumps(targets) if isinstance(targets, list) else targets
+            cur.execute("""
+                INSERT INTO public.scheduled_scans (scan_category, scan_type, targets, scheduled_at, frequency, status, created_by)
+                VALUES (%s, %s, %s, %s, %s, 'pending', %s)
+                RETURNING *
+            """, (scan_category, scan_type, targets_json, scheduled_at, frequency, created_by))
+            res = cur.fetchone()
+            conn.commit()
+            if res:
+                row = dict(res)
+                if hasattr(row.get('scheduled_at'), 'isoformat'):
+                    row['scheduled_at'] = row['scheduled_at'].isoformat()
+                if hasattr(row.get('created_at'), 'isoformat'):
+                    row['created_at'] = row['created_at'].isoformat()
+                return row
+            return None
+    except Exception as e:
+        print(f"[-] Error create_scheduled_scan: {e}")
+        if conn: conn.rollback()
+        return None
+    finally:
+        conn.close()
+
+def get_scheduled_scans_list():
+    ensure_scheduled_scans_table()
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM public.scheduled_scans ORDER BY scheduled_at DESC LIMIT 100")
+            res = cur.fetchall()
+            result = []
+            for r in (res or []):
+                row = dict(r)
+                if hasattr(row.get('scheduled_at'), 'isoformat'):
+                    row['scheduled_at'] = row['scheduled_at'].isoformat()
+                if hasattr(row.get('created_at'), 'isoformat'):
+                    row['created_at'] = row['created_at'].isoformat()
+                if hasattr(row.get('last_run_at'), 'isoformat'):
+                    row['last_run_at'] = row['last_run_at'].isoformat()
+                result.append(row)
+            return result
+    except Exception as e:
+        print(f"[-] Error get_scheduled_scans_list: {e}")
+        return []
+    finally:
+        conn.close()
+
+def delete_scheduled_scan(schedule_id):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM public.scheduled_scans WHERE id = %s RETURNING id", (schedule_id,))
+            res = cur.fetchone()
+            conn.commit()
+            return bool(res)
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"[-] Error delete_scheduled_scan: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_pending_scheduled_scans_due():
+    ensure_scheduled_scans_table()
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM public.scheduled_scans 
+                WHERE status = 'pending' AND scheduled_at <= CURRENT_TIMESTAMP
+            """)
+            res = cur.fetchall()
+            result = []
+            for r in (res or []):
+                row = dict(r)
+                if hasattr(row.get('scheduled_at'), 'isoformat'):
+                    row['scheduled_at'] = row['scheduled_at'].isoformat()
+                result.append(row)
+            return result
+    except Exception as e:
+        print(f"[-] Error get_pending_scheduled_scans_due: {e}")
+        return []
+    finally:
+        conn.close()
+
+def mark_scheduled_scan_running(schedule_id):
+    conn = get_db_connection()
+    if not conn: return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE public.scheduled_scans SET status = 'running' WHERE id = %s", (schedule_id,))
+            conn.commit()
+    except Exception as e:
+        if conn: conn.rollback()
+    finally:
+        conn.close()
+
+def update_scheduled_scan_after_run(schedule_id, frequency):
+    conn = get_db_connection()
+    if not conn: return
+    now_iso = datetime.now(timezone(timedelta(hours=7))).isoformat()
+    try:
+        with conn.cursor() as cur:
+            if frequency == 'daily':
+                cur.execute("""
+                    UPDATE public.scheduled_scans 
+                    SET status = 'pending', scheduled_at = scheduled_at + INTERVAL '1 day', last_run_at = %s 
+                    WHERE id = %s
+                """, (now_iso, schedule_id))
+            elif frequency == 'weekly':
+                cur.execute("""
+                    UPDATE public.scheduled_scans 
+                    SET status = 'pending', scheduled_at = scheduled_at + INTERVAL '7 days', last_run_at = %s 
+                    WHERE id = %s
+                """, (now_iso, schedule_id))
+            else:
+                cur.execute("""
+                    UPDATE public.scheduled_scans 
+                    SET status = 'completed', last_run_at = %s 
+                    WHERE id = %s
+                """, (now_iso, schedule_id))
+            conn.commit()
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"[-] Error update_scheduled_scan_after_run: {e}")
+    finally:
+        conn.close()

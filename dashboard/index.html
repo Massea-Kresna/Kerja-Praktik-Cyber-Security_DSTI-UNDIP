@@ -11,7 +11,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=140">
+    <link rel="stylesheet" href="styles.css?v=141">
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <!-- Chart.js -->
@@ -175,11 +175,13 @@
     <div id="app" class="dashboard-layout">
         <aside class="sidebar">
             <div class="sidebar-brand">
-                <!-- Logo Full -->
-                <img src="assets/csirt-logo.png" alt="UNDIP CSIRT Logo" class="logo-full">
-                
-                <!-- Logo Small (Shield Only) -->
-                <img src="assets/csirt-logo-small.png" alt="UNDIP CSIRT Shield" class="logo-small">
+                <div class="sidebar-brand-content">
+                    <!-- Logo Full -->
+                    <img src="assets/csirt-logo.png" alt="UNDIP CSIRT Logo" class="logo-full">
+                    
+                    <!-- Logo Small (Shield Only) -->
+                    <img src="assets/csirt-logo-small.png" alt="UNDIP CSIRT Shield" class="logo-small" onclick="toggleSidebar()" title="Klik untuk membuka sidebar">
+                </div>
                 
                 <div class="sidebar-toggle-wrapper">
                     <button class="sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebar()" onmouseenter="document.getElementById('sidebarTooltip').style.opacity='1'; document.getElementById('sidebarTooltip').style.visibility='visible';" onmouseleave="document.getElementById('sidebarTooltip').style.opacity='0'; document.getElementById('sidebarTooltip').style.visibility='hidden';">
@@ -294,9 +296,14 @@
             <div class="page-canvas">
                 <div id="view-overview" class="view-container active">
                     <div class="view-header">
-                        <div>
-                            <h1>Overview</h1>
-                            <p>High-level summary of system security posture and active threats.</p>
+                        <div class="view-header-title-block">
+                            <div class="view-header-badge">
+                                <svg class="icon"><use href="#icon-grid" /></svg>
+                            </div>
+                            <div>
+                                <h1>Overview</h1>
+                                <p>High-level summary of system security posture and active threats.</p>
+                            </div>
                         </div>
                     </div>
 
@@ -621,8 +628,16 @@
 
                 <!-- VIEW: Vulnerabilities List (Automated Pentests) -->
                 <div id="view-vulnerabilities" class="view-container hidden">
-                    <div class="view-header" style="margin-bottom: 24px;">
-                        <h1 style="margin: 0;">Scan History</h1>
+                    <div class="view-header">
+                        <div class="view-header-title-block">
+                            <div class="view-header-badge">
+                                <svg class="icon"><use href="#icon-clipboard" /></svg>
+                            </div>
+                            <div>
+                                <h1>Scan History</h1>
+                                <p>Comprehensive record of all automated security scans and vulnerability assessments.</p>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="card table-card">
@@ -796,11 +811,15 @@
                 </div>
 
                 <div id="view-inventory" class="view-container hidden">
-                    <div class="view-header"
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                        <div>
-                            <h1 style="margin-bottom: 4px;">Domain Inventory</h1>
-                            <p style="color: #64748b; margin: 0; font-size: 13px;">Manage domain assets. Click any domain row to toggle its target status.</p>
+                    <div class="view-header">
+                        <div class="view-header-title-block">
+                            <div class="view-header-badge">
+                                <svg class="icon"><use href="#icon-server" /></svg>
+                            </div>
+                            <div>
+                                <h1>Domain Inventory</h1>
+                                <p>Manage target domain assets. Click any domain row to toggle its target status for automated scans.</p>
+                            </div>
                         </div>
                         <button class="btn btn-primary" onclick="openSelectScanTypeModal()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -941,10 +960,15 @@
 
                 <!-- VIEW: Website Scanner -->
                 <div id="view-web-scanner" class="view-container hidden">
-                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                        <div>
-                            <h1 style="margin-bottom: 4px;">Website Scans</h1>
-                            <p style="color: #64748b;">Showing all automated web vulnerability scans for active domains.</p>
+                    <div class="view-header">
+                        <div class="view-header-title-block">
+                            <div class="view-header-badge">
+                                <svg class="icon"><use href="#icon-globe" /></svg>
+                            </div>
+                            <div>
+                                <h1>Website Scans</h1>
+                                <p>Automated web application security scans for active target domains.</p>
+                            </div>
                         </div>
                         <button class="btn btn-primary" onclick="openWebScanModal()">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -992,10 +1016,15 @@
 
                 <!-- VIEW: Network Scanner -->
                 <div id="view-network-scanner" class="view-container hidden">
-                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                        <div>
-                            <h1 style="margin-bottom: 4px;">Network Scans</h1>
-                            <p style="color: #64748b;">Showing all automated network vulnerability scans for active domains.</p>
+                    <div class="view-header">
+                        <div class="view-header-title-block">
+                            <div class="view-header-badge">
+                                <svg class="icon"><use href="#icon-router" /></svg>
+                            </div>
+                            <div>
+                                <h1>Network Scans</h1>
+                                <p>Automated network vulnerability scans, port discovery, and service tracking for active domains.</p>
+                            </div>
                         </div>
                         <button class="btn btn-primary" onclick="openNetworkScanModal()">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1003,7 +1032,7 @@
                             </svg> New Network Scan
                         </button>
                     </div>
-                    
+
                     <div class="card" style="margin-bottom: 20px;">
                         <div class="filter-controls" style="display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center;">
                             <div class="search-box" style="display: flex; align-items: center; background: white; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; width: 100%; max-width: 300px;">
@@ -1041,8 +1070,16 @@
 
             <!-- VIEW: Admin User Management -->
             <div id="view-admin" class="view-container hidden" style="display: none;">
-                <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                    <h1>User Management</h1>
+                <div class="view-header">
+                    <div class="view-header-title-block">
+                        <div class="view-header-badge">
+                            <svg class="icon"><use href="#icon-users" /></svg>
+                        </div>
+                        <div>
+                            <h1>User Management</h1>
+                            <p>Manage user accounts, roles, access permissions, and active login sessions.</p>
+                        </div>
+                    </div>
                     <button class="auth-btn" id="openCreateUserModalBtn" style="width: auto; padding: 10px 20px; font-size: 13px; display: flex; align-items: center; gap: 8px;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -1353,12 +1390,46 @@
                         </label>
                     </div>
                 </div>
+
+                <!-- Opsi Waktu Eksekusi Scan Web -->
+                <div class="form-group" style="margin-top: 16px;">
+                    <label style="font-size: 13px; font-weight: 500; color: var(--color-ink); margin-bottom: 8px; display: block;">Waktu Eksekusi Scan</label>
+                    <div style="display: flex; gap: 12px; margin-bottom: 10px;">
+                        <label style="flex: 1; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 8px; cursor: pointer; background: var(--color-surface);">
+                            <input type="radio" name="webScanScheduleOption" value="now" checked onchange="toggleScanScheduleFields('web')" style="accent-color: var(--color-accent); width: 15px; height: 15px;">
+                            <span style="font-size: 12px; font-weight: 600; color: var(--color-ink);">⚡ Sekarang (Eksekusi Langsung)</span>
+                        </label>
+                        <label style="flex: 1; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 8px; cursor: pointer; background: var(--color-surface);">
+                            <input type="radio" name="webScanScheduleOption" value="schedule" onchange="toggleScanScheduleFields('web')" style="accent-color: var(--color-accent); width: 15px; height: 15px;">
+                            <span style="font-size: 12px; font-weight: 600; color: var(--color-ink);">📅 Jadwalkan Scan</span>
+                        </label>
+                    </div>
+
+                    <!-- Inputs Jadwal Web Scan (Hidden default) -->
+                    <div id="webScanScheduleFields" class="hidden" style="padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; background: rgba(0, 88, 189, 0.04); display: flex; flex-direction: column; gap: 10px;">
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 200px;">
+                                <label style="font-size: 11px; font-weight: 700; color: var(--color-muted); text-transform: uppercase; margin-bottom: 4px; display: block;">Tanggal & Jam Eksekusi</label>
+                                <input type="datetime-local" id="webScanScheduleTime" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--color-border); font-size: 12px; outline: none; background: var(--color-surface); color: var(--color-ink); box-sizing: border-box;">
+                            </div>
+                            <div style="flex: 1; min-width: 180px;">
+                                <label style="font-size: 11px; font-weight: 700; color: var(--color-muted); text-transform: uppercase; margin-bottom: 4px; display: block;">Frekuensi Scan</label>
+                                <select id="webScanScheduleFrequency" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--color-border); font-size: 12px; outline: none; background: var(--color-surface); color: var(--color-ink); box-sizing: border-box;">
+                                    <option value="once">Eksekusi Sekali (One-Time)</option>
+                                    <option value="daily">Setiap Hari (Daily)</option>
+                                    <option value="weekly">Setiap Minggu (Weekly)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
             <div style="padding: 16px 24px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 10px; background: var(--color-bg); border-radius: 0 0 var(--radius-lg) var(--radius-lg);">
                 <button class="btn btn-secondary" onclick="document.getElementById('webScanModalOverlay').classList.remove('active')" style="padding: 9px 20px; font-size: 13px; font-weight: 500;">Cancel</button>
                 <button class="btn btn-primary" id="btnSubmitWebScan" onclick="submitWebScan()" style="padding: 9px 20px; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                    Launch Scan
+                    <span id="btnSubmitWebScanText">Launch Scan</span>
                 </button>
             </div>
         </div>
@@ -1410,12 +1481,46 @@
                         </label>
                     </div>
                 </div>
+
+                <!-- Opsi Waktu Eksekusi Scan Network -->
+                <div class="form-group" style="margin-top: 16px;">
+                    <label style="font-size: 13px; font-weight: 500; color: var(--color-ink); margin-bottom: 8px; display: block;">Waktu Eksekusi Scan</label>
+                    <div style="display: flex; gap: 12px; margin-bottom: 10px;">
+                        <label style="flex: 1; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 8px; cursor: pointer; background: var(--color-surface);">
+                            <input type="radio" name="networkScanScheduleOption" value="now" checked onchange="toggleScanScheduleFields('network')" style="accent-color: var(--color-accent); width: 15px; height: 15px;">
+                            <span style="font-size: 12px; font-weight: 600; color: var(--color-ink);">⚡ Sekarang (Eksekusi Langsung)</span>
+                        </label>
+                        <label style="flex: 1; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 8px; cursor: pointer; background: var(--color-surface);">
+                            <input type="radio" name="networkScanScheduleOption" value="schedule" onchange="toggleScanScheduleFields('network')" style="accent-color: var(--color-accent); width: 15px; height: 15px;">
+                            <span style="font-size: 12px; font-weight: 600; color: var(--color-ink);">📅 Jadwalkan Scan</span>
+                        </label>
+                    </div>
+
+                    <!-- Inputs Jadwal Network Scan (Hidden default) -->
+                    <div id="networkScanScheduleFields" class="hidden" style="padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; background: rgba(0, 88, 189, 0.04); display: flex; flex-direction: column; gap: 10px;">
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 200px;">
+                                <label style="font-size: 11px; font-weight: 700; color: var(--color-muted); text-transform: uppercase; margin-bottom: 4px; display: block;">Tanggal & Jam Eksekusi</label>
+                                <input type="datetime-local" id="networkScanScheduleTime" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--color-border); font-size: 12px; outline: none; background: var(--color-surface); color: var(--color-ink); box-sizing: border-box;">
+                            </div>
+                            <div style="flex: 1; min-width: 180px;">
+                                <label style="font-size: 11px; font-weight: 700; color: var(--color-muted); text-transform: uppercase; margin-bottom: 4px; display: block;">Frekuensi Scan</label>
+                                <select id="networkScanScheduleFrequency" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--color-border); font-size: 12px; outline: none; background: var(--color-surface); color: var(--color-ink); box-sizing: border-box;">
+                                    <option value="once">Eksekusi Sekali (One-Time)</option>
+                                    <option value="daily">Setiap Hari (Daily)</option>
+                                    <option value="weekly">Setiap Minggu (Weekly)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
             <div style="padding: 16px 24px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 10px; background: var(--color-bg); border-radius: 0 0 var(--radius-lg) var(--radius-lg);">
                 <button class="btn btn-secondary" onclick="document.getElementById('networkScanModalOverlay').classList.remove('active')" style="padding: 9px 20px; font-size: 13px; font-weight: 500;">Cancel</button>
                 <button class="btn btn-primary" id="btnSubmitNetworkScan" onclick="submitNetworkScan()" style="padding: 9px 20px; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                    Launch Scan
+                    <span id="btnSubmitNetworkScanText">Launch Scan</span>
                 </button>
             </div>
         </div>
@@ -1948,7 +2053,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=145"></script>
+    <script src="app.js?v=146"></script>
 </body>
 
 </html>

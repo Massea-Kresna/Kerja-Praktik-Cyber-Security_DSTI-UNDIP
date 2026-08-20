@@ -6523,9 +6523,36 @@ function closeSelectScanTypeModal() {
     if (modal) modal.classList.remove('active');
 }
 
+function toggleScanScheduleFields(category) {
+    const radioNow = document.querySelector(`input[name="${category}ScanScheduleOption"][value="now"]`);
+    const isSchedule = !radioNow || !radioNow.checked;
+    const scheduleFieldsContainer = document.getElementById(`${category}ScanScheduleFields`);
+    const btnSubmitText = document.getElementById(`btnSubmit${category.charAt(0).toUpperCase() + category.slice(1)}ScanText`);
+
+    if (scheduleFieldsContainer) {
+        if (isSchedule) {
+            scheduleFieldsContainer.classList.remove('hidden');
+            const timeInput = document.getElementById(`${category}ScanScheduleTime`);
+            if (timeInput && !timeInput.value) {
+                const defaultTime = new Date(Date.now() + 3600000); // 1 hour from now
+                const localISO = new Date(defaultTime.getTime() - (defaultTime.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+                timeInput.value = localISO;
+            }
+            if (btnSubmitText) btnSubmitText.textContent = 'Simpan Jadwal Scan';
+        } else {
+            scheduleFieldsContainer.classList.add('hidden');
+            if (btnSubmitText) btnSubmitText.textContent = 'Launch Scan';
+        }
+    }
+}
+
 function openWebScanModal() {
     document.getElementById('webScanModalOverlay').classList.add('active');
     renderWebScanTargetList();
+
+    const radioNow = document.querySelector('input[name="webScanScheduleOption"][value="now"]');
+    if (radioNow) radioNow.checked = true;
+    toggleScanScheduleFields('web');
 
     const radios = document.querySelectorAll('input[name="webScanType"]');
     radios.forEach(radio => {
@@ -6685,41 +6712,89 @@ function submitWebScan() {
     const scanTypeElement = document.querySelector('input[name="webScanType"]:checked');
     const selectedScanType = scanTypeElement ? scanTypeElement.value : 'deep';
 
-    const btnSubmit = document.getElementById('btnSubmitWebScan');
-    btnSubmit.disabled = true;
-    btnSubmit.style.opacity = '0.5';
-    btnSubmit.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation: spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="8"></circle></svg>
-        Launching (${selectedDomains.length} target)...
-    `;
+    const scheduleOption = document.querySelector('input[name="webScanScheduleOption"]:checked');
+    const isSchedule = scheduleOption && scheduleOption.value === 'schedule';
 
-    fetch(`${API_BASE}/api/web-scan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targets: selectedDomains, scan_type: selectedScanType })
-    })
-        .then(res => res.json())
-        .then(data => {
-            if (data.status === 'success' || data.status === 'ok') {
-                showToast('Success', data.message || `Pemindaian web berhasil dimulai untuk ${selectedDomains.length} domain.`, '✅');
-                document.getElementById('webScanModalOverlay').classList.remove('active');
-                if (typeof fetchActiveScans === 'function') fetchActiveScans();
-            } else {
-                showToast('Error', data.detail || data.message || 'Gagal memulai pemindaian web.', '❌');
-            }
+    const btnSubmit = document.getElementById('btnSubmitWebScan');
+    const btnTextSpan = document.getElementById('btnSubmitWebScanText');
+    const originalText = btnTextSpan ? btnTextSpan.textContent : 'Launch Scan';
+
+    if (isSchedule) {
+        const timeInput = document.getElementById('webScanScheduleTime');
+        const frequencySelect = document.getElementById('webScanScheduleFrequency');
+        const scheduledTime = timeInput ? timeInput.value : '';
+        const frequency = frequencySelect ? frequencySelect.value : 'once';
+
+        if (!scheduledTime) {
+            showToast('Error', 'Silakan pilih tanggal dan jam eksekusi jadwal scan.', '⚠️');
+            return;
+        }
+
+        btnSubmit.disabled = true;
+        btnSubmit.style.opacity = '0.5';
+        if (btnTextSpan) btnTextSpan.textContent = `Menyimpan Jadwal...`;
+
+        fetch(`${API_BASE}/api/scans/schedule`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                scan_category: 'web',
+                scan_type: selectedScanType,
+                targets: selectedDomains,
+                scheduled_at: scheduledTime,
+                frequency: frequency
+            })
         })
-        .catch(err => {
-            console.error('Error starting web scan:', err);
-            showToast('Error', 'Koneksi terputus dari server', '❌');
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success' || data.status === 'ok') {
+                    showToast('Success', data.message || `Jadwal Website Scan berhasil disimpan untuk ${selectedDomains.length} domain.`, '📅');
+                    document.getElementById('webScanModalOverlay').classList.remove('active');
+                } else {
+                    showToast('Error', data.detail || data.message || 'Gagal menyimpan jadwal scan.', '❌');
+                }
+            })
+            .catch(err => {
+                console.error('Error scheduling web scan:', err);
+                showToast('Error', 'Koneksi terputus dari server', '❌');
+            })
+            .finally(() => {
+                btnSubmit.disabled = false;
+                btnSubmit.style.opacity = '1';
+                if (btnTextSpan) btnTextSpan.textContent = originalText;
+            });
+
+    } else {
+        // Immediate launch
+        btnSubmit.disabled = true;
+        btnSubmit.style.opacity = '0.5';
+        if (btnTextSpan) btnTextSpan.textContent = `Launching (${selectedDomains.length} target)...`;
+
+        fetch(`${API_BASE}/api/web-scan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targets: selectedDomains, scan_type: selectedScanType })
         })
-        .finally(() => {
-            btnSubmit.disabled = false;
-            btnSubmit.style.opacity = '1';
-            btnSubmit.innerHTML = `
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-            Launch Scan
-        `;
-        });
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success' || data.status === 'ok') {
+                    showToast('Success', data.message || `Pemindaian web berhasil dimulai untuk ${selectedDomains.length} domain.`, '✅');
+                    document.getElementById('webScanModalOverlay').classList.remove('active');
+                    if (typeof fetchActiveScans === 'function') fetchActiveScans();
+                } else {
+                    showToast('Error', data.detail || data.message || 'Gagal memulai pemindaian web.', '❌');
+                }
+            })
+            .catch(err => {
+                console.error('Error starting web scan:', err);
+                showToast('Error', 'Koneksi terputus dari server', '❌');
+            })
+            .finally(() => {
+                btnSubmit.disabled = false;
+                btnSubmit.style.opacity = '1';
+                if (btnTextSpan) btnTextSpan.textContent = originalText;
+            });
+    }
 }
 
 // Network Scanner
@@ -6727,6 +6802,10 @@ function submitWebScan() {
 function openNetworkScanModal() {
     document.getElementById('networkScanModalOverlay').classList.add('active');
     renderNetworkScanTargetList();
+
+    const radioNow = document.querySelector('input[name="networkScanScheduleOption"][value="now"]');
+    if (radioNow) radioNow.checked = true;
+    toggleScanScheduleFields('network');
 
     const radios = document.querySelectorAll('input[name="networkScanType"]');
     radios.forEach(radio => {
@@ -6841,44 +6920,92 @@ function submitNetworkScan() {
     const scanTypeElement = document.querySelector('input[name="networkScanType"]:checked');
     const selectedScanType = scanTypeElement ? scanTypeElement.value : 'deep';
 
-    const btnSubmit = document.getElementById('btnSubmitNetworkScan');
-    btnSubmit.disabled = true;
-    btnSubmit.style.opacity = '0.5';
-    btnSubmit.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation: spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="8"></circle></svg>
-        Launching (${selectedDomains.length} target)...
-    `;
+    const scheduleOption = document.querySelector('input[name="networkScanScheduleOption"]:checked');
+    const isSchedule = scheduleOption && scheduleOption.value === 'schedule';
 
-    fetch(`${API_BASE}/api/network-scan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            targets: selectedDomains,
-            scan_type: selectedScanType
+    const btnSubmit = document.getElementById('btnSubmitNetworkScan');
+    const btnTextSpan = document.getElementById('btnSubmitNetworkScanText');
+    const originalText = btnTextSpan ? btnTextSpan.textContent : 'Launch Scan';
+
+    if (isSchedule) {
+        const timeInput = document.getElementById('networkScanScheduleTime');
+        const frequencySelect = document.getElementById('networkScanScheduleFrequency');
+        const scheduledTime = timeInput ? timeInput.value : '';
+        const frequency = frequencySelect ? frequencySelect.value : 'once';
+
+        if (!scheduledTime) {
+            showToast('Error', 'Silakan pilih tanggal dan jam eksekusi jadwal scan.', '⚠️');
+            return;
+        }
+
+        btnSubmit.disabled = true;
+        btnSubmit.style.opacity = '0.5';
+        if (btnTextSpan) btnTextSpan.textContent = `Menyimpan Jadwal...`;
+
+        fetch(`${API_BASE}/api/scans/schedule`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                scan_category: 'network',
+                scan_type: selectedScanType,
+                targets: selectedDomains,
+                scheduled_at: scheduledTime,
+                frequency: frequency
+            })
         })
-    })
-        .then(res => res.json())
-        .then(data => {
-            if (data.status === 'success' || data.status === 'ok') {
-                showToast('Success', data.message || `Pemindaian network berhasil dimulai untuk ${selectedDomains.length} domain.`, '✅');
-                document.getElementById('networkScanModalOverlay').classList.remove('active');
-                if (typeof refreshData === 'function') refreshData(true);
-            } else {
-                showToast('Error', data.detail || data.message || 'Gagal memulai pemindaian network.', '❌');
-            }
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success' || data.status === 'ok') {
+                    showToast('Success', data.message || `Jadwal Network Scan berhasil disimpan untuk ${selectedDomains.length} domain.`, '📅');
+                    document.getElementById('networkScanModalOverlay').classList.remove('active');
+                } else {
+                    showToast('Error', data.detail || data.message || 'Gagal menyimpan jadwal scan.', '❌');
+                }
+            })
+            .catch(err => {
+                console.error('Error scheduling network scan:', err);
+                showToast('Error', 'Koneksi terputus dari server', '❌');
+            })
+            .finally(() => {
+                btnSubmit.disabled = false;
+                btnSubmit.style.opacity = '1';
+                if (btnTextSpan) btnTextSpan.textContent = originalText;
+            });
+
+    } else {
+        // Immediate launch
+        btnSubmit.disabled = true;
+        btnSubmit.style.opacity = '0.5';
+        if (btnTextSpan) btnTextSpan.textContent = `Launching (${selectedDomains.length} target)...`;
+
+        fetch(`${API_BASE}/api/network-scan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                targets: selectedDomains,
+                scan_type: selectedScanType
+            })
         })
-        .catch(err => {
-            console.error('Error starting network scan:', err);
-            showToast('Error', 'Koneksi terputus dari server', '❌');
-        })
-        .finally(() => {
-            btnSubmit.disabled = false;
-            btnSubmit.style.opacity = '1';
-            btnSubmit.innerHTML = `
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-            Launch Scan
-        `;
-        });
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success' || data.status === 'ok') {
+                    showToast('Success', data.message || `Pemindaian network berhasil dimulai untuk ${selectedDomains.length} domain.`, '✅');
+                    document.getElementById('networkScanModalOverlay').classList.remove('active');
+                    if (typeof refreshData === 'function') refreshData(true);
+                } else {
+                    showToast('Error', data.detail || data.message || 'Gagal memulai pemindaian network.', '❌');
+                }
+            })
+            .catch(err => {
+                console.error('Error starting network scan:', err);
+                showToast('Error', 'Koneksi terputus dari server', '❌');
+            })
+            .finally(() => {
+                btnSubmit.disabled = false;
+                btnSubmit.style.opacity = '1';
+                if (btnTextSpan) btnTextSpan.textContent = originalText;
+            });
+    }
 }
 
 
