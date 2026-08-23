@@ -112,15 +112,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 if (resp.status === 200) {
-                    showToast('Tersimpan', `Status berhasil diperbarui (Aktif: ${domainsToSave.length}, Tidak Aktif: ${inactiveDomains.length}).`, '💾');
+                    showToast('Tersimpan', `Status berhasil diperbarui (Aktif: ${domainsToSave.length}, Tidak Aktif: ${inactiveDomains.length}).`, '');
                     if (typeof loadDomains === 'function') loadDomains(true);
                 } else {
                     const data = await resp.json();
-                    showToast('Gagal Menyimpan', data.detail || 'Terjadi kesalahan di server.', '❌');
+                    showToast('Gagal Menyimpan', data.detail || 'Terjadi kesalahan di server.', '');
                 }
             } catch (err) {
                 console.error(err);
-                showToast('Koneksi Gagal', 'Gagal menghubungi server.', '🔌');
+                showToast('Koneksi Gagal', 'Gagal menghubungi server.', '');
             }
         });
     }
@@ -131,7 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const domainsToScan = [...selectedDomains];
             if (domainsToScan.length === 0) return;
 
-            showToast('Scan Dimulai', `Memerintahkan backend untuk memulai scan pada ${domainsToScan.length} domain...`, '🚀');
+            showToast('Scan Dimulai', `Memerintahkan backend untuk memulai scan pada ${domainsToScan.length} domain...`, '');
 
             // Kunci tombol agar tidak di-klik dua kali (spam)
             runBtn.disabled = true;
@@ -152,13 +152,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const allSuccess = responses.every(resp => resp.status === 200 || resp.status === 202);
 
                 if (allSuccess) {
-                    showToast('Scan Berhasil Diantrekan', 'Proses scan instan sedang berjalan di latar belakang.', '✅');
+                    showToast('Scan Berhasil Diantrekan', 'Proses scan instan sedang berjalan di latar belakang.', '');
                 } else {
-                    showToast('Peringatan', 'Beberapa scan mungkin gagal dijalankan. Cek log server.', '⚠️');
+                    showToast('Peringatan', 'Beberapa scan mungkin gagal dijalankan. Cek log server.', '️');
                 }
             } catch (err) {
                 console.error(err);
-                showToast('Koneksi Gagal', 'Server tidak merespons proses scan.', '🔌');
+                showToast('Koneksi Gagal', 'Server tidak merespons proses scan.', '');
             } finally {
                 // Kembalikan status tombol seperti semula
                 refreshCheckboxUI();
@@ -177,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const domainsToScan = [...selectedDomains];
             if (domainsToScan.length === 0) return;
 
-            showToast('Scan Jaringan', `Memerintahkan API Pentest-Tools untuk melakukan pemindaian jaringan pada ${domainsToScan.length} domain...`, '🔍');
+            showToast('Scan Jaringan', `Memerintahkan API Pentest-Tools untuk melakukan pemindaian jaringan pada ${domainsToScan.length} domain...`, '');
 
             runNetworkScanBtn.disabled = true;
             runNetworkScanBtn.style.opacity = '0.5';
@@ -190,13 +190,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 if (resp.status === 200) {
-                    showToast('Scan Diterima', 'Proses Network Scan sedang berjalan secara asinkron di server.', '✅');
+                    showToast('Scan Diterima', 'Proses Network Scan sedang berjalan secara asinkron di server.', '');
                 } else {
                     const data = await resp.json();
-                    showToast('Gagal', data.detail || 'Server menolak permintaan pemindaian jaringan.', '❌');
+                    showToast('Gagal', data.detail || 'Server menolak permintaan pemindaian jaringan.', '');
                 }
             } catch (err) {
-                showToast('Koneksi Terputus', 'Gagal menghubungi server.', '🔌');
+                showToast('Koneksi Terputus', 'Gagal menghubungi server.', '');
             } finally {
                 refreshCheckboxUI(); // Memastikan status tombol diperbarui berdasarkan jumlah centang saat ini
             }
@@ -421,7 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             }).filter(d => d.domain_name);
                         }
                     } catch (err) {
-                        showToast('Error', 'Format JSON tidak valid', '❌');
+                        showToast('Error', 'Format JSON tidak valid', '');
                         return;
                     }
                 } else {
@@ -451,7 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
 
-                    showToast('Import Selesai', `Berhasil menambahkan ${addedCount} dari ${importedData.length} domain.`, '✅');
+                    showToast('Import Selesai', `Berhasil menambahkan ${addedCount} dari ${importedData.length} domain.`, '');
                     loadDomains();
                 }
 
@@ -509,11 +509,15 @@ function switchView(viewId) {
         fetchNotifications();
     }
 
-    // Web Scanner & Network Scanner: start/stop polling for active scans
+    // Web Scanner & Network Scanner: start/stop polling for active scans & scheduled scans
     if (viewId === 'web-scanner' || viewId === 'network-scanner') {
         fetchActiveScans();
+        fetchScheduledScans();
         if (!activeScansInterval) {
-            activeScansInterval = setInterval(fetchActiveScans, 5000);
+            activeScansInterval = setInterval(() => {
+                fetchActiveScans();
+                fetchScheduledScans();
+            }, 5000);
         }
     } else {
         if (activeScansInterval) {
@@ -600,9 +604,9 @@ function showToast(message, type = 'info', duration = 4000) {
     toast.className = `toast-item toast-${type}`;
 
     const icons = {
-        success: '✓',
-        error: '⚠️',
-        warning: '⚡',
+        success: '',
+        error: '️',
+        warning: '',
         info: 'ℹ️'
     };
 
@@ -701,15 +705,15 @@ function customConfirm({
         if (confirmBtn) confirmBtn.textContent = confirmText;
         if (cancelBtn) cancelBtn.textContent = cancelText;
 
-        const iconMap = {
-            danger: '🗑️',
-            warning: '⚠️',
-            info: 'ℹ️',
-            success: '✓'
+        const iconSvgMap = {
+            danger: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+            warning: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+            info: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>',
+            success: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>'
         };
 
         if (iconBadge) iconBadge.className = `custom-modal-icon-badge ${variant}`;
-        if (iconEl) iconEl.textContent = iconMap[variant] || 'ℹ️';
+        if (iconEl) iconEl.innerHTML = iconSvgMap[variant] || iconSvgMap.info;
 
         if (confirmBtn) {
             confirmBtn.className = `btn custom-modal-btn ${variant === 'danger' ? 'btn-danger-solid' : 'btn-primary-solid'}`;
@@ -2235,7 +2239,13 @@ function applyNetworkFilters(preservePage = false) {
         return true;
     });
 
-    filteredNetworkScans = [...liveFiltered, ...dbFiltered];
+    let scheduledFiltered = scheduledNetworkScans.filter(scan => {
+        const targetsStr = (scan.targets || []).join(' ').toLowerCase();
+        if (searchInput && !targetsStr.includes(searchInput)) return false;
+        return true;
+    });
+
+    filteredNetworkScans = [...liveFiltered, ...scheduledFiltered, ...dbFiltered];
 
     if (!preservePage) {
         netCurrentPage = 1;
@@ -2266,6 +2276,7 @@ function renderNetworkScans() {
     const paginatedScans = filteredNetworkScans.slice(startIdx, endIdx);
 
     tbody.innerHTML = paginatedScans.map((scan, mapIndex) => {
+        const isScheduled = scan.is_scheduled === true;
         const isLive = scan.live_status !== undefined;
 
         let domainName = '';
@@ -2276,6 +2287,41 @@ function renderNetworkScans() {
         let actionBtn = '';
         let scanIdLabel = '';
         let actualIndex = -1;
+
+        if (isScheduled) {
+            domainName = (scan.targets || []).join(', ') || 'Target Scan';
+            targetSubtitle = `Tipe Scan: ${(scan.scan_type || 'deep').toUpperCase()}`;
+            scanIdLabel = 'Network Scan (Jadwal)';
+            dateStr = scan.scheduled_at ? scan.scheduled_at.replace('T', ' ').slice(0, 19) : '-';
+
+            statusHtml = `
+                <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; background: rgba(0, 88, 189, 0.08); color: var(--color-accent); border: 1px solid rgba(0, 88, 189, 0.2); font-size: 11px; font-weight: 600;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    Terjadwal
+                </div>
+            `;
+            summaryHtml = `<span style="color: var(--color-muted); font-size: 12px; font-weight: 500;">Menunggu Eksekusi</span>`;
+            actionBtn = `<button type="button" class="btn btn-outline" onclick="cancelScheduledScan(${scan.id})" style="border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, 0.04); font-size: 12px; padding: 5px 12px; border-radius: 6px;" onmouseover="this.style.background='#ef4444'; this.style.color='#ffffff';" onmouseout="this.style.background='rgba(239, 68, 68, 0.04)'; this.style.color='#ef4444';">Batalkan Jadwal</button>`;
+
+            return `
+                <tr style="cursor: default; transition: background 0.2s;">
+                    <td style="padding: 16px; min-width: 140px;">
+                        <div style="display:flex; align-items:center; gap:8px; color: var(--color-accent); font-weight: 600; font-size: 13px;">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                            ${scanIdLabel}
+                        </div>
+                    </td>
+                    <td style="padding: 16px;">${statusHtml}</td>
+                    <td style="padding: 16px;">
+                        <div style="font-weight: 600; font-size: 13px; color: var(--color-ink); margin-bottom: 4px;">${escapeHtml(domainName)}</div>
+                        <div style="font-size: 12px; color: var(--color-muted);">${escapeHtml(targetSubtitle)}</div>
+                    </td>
+                    <td style="padding: 16px; min-width: 120px;">${summaryHtml}</td>
+                    <td style="padding: 16px; font-size: 13px; color: var(--color-ink); font-weight: 500; white-space: nowrap;">${dateStr}</td>
+                    <td style="padding: 16px; text-align:center;">${actionBtn}</td>
+                </tr>
+            `;
+        }
 
         // ID UNIK & CEK MEMORI UNTUK CHECKBOX (Anti-Amnesia)
         const uniqueScanId = isLive ? `live_${scan.scan_id || mapIndex}` : `db_${scan.id}`;
@@ -2591,17 +2637,17 @@ function renderPortExposureRadar() {
         const pNum = parseInt(portNum, 10);
         
         let riskClass = 'port-badge-green';
-        let warningTag = '🟢 Standard Web';
+        let warningTag = 'Standard Web';
         
         if ([3306, 5432, 27017, 6379, 1433].includes(pNum)) {
             riskClass = 'port-badge-red';
-            warningTag = '🚨 DB Exposed!';
+            warningTag = 'DB Exposed!';
         } else if ([22, 21, 23, 3389].includes(pNum)) {
             riskClass = 'port-badge-yellow';
-            warningTag = '⚠️ Restriksi IP';
+            warningTag = 'Restriksi IP';
         } else if ([8080, 8443, 8000].includes(pNum)) {
             riskClass = 'port-badge-yellow';
-            warningTag = '⚠️ Dev Port';
+            warningTag = 'Dev Port';
         }
 
         return { key, portNum: pNum, service: service || 'TCP', count, riskClass, warningTag };
@@ -2870,7 +2916,7 @@ if (domainForm) {
                 showToast(
                     isPending ? 'Permintaan Terkirim' : 'Sukses', 
                     data.message || 'Domain berhasil disimpan', 
-                    isPending ? '⏳' : '✅'
+                    isPending ? 'Pending' : 'Done'
                 );
                 domainModalOverlay.classList.remove('active');
                 loadDomains();
@@ -2944,7 +2990,7 @@ window.exportDomains = function (format) {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-    showToast('Sukses', `Berhasil mengekspor domain dalam format .${format.toUpperCase()}`, '✅');
+    showToast('Sukses', `Berhasil mengekspor domain dalam format .${format.toUpperCase()}`, '');
 };
 
 async function loadDomains(preservePage = false) {
@@ -3021,20 +3067,20 @@ async function toggleDomainActive(domainId, event) {
             showToast(
                 'Status Target',
                 `Domain ${domain.domain_name} sekarang ${newStatus ? 'ACTIVE' : 'INACTIVE'}.`,
-                newStatus ? '✅' : 'ℹ️'
+                newStatus ? 'Active' : 'Inactive'
             );
         } else {
             // Revert on error
             domain.is_active = !newStatus;
             renderInventoryList();
             const data = await resp.json();
-            showToast('Error', data.detail || 'Gagal mengubah status domain', '❌');
+            showToast('Error', data.detail || 'Gagal mengubah status domain', '');
         }
     } catch (err) {
         console.error('Error toggling domain status:', err);
         domain.is_active = !newStatus;
         renderInventoryList();
-        showToast('Error', 'Koneksi terputus dari server', '❌');
+        showToast('Error', 'Koneksi terputus dari server', '');
     }
 }
 
@@ -4158,7 +4204,7 @@ async function handleForgotPasswordSubmit(e) {
         const data = await resp.json();
 
         // Selalu tampilkan toast sukses (mencegah enumerasi) lalu kembali ke login
-        showToast("Informasi", data.message, "📧");
+        showToast("Informasi", data.message, "");
         showLoginForm(); 
     } catch (err) {
         errMsg.textContent = "Gagal menghubungi server.";
@@ -4294,7 +4340,7 @@ async function handleAuthSubmit(e) {
                 // Sembunyikan form login, tampilkan form OTP
                 document.getElementById('authForm').style.display = 'none';
                 document.getElementById('otpForm').style.display = 'block';
-                showToast("Info", data.message, "📧");
+                showToast("Info", data.message, "");
             } else {
                 handleSuccessfulLogin(data);
             }
@@ -4348,7 +4394,7 @@ async function handleOtpSubmit(e) {
 
         if (resp.status === 200) {
             // Sembunyikan pesan sukses
-            showToast("Sukses", "Verifikasi berhasil.", "✅");
+            showToast("Sukses", "Verifikasi berhasil.", "");
 
             // Lakukan login
             document.getElementById('otpForm').style.display = 'none';
@@ -4375,7 +4421,7 @@ async function handleLogout() {
     } catch (err) {
         console.error("Gagal mengirim request logout:", err);
     }
-    showToast("Logout", "Anda berhasil keluar.", "👋");
+    showToast("Logout", "Anda berhasil keluar.", "");
     showLoginOverlay();
 }
 
@@ -4465,7 +4511,7 @@ async function handleCreateUserSubmit(e) {
         const data = await resp.json();
 
         if (resp.status === 200) {
-            showToast("Sukses", `User baru '${username}' berhasil didaftarkan.`, "✨");
+            showToast("Sukses", `User baru '${username}' berhasil didaftarkan.`, "");
             closeCreateUserModal();
             loadAdminUsers();
             fetchNotifications(); // Refresh daftar user
@@ -5165,12 +5211,12 @@ function renderNotificationList() {
         const relativeTime = formatRelativeTime(n.timestamp);
         
         // 1. Tentukan Icon
-        let icon = '🔔';
-        if (n.type === 'scan_complete' || n.type === 'success') icon = '✅';
-        else if (n.type === 'scan_failed') icon = '❌';
-        else if (n.type === 'user_login') icon = '👤';
-        else if (n.type === 'scan_finished') icon = '🚀';
-        else if (n.type === 'domain_found') icon = '🌐';
+        let icon = '';
+        if (n.type === 'scan_complete' || n.type === 'success') icon = '';
+        else if (n.type === 'scan_failed') icon = '';
+        else if (n.type === 'user_login') icon = '';
+        else if (n.type === 'scan_finished') icon = '';
+        else if (n.type === 'domain_found') icon = '';
         else if (n.type === 'info') icon = 'ℹ️';
 
         let absoluteTime = '';
@@ -5277,10 +5323,10 @@ function connectLiveWebSocket(sessionId) {
                         if (data.notification.type === 'domain_found') {
                             showDomainFoundToast(data.notification);
                         } else {
-                            showToast(data.notification.title, data.notification.message, "🔔");
+                            showToast(data.notification.title, data.notification.message, "");
                         }
                     } else {
-                        showToast(data.notification.title, data.notification.message, "🔔");
+                        showToast(data.notification.title, data.notification.message, "");
                     }
                     fetchNotifications();
                 }
@@ -5298,13 +5344,13 @@ function connectLiveWebSocket(sessionId) {
                 if (typeof refreshData === 'function') refreshData(true);
             } else if (data.event === 'force_logout') {
                 window.kickedReason = 'force_logout';
-                showToast("Sesi Diakhiri", "Anda telah dipaksa keluar oleh Administrator.", "⚠️");
+                showToast("Sesi Diakhiri", "Anda telah dipaksa keluar oleh Administrator.", "️");
                 setTimeout(() => {
                     handleLogout();
                 }, 1000);
             } else if (data.event === 'timeout') {
                 window.kickedReason = 'timeout';
-                showToast("Akun Ditangguhkan", "Akun Anda telah ditangguhkan oleh Administrator.", "⏳");
+                showToast("Akun Ditangguhkan", "Akun Anda telah ditangguhkan oleh Administrator.", "");
                 setTimeout(() => {
                     handleLogout();
                 }, 1000);
@@ -5326,7 +5372,7 @@ function connectLiveWebSocket(sessionId) {
         } else if (e.code === 4000) {
             // Jika kode 4000, berarti user di-kick (force logout / timeout)
             if (!window.kickedReason) {
-                showToast("Sesi Diakhiri", "Anda telah dikeluarkan oleh sistem.", "⚠️");
+                showToast("Sesi Diakhiri", "Anda telah dikeluarkan oleh sistem.", "️");
                 setTimeout(() => {
                     handleLogout();
                 }, 500);
@@ -5336,7 +5382,7 @@ function connectLiveWebSocket(sessionId) {
     };
 }
 
-function showToast(title, message, icon = "🔔") {
+function showToast(title, message, icon = "") {
     const container = document.getElementById('toast-container');
     if (!container) return;
 
@@ -5368,7 +5414,7 @@ window.copyToClipboard = function(text, event, label = 'IP Address') {
     const cleanText = text.trim();
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(cleanText).then(() => {
-            showToast('Tersalin', `${label} ${cleanText} berhasil disalin ke clipboard!`, '📋');
+            showToast('Tersalin', `${label} ${cleanText} berhasil disalin ke clipboard!`, '');
         }).catch(err => {
             console.error('Clipboard error:', err);
             fallbackCopyText(cleanText, label);
@@ -5388,9 +5434,9 @@ function fallbackCopyText(text, label) {
         textarea.select();
         document.execCommand('copy');
         document.body.removeChild(textarea);
-        showToast('Tersalin', `${label} ${text} berhasil disalin ke clipboard!`, '📋');
+        showToast('Tersalin', `${label} ${text} berhasil disalin ke clipboard!`, '');
     } catch (e) {
-        showToast('Error', 'Gagal menyalin ke clipboard', '❌');
+        showToast('Error', 'Gagal menyalin ke clipboard', '');
     }
 }
 
@@ -5496,13 +5542,13 @@ function showOvernightToastNotification(scanData) {
 
 
     toast.innerHTML = `
-        <div class="toast-icon">⚠️</div>
+        <div class="toast-icon">️</div>
         <div class="toast-body" style="width: 100%;">
             <div class="toast-title">Auto Scan Dini Hari (HIGH & CRITICAL)</div>
             <div class="toast-message">${toastMessage}</div>
             <div class="toast-actions-row">
                 <button class="toast-btn toast-btn-primary" id="btnCekDetail-${scanIdStr}">Cek Detail</button>
-                <button class="toast-btn toast-btn-secondary" id="btnCloseNotif-${scanIdStr}">Tutup ✕</button>
+                <button class="toast-btn toast-btn-secondary" id="btnCloseNotif-${scanIdStr}">Tutup </button>
             </div>
         </div>
     `;
@@ -5561,7 +5607,7 @@ function showOvernightToastNotification(scanData) {
         };
     }
 
-    // Tombol "Tutup ✕"
+    // Tombol "Tutup "
     const btnClose = document.getElementById(`btnCloseNotif-${scanIdStr}`);
     if (btnClose) {
         btnClose.onclick = (e) => {
@@ -5758,7 +5804,7 @@ document.getElementById('btnProcessReportAction')?.addEventListener('click', asy
 
             const blob = await resp.blob();
             document.getElementById('reportActionModalOverlay').classList.remove('active');
-            showToast('Success', 'Report successfully downloaded!', '✅');
+            showToast('Success', 'Report successfully downloaded!', '');
 
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -5798,11 +5844,11 @@ document.getElementById('btnProcessReportAction')?.addEventListener('click', asy
 
             const data = await resp.json();
             document.getElementById('reportActionModalOverlay').classList.remove('active');
-            showToast('Success', data.message, '✅');
+            showToast('Success', data.message, '');
         }
     } catch (err) {
         console.error(err);
-        showToast('Error', err.message, '❌');
+        showToast('Error', err.message, '');
     } finally {
         btnSubmit.textContent = originalText;
         btnSubmit.disabled = false;
@@ -5810,8 +5856,58 @@ document.getElementById('btnProcessReportAction')?.addEventListener('click', asy
     }
 });
 
-// --- Web Scanner Logic ---
+// --- Web Scanner & Scheduled Scans Logic ---
 let activeScansInterval = null;
+let allScheduledScans = [];
+let scheduledWebScans = [];
+let scheduledNetworkScans = [];
+
+function fetchScheduledScans() {
+    fetch(`${API_BASE}/api/scans/schedules`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success' || data.status === 'ok') {
+                allScheduledScans = (data.data || []).map(item => ({ ...item, is_scheduled: true }));
+                scheduledWebScans = allScheduledScans.filter(s => s.scan_category === 'web' && s.status === 'pending');
+                scheduledNetworkScans = allScheduledScans.filter(s => s.scan_category === 'network' && s.status === 'pending');
+
+                if (typeof applyWebFilters === 'function') applyWebFilters(true);
+                if (typeof applyNetworkFilters === 'function') applyNetworkFilters(true);
+            }
+        })
+        .catch(err => {
+            console.error('Error fetching scheduled scans:', err);
+        });
+}
+
+async function cancelScheduledScan(scheduleId) {
+    const isConfirmed = await customConfirm({
+        title: 'Batalkan Jadwal Scan',
+        message: 'Apakah Anda yakin ingin membatalkan jadwal scan ini?',
+        confirmText: 'Ya, Batalkan Jadwal',
+        cancelText: 'Batal',
+        variant: 'danger'
+    });
+
+    if (!isConfirmed) return;
+
+    fetch(`${API_BASE}/api/scans/schedules/${scheduleId}`, {
+        method: 'DELETE'
+    })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success' || data.status === 'ok') {
+                showToast('Success', data.message || 'Jadwal scan berhasil dibatalkan.', '');
+                fetchScheduledScans();
+            } else {
+                showToast('Error', data.detail || data.message || 'Gagal membatalkan jadwal scan.', '');
+            }
+        })
+        .catch(err => {
+            console.error('Error cancelling scheduled scan:', err);
+            showToast('Error', 'Gagal membatalkan jadwal scan.', '');
+        });
+}
 
 function fetchActiveScans() {
     fetch(`${API_BASE}/api/scans/active`)
@@ -5872,7 +5968,13 @@ function applyWebFilters(preservePage = false) {
         return true;
     });
 
-    filteredWebScans = [...liveFiltered, ...dbFiltered];
+    let scheduledFiltered = scheduledWebScans.filter(scan => {
+        const targetsStr = (scan.targets || []).join(' ').toLowerCase();
+        if (searchInput && !targetsStr.includes(searchInput)) return false;
+        return true;
+    });
+
+    filteredWebScans = [...liveFiltered, ...scheduledFiltered, ...dbFiltered];
 
     if (!preservePage) {
         webCurrentPage = 1;
@@ -5905,6 +6007,7 @@ function renderWebScannerTable() {
     const paginatedScans = filteredWebScans.slice(startIdx, endIdx);
 
     tbody.innerHTML = paginatedScans.map((scan, mapIndex) => {
+        const isScheduled = scan.is_scheduled === true;
         const isLive = scan.live_status !== undefined;
 
         let domainName = '';
@@ -5915,6 +6018,41 @@ function renderWebScannerTable() {
         let actionBtn = '';
         let scanIdLabel = '';
         let actualIndex = -1;
+
+        if (isScheduled) {
+            domainName = (scan.targets || []).join(', ') || 'Target Scan';
+            targetSubtitle = `Tipe Scan: ${(scan.scan_type || 'deep').toUpperCase()}`;
+            scanIdLabel = 'Website Scan (Jadwal)';
+            dateStr = scan.scheduled_at ? scan.scheduled_at.replace('T', ' ').slice(0, 19) : '-';
+
+            statusHtml = `
+                <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; background: rgba(0, 88, 189, 0.08); color: var(--color-accent); border: 1px solid rgba(0, 88, 189, 0.2); font-size: 11px; font-weight: 600;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    Terjadwal
+                </div>
+            `;
+            summaryHtml = `<span style="color: var(--color-muted); font-size: 12px; font-weight: 500;">Menunggu Eksekusi</span>`;
+            actionBtn = `<button type="button" class="btn btn-outline" onclick="cancelScheduledScan(${scan.id})" style="border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, 0.04); font-size: 12px; padding: 5px 12px; border-radius: 6px;" onmouseover="this.style.background='#ef4444'; this.style.color='#ffffff';" onmouseout="this.style.background='rgba(239, 68, 68, 0.04)'; this.style.color='#ef4444';">Batalkan Jadwal</button>`;
+
+            return `
+                <tr style="cursor: default; transition: background 0.2s;">
+                    <td style="padding: 16px; min-width: 140px;">
+                        <div style="display:flex; align-items:center; gap:8px; color: var(--color-accent); font-weight: 600; font-size: 13px;">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                            ${scanIdLabel}
+                        </div>
+                    </td>
+                    <td style="padding: 16px;">${statusHtml}</td>
+                    <td style="padding: 16px;">
+                        <div style="font-weight: 600; font-size: 13px; color: var(--color-ink); margin-bottom: 4px;">${escapeHtml(domainName)}</div>
+                        <div style="font-size: 12px; color: var(--color-muted);">${escapeHtml(targetSubtitle)}</div>
+                    </td>
+                    <td style="padding: 16px; min-width: 120px;">${summaryHtml}</td>
+                    <td style="padding: 16px; font-size: 13px; color: var(--color-ink); font-weight: 500; white-space: nowrap;">${dateStr}</td>
+                    <td style="padding: 16px; text-align:center;">${actionBtn}</td>
+                </tr>
+            `;
+        }
 
         // ID UNIK & CEK MEMORI UNTUK CHECKBOX (Anti-Amnesia)
         const uniqueScanId = isLive ? `live_${scan.scan_id || mapIndex}` : `db_${scan.id}`;
@@ -5980,7 +6118,6 @@ function renderWebScannerTable() {
                     <td style="padding: 16px; text-align:center;">${actionBtn}</td>
                 </tr>
             `;
-
         } else {
             actualIndex = allVulns.indexOf(scan);
             domainName = scan.domains?.domain_name || 'Unknown Target';
@@ -6427,11 +6564,11 @@ async function toggleDomainActiveInModal(domainId, newStatus) {
         showToast(
             'Status Target',
             `Domain ${domain.domain_name} sekarang ${newStatus ? 'ACTIVE' : 'INACTIVE'}.`,
-            newStatus ? '✅' : 'ℹ️'
+            newStatus ? 'Active' : 'Inactive'
         );
     } catch (err) {
         console.error('Error toggling status:', err);
-        showToast('Error', 'Gagal memperbarui status domain.', '❌');
+        showToast('Error', 'Gagal memperbarui status domain.', '');
     }
 }
 
@@ -6502,12 +6639,12 @@ async function stopActiveScan(scanId) {
                 showToast(data.message || 'Pemindaian dihentikan.', 'success');
                 fetchActiveScans();
             } else {
-                showToast('Error', data.detail || data.message, '❌');
+                showToast('Error', data.detail || data.message, '');
             }
         })
         .catch(err => {
             console.error('Error stopping scan:', err);
-            showToast('Error', 'An error occurred while stopping the scan.', '❌');
+            showToast('Error', 'An error occurred while stopping the scan.', '');
         });
 }
 
@@ -6523,6 +6660,405 @@ function closeSelectScanTypeModal() {
     if (modal) modal.classList.remove('active');
 }
 
+// --- Custom Interactive Schedule Calendar & Time Picker ---
+// --- Custom Interactive Schedule Sub-Modal Pop-Up Controller ---
+let currentSchedulePickerPrefix = 'web';
+const schedulePickerState = {
+    web: { year: new Date().getFullYear(), month: new Date().getMonth(), day: new Date().getDate(), hour: '12', minute: '00' },
+    network: { year: new Date().getFullYear(), month: new Date().getMonth(), day: new Date().getDate(), hour: '12', minute: '00' }
+};
+
+const modalSchedulePickerState = {
+    year: new Date().getFullYear(),
+    month: new Date().getMonth(),
+    day: new Date().getDate(),
+    hour: '12',
+    minute: '00'
+};
+
+function initScheduleCalendar(prefix = 'web') {
+    const state = schedulePickerState[prefix];
+    const defaultTime = new Date(Date.now() + 3600000); // +1 hour
+
+    state.year = defaultTime.getFullYear();
+    state.month = defaultTime.getMonth();
+    state.day = defaultTime.getDate();
+    state.hour = String(defaultTime.getHours()).padStart(2, '0');
+
+    let rawMinute = Math.floor(defaultTime.getMinutes() / 5) * 5;
+    state.minute = String(rawMinute).padStart(2, '0');
+
+    updateScheduleValueAndLabel(prefix);
+}
+
+function openSchedulePickerModal(prefix = 'web') {
+    currentSchedulePickerPrefix = prefix;
+    const currentState = schedulePickerState[prefix];
+
+    modalSchedulePickerState.year = currentState.year;
+    modalSchedulePickerState.month = currentState.month;
+    modalSchedulePickerState.day = currentState.day;
+    modalSchedulePickerState.hour = currentState.hour;
+    modalSchedulePickerState.minute = currentState.minute;
+
+    // Populate Year select
+    const yearSelect = document.getElementById('modalScheduleYearSelect');
+    if (yearSelect && yearSelect.options.length === 0) {
+        let options = '';
+        for (let y = modalSchedulePickerState.year; y <= modalSchedulePickerState.year + 5; y++) {
+            options += `<option value="${y}">${y}</option>`;
+        }
+        yearSelect.innerHTML = options;
+    }
+
+    const modal = document.getElementById('schedulePickerModalOverlay');
+    if (modal) modal.classList.add('active');
+
+    renderScheduleCalendarModal();
+}
+
+function closeSchedulePickerModal() {
+    const modal = document.getElementById('schedulePickerModalOverlay');
+    if (modal) modal.classList.remove('active');
+}
+
+function applySchedulePickerSelection() {
+    formatScheduleTimeInput('hour');
+    formatScheduleTimeInput('minute');
+
+    const now = new Date();
+    const selectedDate = new Date(modalSchedulePickerState.year, modalSchedulePickerState.month, modalSchedulePickerState.day, parseInt(modalSchedulePickerState.hour, 10) || 0, parseInt(modalSchedulePickerState.minute, 10) || 0, 0);
+
+    if (selectedDate < now) {
+        showToast('Peringatan', 'Waktu eksekusi tidak boleh di masa lalu. Harap pilih tanggal dan jam yang akan datang.', '❌');
+        return;
+    }
+
+    const targetState = schedulePickerState[currentSchedulePickerPrefix];
+    targetState.year = modalSchedulePickerState.year;
+    targetState.month = modalSchedulePickerState.month;
+    targetState.day = modalSchedulePickerState.day;
+    targetState.hour = modalSchedulePickerState.hour;
+    targetState.minute = modalSchedulePickerState.minute;
+
+    updateScheduleValueAndLabel(currentSchedulePickerPrefix);
+    closeSchedulePickerModal();
+}
+
+function selectScheduleDayModal(day) {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const targetDate = new Date(modalSchedulePickerState.year, modalSchedulePickerState.month, day, 23, 59, 59);
+
+    if (targetDate < todayStart) {
+        return;
+    }
+
+    modalSchedulePickerState.day = day;
+    renderScheduleCalendarModal();
+}
+
+function navigateScheduleMonthModal(delta) {
+    const now = new Date();
+    let newMonth = modalSchedulePickerState.month + delta;
+    let newYear = modalSchedulePickerState.year;
+
+    if (newMonth < 0) {
+        newMonth = 11;
+        newYear -= 1;
+    } else if (newMonth > 11) {
+        newMonth = 0;
+        newYear += 1;
+    }
+
+    if (newYear < now.getFullYear() || (newYear === now.getFullYear() && newMonth < now.getMonth())) {
+        return;
+    }
+
+    modalSchedulePickerState.month = newMonth;
+    modalSchedulePickerState.year = newYear;
+
+    if (newYear === now.getFullYear() && newMonth === now.getMonth() && modalSchedulePickerState.day < now.getDate()) {
+        modalSchedulePickerState.day = now.getDate();
+    }
+
+    renderScheduleCalendarModal();
+}
+
+function onScheduleDropdownChangeModal() {
+    const monthSelect = document.getElementById('modalScheduleMonthSelect');
+    const yearSelect = document.getElementById('modalScheduleYearSelect');
+    const now = new Date();
+
+    let selectedMonth = monthSelect ? parseInt(monthSelect.value, 10) : modalSchedulePickerState.month;
+    let selectedYear = yearSelect ? parseInt(yearSelect.value, 10) : modalSchedulePickerState.year;
+
+    if (selectedYear < now.getFullYear() || (selectedYear === now.getFullYear() && selectedMonth < now.getMonth())) {
+        selectedYear = now.getFullYear();
+        selectedMonth = now.getMonth();
+        if (monthSelect) monthSelect.value = selectedMonth;
+        if (yearSelect) yearSelect.value = selectedYear;
+    }
+
+    modalSchedulePickerState.month = selectedMonth;
+    modalSchedulePickerState.year = selectedYear;
+
+    if (selectedYear === now.getFullYear() && selectedMonth === now.getMonth() && modalSchedulePickerState.day < now.getDate()) {
+        modalSchedulePickerState.day = now.getDate();
+    }
+
+    renderScheduleCalendarModal();
+}
+
+window.selectScheduleDayModal = selectScheduleDayModal;
+window.navigateScheduleMonthModal = navigateScheduleMonthModal;
+window.onScheduleDropdownChangeModal = onScheduleDropdownChangeModal;
+
+function renderScheduleCalendarModal() {
+    const state = modalSchedulePickerState;
+    const now = new Date();
+    const monthSelect = document.getElementById('modalScheduleMonthSelect');
+    const yearSelect = document.getElementById('modalScheduleYearSelect');
+    const hourInput = document.getElementById('modalScheduleHourInput');
+    const minuteInput = document.getElementById('modalScheduleMinuteInput');
+    const prevBtn = document.getElementById('btnPrevScheduleMonthModal');
+
+    if (yearSelect) {
+        let options = '';
+        for (let y = now.getFullYear(); y <= now.getFullYear() + 5; y++) {
+            options += `<option value="${y}">${y}</option>`;
+        }
+        yearSelect.innerHTML = options;
+        yearSelect.value = state.year < now.getFullYear() ? now.getFullYear() : state.year;
+    }
+
+    if (monthSelect) {
+        Array.from(monthSelect.options).forEach(opt => {
+            const mVal = parseInt(opt.value, 10);
+            if (state.year === now.getFullYear() && mVal < now.getMonth()) {
+                opt.disabled = true;
+            } else {
+                opt.disabled = false;
+            }
+        });
+        monthSelect.value = state.month;
+    }
+
+    if (prevBtn) {
+        const isCurrentOrPastMonth = (state.year <= now.getFullYear() && state.month <= now.getMonth());
+        prevBtn.disabled = isCurrentOrPastMonth;
+        prevBtn.style.opacity = isCurrentOrPastMonth ? '0.35' : '1';
+        prevBtn.style.cursor = isCurrentOrPastMonth ? 'not-allowed' : 'pointer';
+    }
+
+    if (hourInput) hourInput.value = state.hour;
+    if (minuteInput) minuteInput.value = state.minute;
+
+    const grid = document.getElementById('modalScheduleDaysGrid');
+    if (!grid) return;
+
+    const daysOfWeek = ['Mg', 'Sn', 'Sl', 'Rb', 'Km', 'Jm', 'Sb'];
+    let html = daysOfWeek.map(d => `<div style="font-size: 11px; font-weight: 700; color: #94a3b8; padding: 4px 0;">${d}</div>`).join('');
+
+    const firstDayIndex = new Date(state.year, state.month, 1).getDay();
+    const totalDaysInMonth = new Date(state.year, state.month + 1, 0).getDate();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+
+    for (let i = 0; i < firstDayIndex; i++) {
+        html += `<div></div>`;
+    }
+
+    for (let day = 1; day <= totalDaysInMonth; day++) {
+        const cellDate = new Date(state.year, state.month, day, 23, 59, 59);
+        const isPastDay = cellDate < todayStart;
+        const isSelected = day === state.day;
+
+        let bg = isSelected ? 'var(--primary)' : 'transparent';
+        let color = isSelected ? '#ffffff' : (isPastDay ? '#94a3b8' : 'var(--color-ink)');
+        let fontWeight = isSelected ? '700' : '500';
+        let cursor = isPastDay ? 'not-allowed' : 'pointer';
+        let opacity = isPastDay ? '0.35' : '1';
+        let textDecor = isPastDay ? 'line-through' : 'none';
+        let onClickAttr = isPastDay ? '' : `onclick="selectScheduleDayModal(${day})"`;
+
+        html += `
+            <div ${onClickAttr}
+                 style="padding: 5px 0; font-size: 12px; cursor: ${cursor}; opacity: ${opacity}; background: ${bg}; color: ${color}; border-radius: 6px; font-weight: ${fontWeight}; text-decoration: ${textDecor}; transition: all 0.12s; text-align: center;">
+                ${day}
+            </div>
+        `;
+    }
+
+    const totalFilledCells = firstDayIndex + totalDaysInMonth;
+    const totalGridCells = totalFilledCells > 35 ? 42 : 35;
+    const trailingEmptyCells = totalGridCells - totalFilledCells;
+    for (let t = 0; t < trailingEmptyCells; t++) {
+        html += `<div></div>`;
+    }
+
+    grid.innerHTML = html;
+    updateScheduleModalFooterLabel();
+}
+
+function validateScheduleTimeInput(type) {
+    const inputId = type === 'hour' ? 'modalScheduleHourInput' : 'modalScheduleMinuteInput';
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    let cleanVal = input.value.replace(/\D/g, ''); // Strip non-numeric
+    if (cleanVal.length > 2) cleanVal = cleanVal.slice(0, 2);
+
+    const maxVal = type === 'hour' ? 23 : 59;
+    if (cleanVal !== '') {
+        let num = parseInt(cleanVal, 10);
+        if (num > maxVal) num = maxVal;
+        cleanVal = String(num);
+    }
+
+    input.value = cleanVal;
+    const padded = cleanVal === '' ? '00' : String(parseInt(cleanVal, 10)).padStart(2, '0');
+    modalSchedulePickerState[type] = padded;
+
+    updateScheduleModalFooterLabel();
+}
+
+function formatScheduleTimeInput(type) {
+    const inputId = type === 'hour' ? 'modalScheduleHourInput' : 'modalScheduleMinuteInput';
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    let cleanVal = input.value.replace(/\D/g, '');
+    let num = parseInt(cleanVal, 10);
+    if (isNaN(num)) num = 0;
+
+    const maxVal = type === 'hour' ? 23 : 59;
+    if (num > maxVal) num = maxVal;
+    if (num < 0) num = 0;
+
+    const padded = String(num).padStart(2, '0');
+    input.value = padded;
+    modalSchedulePickerState[type] = padded;
+
+    updateScheduleModalFooterLabel();
+}
+
+function updateScheduleModalFooterLabel() {
+    const state = modalSchedulePickerState;
+    const now = new Date();
+    const year = state.year;
+    const dayStr = String(state.day).padStart(2, '0');
+    const hourStr = state.hour || '00';
+    const minStr = state.minute || '00';
+    const monthNamesIndoFull = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+    const selectedDateTime = new Date(state.year, state.month, state.day, parseInt(state.hour, 10) || 0, parseInt(state.minute, 10) || 0, 0);
+    const isPastTime = selectedDateTime < now;
+
+    const labelSpan = document.getElementById('modalScheduleDisplayLabel');
+    const applyBtn = document.getElementById('modalScheduleApplyBtn');
+
+    if (isPastTime) {
+        if (labelSpan) {
+            labelSpan.textContent = `Waktu eksekusi tidak boleh di masa lalu (${dayStr} ${monthNamesIndoFull[state.month]} ${year} ${hourStr}:${minStr} WIB)`;
+            labelSpan.style.color = '#ef4444';
+            labelSpan.style.fontWeight = '600';
+        }
+        if (applyBtn) {
+            applyBtn.disabled = true;
+            applyBtn.style.opacity = '0.4';
+            applyBtn.style.cursor = 'not-allowed';
+        }
+    } else {
+        if (labelSpan) {
+            labelSpan.textContent = `Waktu Terpilih: ${dayStr} ${monthNamesIndoFull[state.month]} ${year} pukul ${hourStr}:${minStr} WIB`;
+            labelSpan.style.color = 'var(--color-accent)';
+            labelSpan.style.fontWeight = '600';
+        }
+        if (applyBtn) {
+            applyBtn.disabled = false;
+            applyBtn.style.opacity = '1';
+            applyBtn.style.cursor = 'pointer';
+        }
+    }
+}
+
+function setQuickSchedulePresetModal(presetType) {
+    const state = modalSchedulePickerState;
+    const now = new Date();
+
+    if (presetType === 'tonight') {
+        state.year = now.getFullYear();
+        state.month = now.getMonth();
+        state.day = now.getDate();
+        state.hour = '23';
+        state.minute = '00';
+    } else if (presetType === 'tomorrow_morning') {
+        const tomorrow = new Date(now.getTime() + 86400000);
+        state.year = tomorrow.getFullYear();
+        state.month = tomorrow.getMonth();
+        state.day = tomorrow.getDate();
+        state.hour = '08';
+        state.minute = '00';
+    } else if (presetType === 'tomorrow_afternoon') {
+        const tomorrow = new Date(now.getTime() + 86400000);
+        state.year = tomorrow.getFullYear();
+        state.month = tomorrow.getMonth();
+        state.day = tomorrow.getDate();
+        state.hour = '14';
+        state.minute = '00';
+    }
+
+    renderScheduleCalendarModal();
+}
+
+function updateScheduleValueAndLabel(prefix) {
+    const state = schedulePickerState[prefix];
+    const year = state.year;
+    const monthStr = String(state.month + 1).padStart(2, '0');
+    const dayStr = String(state.day).padStart(2, '0');
+    const hourStr = state.hour || '12';
+    const minStr = state.minute || '00';
+
+    const isoStr = `${year}-${monthStr}-${dayStr}T${hourStr}:${minStr}`;
+    const hiddenInput = document.getElementById(`${prefix}ScanScheduleTime`);
+    if (hiddenInput) hiddenInput.value = isoStr;
+
+    const monthNamesIndoFull = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    const formattedText = `Waktu Terpilih: ${dayStr} ${monthNamesIndoFull[state.month]} ${year} pukul ${hourStr}:${minStr} WIB`;
+
+    const labelSpan = document.getElementById(`${prefix}ScheduleDisplayLabel`);
+    if (labelSpan) labelSpan.textContent = formattedText;
+}
+
+function setQuickSchedulePreset(prefix, presetType) {
+    const state = schedulePickerState[prefix];
+    const now = new Date();
+
+    if (presetType === 'tonight') {
+        state.year = now.getFullYear();
+        state.month = now.getMonth();
+        state.day = now.getDate();
+        state.hour = '23';
+        state.minute = '00';
+    } else if (presetType === 'tomorrow_morning') {
+        const tomorrow = new Date(now.getTime() + 86400000);
+        state.year = tomorrow.getFullYear();
+        state.month = tomorrow.getMonth();
+        state.day = tomorrow.getDate();
+        state.hour = '08';
+        state.minute = '00';
+    } else if (presetType === 'tomorrow_afternoon') {
+        const tomorrow = new Date(now.getTime() + 86400000);
+        state.year = tomorrow.getFullYear();
+        state.month = tomorrow.getMonth();
+        state.day = tomorrow.getDate();
+        state.hour = '14';
+        state.minute = '00';
+    }
+
+    renderScheduleCalendar(prefix);
+}
+
 function toggleScanScheduleFields(category) {
     const radioNow = document.querySelector(`input[name="${category}ScanScheduleOption"][value="now"]`);
     const isSchedule = !radioNow || !radioNow.checked;
@@ -6531,15 +7067,12 @@ function toggleScanScheduleFields(category) {
 
     if (scheduleFieldsContainer) {
         if (isSchedule) {
+            scheduleFieldsContainer.style.display = 'flex';
             scheduleFieldsContainer.classList.remove('hidden');
-            const timeInput = document.getElementById(`${category}ScanScheduleTime`);
-            if (timeInput && !timeInput.value) {
-                const defaultTime = new Date(Date.now() + 3600000); // 1 hour from now
-                const localISO = new Date(defaultTime.getTime() - (defaultTime.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
-                timeInput.value = localISO;
-            }
+            initScheduleCalendar(category);
             if (btnSubmitText) btnSubmitText.textContent = 'Simpan Jadwal Scan';
         } else {
+            scheduleFieldsContainer.style.display = 'none';
             scheduleFieldsContainer.classList.add('hidden');
             if (btnSubmitText) btnSubmitText.textContent = 'Launch Scan';
         }
@@ -6705,7 +7238,7 @@ function submitWebScan() {
     const selectedDomains = Array.from(selectedCheckboxes).map(cb => cb.value);
 
     if (selectedDomains.length === 0) {
-        showToast('Error', 'Pilih minimal satu domain target dari inventory.', '❌');
+        showToast('Error', 'Pilih minimal satu domain target dari inventory.', '');
         return;
     }
 
@@ -6721,12 +7254,10 @@ function submitWebScan() {
 
     if (isSchedule) {
         const timeInput = document.getElementById('webScanScheduleTime');
-        const frequencySelect = document.getElementById('webScanScheduleFrequency');
         const scheduledTime = timeInput ? timeInput.value : '';
-        const frequency = frequencySelect ? frequencySelect.value : 'once';
 
         if (!scheduledTime) {
-            showToast('Error', 'Silakan pilih tanggal dan jam eksekusi jadwal scan.', '⚠️');
+            showToast('Error', 'Silakan pilih tanggal dan jam eksekusi jadwal scan.');
             return;
         }
 
@@ -6742,21 +7273,21 @@ function submitWebScan() {
                 scan_type: selectedScanType,
                 targets: selectedDomains,
                 scheduled_at: scheduledTime,
-                frequency: frequency
+                frequency: 'once'
             })
         })
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success' || data.status === 'ok') {
-                    showToast('Success', data.message || `Jadwal Website Scan berhasil disimpan untuk ${selectedDomains.length} domain.`, '📅');
+                    showToast('Success', data.message || `Jadwal Website Scan berhasil disimpan untuk ${selectedDomains.length} domain.`);
                     document.getElementById('webScanModalOverlay').classList.remove('active');
                 } else {
-                    showToast('Error', data.detail || data.message || 'Gagal menyimpan jadwal scan.', '❌');
+                    showToast('Error', data.detail || data.message || 'Gagal menyimpan jadwal scan.');
                 }
             })
             .catch(err => {
                 console.error('Error scheduling web scan:', err);
-                showToast('Error', 'Koneksi terputus dari server', '❌');
+                showToast('Error', 'Koneksi terputus dari server', '');
             })
             .finally(() => {
                 btnSubmit.disabled = false;
@@ -6778,16 +7309,16 @@ function submitWebScan() {
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success' || data.status === 'ok') {
-                    showToast('Success', data.message || `Pemindaian web berhasil dimulai untuk ${selectedDomains.length} domain.`, '✅');
+                    showToast('Success', data.message || `Pemindaian web berhasil dimulai untuk ${selectedDomains.length} domain.`);
                     document.getElementById('webScanModalOverlay').classList.remove('active');
                     if (typeof fetchActiveScans === 'function') fetchActiveScans();
                 } else {
-                    showToast('Error', data.detail || data.message || 'Gagal memulai pemindaian web.', '❌');
+                    showToast('Error', data.detail || data.message || 'Gagal memulai pemindaian web.');
                 }
             })
             .catch(err => {
                 console.error('Error starting web scan:', err);
-                showToast('Error', 'Koneksi terputus dari server', '❌');
+                showToast('Error', 'Koneksi terputus dari server', '');
             })
             .finally(() => {
                 btnSubmit.disabled = false;
@@ -6913,7 +7444,7 @@ function submitNetworkScan() {
     const selectedDomains = Array.from(selectedCheckboxes).map(cb => cb.value);
 
     if (selectedDomains.length === 0) {
-        showToast('Error', 'Pilih minimal satu domain target dari inventory.', '❌');
+        showToast('Error', 'Pilih minimal satu domain target dari inventory.', '');
         return;
     }
 
@@ -6929,12 +7460,10 @@ function submitNetworkScan() {
 
     if (isSchedule) {
         const timeInput = document.getElementById('networkScanScheduleTime');
-        const frequencySelect = document.getElementById('networkScanScheduleFrequency');
         const scheduledTime = timeInput ? timeInput.value : '';
-        const frequency = frequencySelect ? frequencySelect.value : 'once';
 
         if (!scheduledTime) {
-            showToast('Error', 'Silakan pilih tanggal dan jam eksekusi jadwal scan.', '⚠️');
+            showToast('Error', 'Silakan pilih tanggal dan jam eksekusi jadwal scan.');
             return;
         }
 
@@ -6950,21 +7479,21 @@ function submitNetworkScan() {
                 scan_type: selectedScanType,
                 targets: selectedDomains,
                 scheduled_at: scheduledTime,
-                frequency: frequency
+                frequency: 'once'
             })
         })
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success' || data.status === 'ok') {
-                    showToast('Success', data.message || `Jadwal Network Scan berhasil disimpan untuk ${selectedDomains.length} domain.`, '📅');
+                    showToast('Success', data.message || `Jadwal Network Scan berhasil disimpan untuk ${selectedDomains.length} domain.`);
                     document.getElementById('networkScanModalOverlay').classList.remove('active');
                 } else {
-                    showToast('Error', data.detail || data.message || 'Gagal menyimpan jadwal scan.', '❌');
+                    showToast('Error', data.detail || data.message || 'Gagal menyimpan jadwal scan.');
                 }
             })
             .catch(err => {
                 console.error('Error scheduling network scan:', err);
-                showToast('Error', 'Koneksi terputus dari server', '❌');
+                showToast('Error', 'Koneksi terputus dari server', '');
             })
             .finally(() => {
                 btnSubmit.disabled = false;
@@ -6989,16 +7518,16 @@ function submitNetworkScan() {
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success' || data.status === 'ok') {
-                    showToast('Success', data.message || `Pemindaian network berhasil dimulai untuk ${selectedDomains.length} domain.`, '✅');
+                    showToast('Success', data.message || `Pemindaian network berhasil dimulai untuk ${selectedDomains.length} domain.`, '');
                     document.getElementById('networkScanModalOverlay').classList.remove('active');
                     if (typeof refreshData === 'function') refreshData(true);
                 } else {
-                    showToast('Error', data.detail || data.message || 'Gagal memulai pemindaian network.', '❌');
+                    showToast('Error', data.detail || data.message || 'Gagal memulai pemindaian network.', '');
                 }
             })
             .catch(err => {
                 console.error('Error starting network scan:', err);
-                showToast('Error', 'Koneksi terputus dari server', '❌');
+                showToast('Error', 'Koneksi terputus dari server', '');
             })
             .finally(() => {
                 btnSubmit.disabled = false;
@@ -7010,7 +7539,7 @@ function submitNetworkScan() {
 
 
 window.triggerSingleNetworkScan = async function (domainName) {
-    showToast('Scan Jaringan', `Memulai network scan untuk ${domainName}...`, '🚀');
+    showToast('Scan Jaringan', `Memulai network scan untuk ${domainName}...`, '');
     try {
         const resp = await fetch(`${API_BASE}/api/network-scan`, {
             method: 'POST',
@@ -7019,15 +7548,15 @@ window.triggerSingleNetworkScan = async function (domainName) {
         });
 
         if (resp.status === 200 || resp.status === 201 || resp.status === 202) {
-            showToast('Scan Diantrekan', `Scan untuk ${domainName} sedang berjalan di server.`, '✅');
+            showToast('Scan Diantrekan', `Scan untuk ${domainName} sedang berjalan di server.`, '');
             // Minta tabel diperbarui sesaat lagi
             setTimeout(() => refreshData(true), 2000);
         } else {
             const data = await resp.json();
-            showToast('Gagal', data.detail || 'Gagal memulai scan jaringan.', '❌');
+            showToast('Gagal', data.detail || 'Gagal memulai scan jaringan.', '');
         }
     } catch (err) {
-        showToast('Error Koneksi', 'Tidak dapat terhubung ke server.', '🔌');
+        showToast('Error Koneksi', 'Tidak dapat terhubung ke server.', '');
     }
 }
 
@@ -7721,13 +8250,13 @@ function showScanFinishedToast(notif) {
     toast.className = 'toast-notification overnight-toast';
 
     toast.innerHTML = `
-        <div class="toast-icon">⚠️</div>
+        <div class="toast-icon">️</div>
         <div class="toast-body" style="width: 100%;">
             <div class="toast-title">${escapeHtml(notif.title || 'Scan Selesai')}</div>
             <div class="toast-message">Ditemukan hasil pemindaian baru untuk target <strong>${escapeHtml(notif.domain || 'Domain')}</strong>. Cek detail sekarang.</div>
             <div class="toast-actions-row">
                 <button class="toast-btn toast-btn-primary" id="btnCekDetailScan-${notif.id}">Cek Detail</button>
-                <button class="toast-btn toast-btn-secondary" id="btnCloseScanNotif-${notif.id}">Tutup ✕</button>
+                <button class="toast-btn toast-btn-secondary" id="btnCloseScanNotif-${notif.id}">Tutup </button>
             </div>
         </div>
     `;
@@ -7799,13 +8328,13 @@ function showDomainFoundToast(notif) {
     toast.className = 'toast-notification overnight-toast';
 
     toast.innerHTML = `
-        <div class="toast-icon">🌐</div>
+        <div class="toast-icon"></div>
         <div class="toast-body" style="width: 100%;">
             <div class="toast-title">${escapeHtml(notif.title)}</div>
             <div class="toast-message">${escapeHtml(notif.message)}</div>
             <div class="toast-actions-row">
                 <button class="toast-btn toast-btn-primary" id="btnCekDomain-${notif.id}">Cek Detail</button>
-                <button class="toast-btn toast-btn-secondary" id="btnCloseDomain-${notif.id}">Tutup ✕</button>
+                <button class="toast-btn toast-btn-secondary" id="btnCloseDomain-${notif.id}">Tutup </button>
             </div>
         </div>
     `;
@@ -8006,7 +8535,7 @@ function updateThemeIcon(theme) {
 initTheme();
 
 // =========================================================
-// 🔔 FEATURE: DOMAIN ADDITION APPROVAL (SUPERADMIN)
+//  FEATURE: DOMAIN ADDITION APPROVAL (SUPERADMIN)
 // =========================================================
 window.openPendingDomainsModal = async function() {
     const modal = document.getElementById('pendingDomainsModalOverlay');

@@ -36,6 +36,14 @@ def ensure_domain_approval_columns():
                 cur.execute("SELECT setval('domains_id_seq', COALESCE((SELECT MAX(id) FROM domains), 1))")
             except Exception:
                 pass
+
+            # Ensure users table role constraint allows superadmin
+            try:
+                cur.execute("ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_role_check")
+                cur.execute("ALTER TABLE public.users ADD CONSTRAINT users_role_check CHECK (role IN ('superadmin', 'admin', 'user'))")
+            except Exception:
+                pass
+
             conn.commit()
     except Exception as e:
         if conn: conn.rollback()
