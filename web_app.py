@@ -583,37 +583,30 @@ def reset_password(req: ResetPasswordRequest):
         raise HTTPException(status_code=500, detail="Gagal menyimpan perubahan ke database.")
 
 # ===================================================================
-# API: Admin Panel Endpoints (Hanya untuk Admin)
+# API: Admin Panel Endpoints
 # ===================================================================
+
 @app.get("/api/admin/users")
-def get_users(admin_user = Depends(get_current_admin)):
-    """Mendapatkan daftar seluruh user untuk Admin Page"""
+def get_users(current_user = Depends(get_current_user)):
+    """Mendapatkan daftar pengguna berdasarkan peran/hirarki yang mengakses"""
     users = db_manager.list_all_users()
-    caller_role = admin_user.get("role")
-    caller_username = admin_user.get("username")
+    caller_role = current_user.get("role")
+    caller_username = current_user.get("username")
     
+    # 1. Super Admin bisa melihat semua orang
     if caller_role == "superadmin":
         return {"status": "ok", "data": users}
         
-    # Admin biasa hanya melihat user ber-role 'user' yang dibuat oleh dirinya sendiri
-    filtered = [
-        u for u in users 
-        if u.get("role") == "user" and u.get("created_by") == caller_username
-    ]
-    return {"status": "ok", "data": filtered}
-
-@app.get("/api/admin/users/{admin_username}/created-users")
-def get_created_users_by_admin(admin_username: str, admin_user = Depends(get_current_admin)):
-    """Mendapatkan daftar user yang dibuat oleh admin tertentu (Hanya Super Admin & Admin Ybs)"""
-    caller_role = admin_user.get("role")
-    caller_username = admin_user.get("username")
-    
-    if caller_role != "superadmin" and caller_username != admin_username:
-        raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk melihat daftar user ini.")
+    # 2. Admin biasa HANYA bisa melihat akun yang ia buat sendiri
+    if caller_role == "admin":
+        filtered = [
+            u for u in users 
+            if u.get("role") == "user" and u.get("created_by") == caller_username
+        ]
+        return {"status": "ok", "data": filtered}
         
-    users = db_manager.list_all_users()
-    created_users = [u for u in users if u.get("created_by") == admin_username]
-    return {"status": "ok", "admin_username": admin_username, "count": len(created_users), "data": created_users}
+    # 3. User biasa tidak berhak melihat apa-apa
+    raise HTTPException(status_code=403, detail="Anda tidak memiliki akses ke halaman ini.")
 
 def check_target_user_protection(target_username: str, caller: dict):
     target_user = db_manager.get_user_by_username(target_username)
@@ -635,52 +628,70 @@ def check_target_user_protection(target_username: str, caller: dict):
         
     return target_user
 
-def check_target_user_protection(target_username: str, caller: dict):
+def enforce_user_hierarchy(target_username: str, caller: dict):
+    """
+    Fungsi keamanan absolut untuk memastikan:
+    1. Tidak ada yang bisa mengubah Super Admin kecuali Super Admin itu sendiri.
+    2. Admin biasa hanya bisa mengubah User yang ia buat.
+    """
     target_user = db_manager.get_user_by_username(target_username)
     if not target_user:
         raise HTTPException(status_code=404, detail=f"User '{target_username}' tidak ditemukan.")
-    if target_user.get("role") == "superadmin" and caller.get("role") != "superadmin":
-        raise HTTPException(status_code=403, detail="Admin tidak memiliki izin untuk melakukan aksi ini terhadap Super Admin.")
-    return target_user
+        
+    caller_role = caller.get("role")
+    caller_username = caller.get("username")
+    target_role = target_user.get("role")
+    
+    # Super Admin bebas melakukan apapun ke semua akun (kecuali menghapus diri sendiri, itu ditangani di endpoint)
+    if caller_role == "superadmin":
+        return target_user
+        
+    # Jika yang mengeksekusi adalah Admin biasa:
+    if caller_role == "admin":
+        # Block 1: Admin tidak bisa mengutak-atik Super Admin atau Admin lain
+        if target_role in ["superadmin", "admin"]:
+            raise HTTPException(status_code=403, detail="Admin tidak memiliki izin untuk mengelola akun Admin/Super Admin lain.")
+            
+        # Block 2: Admin tidak bisa mengutak-atik User yang dibuat oleh orang lain
+        if target_user.get("created_by") != caller_username:
+            raise HTTPException(status_code=403, detail="Anda hanya dapat mengelola user yang Anda buat sendiri.")
+            
+        return target_user
+        
+    raise HTTPException(status_code=403, detail="Akses Ditolak.")
 
 @app.post("/api/admin/users/{target_username}/force-logout")
-async def force_logout(target_username: str, admin_user = Depends(get_current_admin)):
-    """Memaksa logout salah satu user"""
-    check_target_user_protection(target_username, admin_user)
+async def force_logout(target_username: str, current_user = Depends(get_current_user)):
+    enforce_user_hierarchy(target_username, current_user)
     db_manager.update_user_session(target_username, None, False)
     await manager.kick_user(target_username, "force_logout")
-    
     return {"status": "ok", "message": f"User '{target_username}' berhasil di-force logout."}
 
 @app.post("/api/admin/users/{target_username}/timeout")
-async def put_user_timeout(target_username: str, req: TimeoutRequest, admin_user = Depends(get_current_admin)):
-    """Menangguhkan user selama rentang waktu tertentu"""
-    check_target_user_protection(target_username, admin_user)
+async def put_user_timeout(target_username: str, req: TimeoutRequest, current_user = Depends(get_current_user)):
+    enforce_user_hierarchy(target_username, current_user)
     timeout_time = (datetime.now(timezone.utc) + timedelta(minutes=req.minutes)).isoformat()
     db_manager.update_user_timeout(target_username, timeout_time)
     await manager.kick_user(target_username, "timeout")
-    
     return {"status": "ok", "message": f"User '{target_username}' ditangguhkan selama {req.minutes} menit."}
 
 @app.post("/api/admin/users/{target_username}/remove-timeout")
-def remove_user_timeout(target_username: str, admin_user = Depends(get_current_admin)):
-    """Mencabut penangguhan (timeout) user"""
-    check_target_user_protection(target_username, admin_user)
+def remove_user_timeout(target_username: str, current_user = Depends(get_current_user)):
+    enforce_user_hierarchy(target_username, current_user)
     db_manager.update_user_timeout(target_username, None)
     return {"status": "ok", "message": f"Timeout untuk user '{target_username}' berhasil dicabut."}
 
 @app.delete("/api/admin/users/{target_username}")
-async def delete_user_endpoint(target_username: str, admin_user = Depends(get_current_admin)):
-    """Menghapus user secara permanen"""
-    check_target_user_protection(target_username, admin_user)
-    if target_username == admin_user["username"]:
+async def delete_user_endpoint(target_username: str, current_user = Depends(get_current_user)):
+    enforce_user_hierarchy(target_username, current_user)
+    
+    if target_username == current_user["username"]:
         raise HTTPException(status_code=400, detail="Anda tidak dapat menghapus akun Anda sendiri.")
         
     success = db_manager.delete_user(target_username)
     if not success:
-        raise HTTPException(status_code=404, detail=f"User '{target_username}' tidak ditemukan.")
+        raise HTTPException(status_code=404, detail=f"User '{target_username}' gagal dihapus dari database.")
         
-    # Kick target user out immediately if they are online
     await manager.kick_user(target_username, "force_logout")
     return {"status": "ok", "message": f"User '{target_username}' berhasil dihapus."}
 
