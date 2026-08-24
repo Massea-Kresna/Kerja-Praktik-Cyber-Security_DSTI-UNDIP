@@ -50,35 +50,63 @@ def ensure_domain_approval_columns():
     finally:
         conn.close()
 
+def ensure_database_schema():
+    conn = get_db_connection()
+    if not conn: return
+    try:
+        with conn.cursor() as cur:
+
+            cur.execute("ALTER TABLE public.domains ADD COLUMN IF NOT EXISTS approval_status VARCHAR(50) DEFAULT 'approved'")
+            cur.execute("ALTER TABLE public.domains ADD COLUMN IF NOT EXISTS requested_by TEXT")
+            cur.execute("UPDATE public.domains SET approval_status = 'approved' WHERE approval_status IS NULL")
+            
+            cur.execute("ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_by TEXT")
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS public.system_notifications (
+                    id SERIAL PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    notif_type VARCHAR(50) DEFAULT 'info',
+                    target_user TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    is_read BOOLEAN DEFAULT false
+                )
+            """)
+            
+            try:
+                cur.execute("SELECT setval('domains_id_seq', COALESCE((SELECT MAX(id) FROM domains), 1))")
+            except Exception:
+                pass
+            conn.commit()
+    except Exception as e:
+        if conn: conn.rollback()
+    finally:
+        conn.close()
+
 def check_db_connection():
     conn = get_db_connection()
     if conn:
         conn.close()
-        ensure_domain_approval_columns()
+        ensure_database_schema()
         return True
     return False
 
 def save_reset_token(email: str, token: str):
-    """Menyimpan token (Waktu dikontrol penuh oleh Python)"""
-    # Gunakan waktu absolut UTC agar tidak terpengaruh lokasi server
     expiry = datetime.now(timezone.utc) + timedelta(minutes=15)
-    
     saved_to_db = False
     conn = get_db_connection()
     if conn:
         try:
             with conn.cursor() as cur:
-                # Simpan waktu ke database tanpa menggunakan fungsi SQL
                 cur.execute("UPDATE users SET reset_token = %s, token_expiry = %s WHERE username = %s", (token, expiry, email))
                 conn.commit()
                 saved_to_db = True
         except Exception as e:
-            print(f"[-] Gagal menyimpan reset token PG: {e}")
             conn.rollback()
         finally:
             conn.close()
             
-    # Backup otomatis ke JSON jika ada kendala di database
     users = _read_local_users()
     for u in users:
         if u['username'] == email:
@@ -86,52 +114,39 @@ def save_reset_token(email: str, token: str):
             u['token_expiry'] = expiry.isoformat()
             _write_local_users(users)
             return True
-            
     return saved_to_db
 
 def verify_reset_token(token: str):
-    """Mengecek token (Validasi waktu dilakukan 100% di Python)"""
     now = datetime.now(timezone.utc)
-    
-    # 1. Cek dari Database PostgreSQL
     conn = get_db_connection()
     if conn:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                # Ambil data HANYA berdasarkan kecocokan token
                 cur.execute("SELECT username, token_expiry FROM users WHERE reset_token = %s", (token,))
                 res = cur.fetchone()
                 if res:
                     exp = res['token_expiry']
                     if exp:
-                        # Kembalikan zona waktu yang mungkin dihapus sepihak oleh Postgres
                         if exp.tzinfo is None:
                             exp = exp.replace(tzinfo=timezone.utc)
-                        
-                        # Validasi waktu secara matematis di Python
                         if exp > now:
                             return {"username": res['username']}
         except Exception as e:
-            print(f"[-] Gagal memverifikasi token PG: {e}")
+            pass
         finally:
             conn.close()
             
-    # 2. Cek dari Fallback JSON Lokal
     users = _read_local_users()
     for u in users:
         if u.get('reset_token') == token:
             try:
                 exp_time = datetime.fromisoformat(u['token_expiry'])
-                if exp_time.tzinfo is None:
-                    exp_time = exp_time.replace(tzinfo=timezone.utc)
-                if exp_time > now:
-                    return {"username": u['username']}
-            except Exception:
-                pass
+                if exp_time.tzinfo is None: exp_time = exp_time.replace(tzinfo=timezone.utc)
+                if exp_time > now: return {"username": u['username']}
+            except Exception: pass
     return None
 
 def reset_user_password(username: str, new_hashed_password: str):
-    """Menimpa password baru dan membersihkan jejak token"""
     saved_to_db = False
     conn = get_db_connection()
     if conn:
@@ -141,7 +156,6 @@ def reset_user_password(username: str, new_hashed_password: str):
                 conn.commit()
                 saved_to_db = True
         except Exception as e:
-            print(f"[-] Gagal mereset password PG: {e}")
             conn.rollback()
         finally:
             conn.close()
@@ -154,44 +168,36 @@ def reset_user_password(username: str, new_hashed_password: str):
             u['token_expiry'] = None
             _write_local_users(users)
             return True
-            
     return saved_to_db
 
 # ==============================================================================
-# AUTH & USER MANAGEMENT (LOCAL POSTGRES DENGAN JSON FALLBACK)
+# AUTH & USER MANAGEMENT (SUDAH DIKUNCI ANTI-GHOST USER)
 # ==============================================================================
 
 def hash_password(password: str, salt: str = None) -> str:
-    if not salt:
-        salt = uuid.uuid4().hex
+    if not salt: salt = uuid.uuid4().hex
     hashed = hashlib.sha256((password + salt).encode('utf-8')).hexdigest()
     return f'{salt}${hashed}'
 
 def verify_password(password: str, stored_hash: str) -> bool:
     try:
-        if not stored_hash or '$' not in stored_hash:
-            return False
+        if not stored_hash or '$' not in stored_hash: return False
         salt, hashed = stored_hash.split('$', 1)
         return hash_password(password, salt) == stored_hash
-    except Exception:
-        return False
+    except Exception: return False
 
 def _read_local_users():
-    if not os.path.exists(LOCAL_USERS_FILE):
-        return []
+    if not os.path.exists(LOCAL_USERS_FILE): return []
     try:
-        with open(LOCAL_USERS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        return []
+        with open(LOCAL_USERS_FILE, 'r', encoding='utf-8') as f: return json.load(f)
+    except Exception: return []
 
 def _write_local_users(users):
     try:
         with open(LOCAL_USERS_FILE, 'w', encoding='utf-8') as f:
             json.dump(users, f, indent=4, default=str)
         return True
-    except Exception:
-        return False
+    except Exception: return False
 
 def get_user_by_username(username: str):
     conn = get_db_connection()
@@ -200,30 +206,26 @@ def get_user_by_username(username: str):
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute('SELECT * FROM users WHERE username = %s LIMIT 1', (username,))
                 res = cur.fetchone()
-                if res:
-                    return dict(res)
+                return dict(res) if res else None # Tidak ada lagi fallback JSON jika DB jalan!
         except Exception as e:
-            print(f'[-] Postgres get_user error, fallback ke lokal: {e}')
+            print(f'[-] Postgres get_user error: {e}')
+            return None
         finally:
             conn.close()
             
-    # Fallback lokal
     users = _read_local_users()
     for u in users:
-        if u['username'] == username:
-            return u
+        if u['username'] == username: return u
     return None
 
 def create_user(username: str, password_plain: str, role: str, created_by: str = None):
     hashed_pw = hash_password(password_plain)
-    
     conn = get_db_connection()
     if conn:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute('SELECT id FROM users WHERE username = %s', (username,))
-                if cur.fetchone():
-                    raise Exception('Username sudah digunakan')
+                if cur.fetchone(): raise Exception('Username sudah digunakan')
                     
                 cur.execute(
                     'INSERT INTO users (username, password, role, is_online, created_by) VALUES (%s, %s, %s, %s, %s) RETURNING *',
@@ -231,30 +233,21 @@ def create_user(username: str, password_plain: str, role: str, created_by: str =
                 )
                 res = cur.fetchone()
                 conn.commit()
-                if res:
-                    return dict(res)
+                if res: return dict(res)
         except Exception as e:
-            print(f'[-] Postgres create_user error, fallback ke lokal: {e}')
-            if conn:
-                conn.rollback()
+            if conn: conn.rollback()
+            raise e
         finally:
             conn.close()
 
     users = _read_local_users()
     for u in users:
-        if u['username'] == username:
-            raise Exception('Username sudah digunakan')
+        if u['username'] == username: raise Exception('Username sudah digunakan')
             
     new_user = {
-        'username': username,
-        'password': hashed_pw,
-        'role': role,
-        'is_online': False,
-        'last_online': None,
-        'timeout_until': None,
-        'session_id': None,
-        'created_at': datetime.now(timezone.utc).isoformat(),
-        'created_by': created_by
+        'username': username, 'password': hashed_pw, 'role': role, 'is_online': False,
+        'last_online': None, 'timeout_until': None, 'session_id': None,
+        'created_at': datetime.now(timezone.utc).isoformat(), 'created_by': created_by
     }
     users.append(new_user)
     _write_local_users(users)
@@ -262,29 +255,20 @@ def create_user(username: str, password_plain: str, role: str, created_by: str =
 
 def update_user_session(username: str, session_id: str or None, is_online: bool):
     now_iso = datetime.now(timezone.utc).isoformat()
-    
     conn = get_db_connection()
     if conn:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 if is_online:
-                    cur.execute(
-                        'UPDATE users SET session_id = %s, is_online = %s, last_online = %s WHERE username = %s RETURNING *',
-                        (session_id, is_online, now_iso, username)
-                    )
+                    cur.execute('UPDATE users SET session_id = %s, is_online = %s, last_online = %s WHERE username = %s RETURNING *', (session_id, is_online, now_iso, username))
                 else:
-                    cur.execute(
-                        'UPDATE users SET session_id = %s, is_online = %s WHERE username = %s RETURNING *',
-                        (session_id, is_online, username)
-                    )
+                    cur.execute('UPDATE users SET session_id = %s, is_online = %s WHERE username = %s RETURNING *', (session_id, is_online, username))
                 res = cur.fetchone()
                 conn.commit()
-                if res:
-                    return dict(res)
+                return dict(res) if res else None
         except Exception as e:
-            print(f'[-] Postgres update_user_session error, fallback ke lokal: {e}')
-            if conn:
-                conn.rollback()
+            if conn: conn.rollback()
+            return None
         finally:
             conn.close()
             
@@ -293,8 +277,7 @@ def update_user_session(username: str, session_id: str or None, is_online: bool)
         if u['username'] == username:
             u['session_id'] = session_id
             u['is_online'] = is_online
-            if is_online:
-                u['last_online'] = now_iso
+            if is_online: u['last_online'] = now_iso
             _write_local_users(users)
             return u
     return None
@@ -306,23 +289,15 @@ def update_user_online_status(username: str, is_online: bool):
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 if is_online:
-                    cur.execute(
-                        'UPDATE users SET is_online = %s, last_online = %s WHERE username = %s RETURNING *',
-                        (is_online, now_iso, username)
-                    )
+                    cur.execute('UPDATE users SET is_online = %s, last_online = %s WHERE username = %s RETURNING *', (is_online, now_iso, username))
                 else:
-                    cur.execute(
-                        'UPDATE users SET is_online = %s WHERE username = %s RETURNING *',
-                        (is_online, username)
-                    )
+                    cur.execute('UPDATE users SET is_online = %s WHERE username = %s RETURNING *', (is_online, username))
                 res = cur.fetchone()
                 conn.commit()
-                if res:
-                    return dict(res)
+                return dict(res) if res else None
         except Exception as e:
-            print(f'[-] Postgres update_user_online_status error, fallback ke lokal: {e}')
-            if conn:
-                conn.rollback()
+            if conn: conn.rollback()
+            return None
         finally:
             conn.close()
             
@@ -330,8 +305,7 @@ def update_user_online_status(username: str, is_online: bool):
     for u in users:
         if u['username'] == username:
             u['is_online'] = is_online
-            if is_online:
-                u['last_online'] = now_iso
+            if is_online: u['last_online'] = now_iso
             _write_local_users(users)
             return u
     return None
@@ -341,18 +315,13 @@ def update_user_timeout(username: str, timeout_until: str or None):
     if conn:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(
-                    'UPDATE users SET timeout_until = %s, session_id = NULL, is_online = FALSE WHERE username = %s RETURNING *',
-                    (timeout_until, username)
-                )
+                cur.execute('UPDATE users SET timeout_until = %s, session_id = NULL, is_online = FALSE WHERE username = %s RETURNING *', (timeout_until, username))
                 res = cur.fetchone()
                 conn.commit()
-                if res:
-                    return dict(res)
+                return dict(res) if res else None
         except Exception as e:
-            print(f'[-] Postgres update_user_timeout error, fallback ke lokal: {e}')
-            if conn:
-                conn.rollback()
+            if conn: conn.rollback()
+            return None
         finally:
             conn.close()
             
@@ -373,10 +342,10 @@ def list_all_users():
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute('SELECT id, username, role, is_online, last_online, timeout_until, created_at, created_by FROM users ORDER BY username ASC')
                 res = cur.fetchall()
-                if res:
-                    return [dict(row) for row in res]
+                return [dict(row) for row in res] if res else []
         except Exception as e:
-            print(f'[-] Postgres list_all_users error, fallback ke lokal: {e}')
+            print(f'[-] Postgres list_all_users error: {e}')
+            return []
         finally:
             conn.close()
             
@@ -384,17 +353,14 @@ def list_all_users():
     filtered = []
     for u in users:
         filtered.append({
-            'username': u['username'],
-            'role': u['role'],
-            'is_online': u['is_online'],
-            'last_online': u.get('last_online'),
-            'timeout_until': u.get('timeout_until'),
-            'created_at': u.get('created_at'),
-            'created_by': u.get('created_by')
+            'username': u['username'], 'role': u['role'], 'is_online': u['is_online'],
+            'last_online': u.get('last_online'), 'timeout_until': u.get('timeout_until'),
+            'created_at': u.get('created_at'), 'created_by': u.get('created_by')
         })
     return sorted(filtered, key=lambda x: x['username'])
 
 def delete_user(username: str) -> bool:
+    is_deleted = False
     conn = get_db_connection()
     if conn:
         try:
@@ -402,20 +368,20 @@ def delete_user(username: str) -> bool:
                 cur.execute('DELETE FROM users WHERE username = %s RETURNING id', (username,))
                 res = cur.fetchone()
                 conn.commit()
-                if res:
-                    return True
+                if res: is_deleted = True
         except Exception as e:
-            print(f'[-] Postgres delete_user error, fallback ke lokal: {e}')
-            if conn:
-                conn.rollback()
+            if conn: conn.rollback()
         finally:
             conn.close()
             
+    # Sikat tuntas dari JSON lokal agar tidak ada celah login
     users = _read_local_users()
     filtered_users = [u for u in users if u['username'] != username]
     if len(users) != len(filtered_users):
-        return _write_local_users(filtered_users)
-    return False
+        _write_local_users(filtered_users)
+        is_deleted = True
+        
+    return is_deleted
 
 def get_user_by_session_id(session_id: str):
     conn = get_db_connection()
@@ -424,17 +390,15 @@ def get_user_by_session_id(session_id: str):
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute('SELECT * FROM users WHERE session_id = %s LIMIT 1', (session_id,))
                 res = cur.fetchone()
-                if res:
-                    return dict(res)
+                return dict(res) if res else None
         except Exception as e:
-            pass
+            return None
         finally:
             conn.close()
             
     users = _read_local_users()
     for u in users:
-        if u.get('session_id') == session_id:
-            return u
+        if u.get('session_id') == session_id: return u
     return None
 
 def seed_default_admin():
@@ -443,10 +407,10 @@ def seed_default_admin():
     try:
         admin_user = get_user_by_username(admin_username)
         if not admin_user:
-            create_user(admin_username, 'admin123', 'admin')
+            create_user(admin_username, 'admin123', 'superadmin')
             print(f'[+] Seeding Sukses: User default {admin_username} dengan password admin123 telah ditambahkan.')
     except Exception as e:
-        print(f'[-] Gagal melakukan seeding admin: {e}')
+        pass
 
 # ==============================================================================
 # SCAN SAVING METHODS
