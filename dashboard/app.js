@@ -684,6 +684,7 @@ function customConfirm({
     message = 'Apakah Anda yakin ingin melanjutkan tindakan ini?',
     confirmText = 'Ya, Lanjutkan',
     cancelText = 'Batal',
+    secondaryText = null,
     variant = 'danger'
 } = {}) {
     return new Promise((resolve) => {
@@ -693,6 +694,7 @@ function customConfirm({
         const iconBadge = document.getElementById('customModalIconBadge');
         const iconEl = document.getElementById('customModalIcon');
         const confirmBtn = document.getElementById('customModalConfirmBtn');
+        const secondaryBtn = document.getElementById('customModalSecondaryBtn');
         const cancelBtn = document.getElementById('customModalCancelBtn');
 
         if (!modal || !confirmBtn || !cancelBtn) {
@@ -704,6 +706,15 @@ function customConfirm({
         if (msgEl) msgEl.textContent = message;
         if (confirmBtn) confirmBtn.textContent = confirmText;
         if (cancelBtn) cancelBtn.textContent = cancelText;
+
+        if (secondaryBtn) {
+            if (secondaryText) {
+                secondaryBtn.textContent = secondaryText;
+                secondaryBtn.style.display = 'inline-block';
+            } else {
+                secondaryBtn.style.display = 'none';
+            }
+        }
 
         const iconSvgMap = {
             danger: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
@@ -724,19 +735,22 @@ function customConfirm({
         const cleanup = (result) => {
             modal.classList.remove('open');
             confirmBtn.removeEventListener('click', onConfirm);
+            if (secondaryBtn) secondaryBtn.removeEventListener('click', onSecondary);
             cancelBtn.removeEventListener('click', onCancel);
             document.removeEventListener('keydown', onKeyDown);
             resolve(result);
         };
 
-        const onConfirm = () => cleanup(true);
-        const onCancel = () => cleanup(false);
+        const onConfirm = () => cleanup(secondaryText ? 'confirm' : true);
+        const onSecondary = () => cleanup('secondary');
+        const onCancel = () => cleanup(secondaryText ? 'cancel' : false);
         const onKeyDown = (e) => {
             if (e.key === 'Escape') onCancel();
             if (e.key === 'Enter') onConfirm();
         };
 
         confirmBtn.addEventListener('click', onConfirm);
+        if (secondaryBtn) secondaryBtn.addEventListener('click', onSecondary);
         cancelBtn.addEventListener('click', onCancel);
         document.addEventListener('keydown', onKeyDown);
     });
@@ -2226,31 +2240,357 @@ function processNetworkScans(preservePage = false) {
 function applyNetworkFilters(preservePage = false) {
     const searchInput = document.getElementById('netSearchInput')?.value.toLowerCase() || '';
 
-    let dbFiltered = networkScans.filter(scan => {
-        const domainName = (scan.domains?.domain_name || '').toLowerCase();
-        const ip = (scan.domains?.ip_address || '').toLowerCase();
-        if (searchInput && !domainName.includes(searchInput) && !ip.includes(searchInput)) return false;
-        return true;
-    });
-
-    let liveFiltered = liveNetworkScans.filter(scan => {
-        const domainName = (scan.domain || '').toLowerCase();
-        if (searchInput && !domainName.includes(searchInput)) return false;
-        return true;
-    });
-
     let scheduledFiltered = scheduledNetworkScans.filter(scan => {
         const targetsStr = (scan.targets || []).join(' ').toLowerCase();
         if (searchInput && !targetsStr.includes(searchInput)) return false;
         return true;
     });
 
-    filteredNetworkScans = [...liveFiltered, ...scheduledFiltered, ...dbFiltered];
+    const scheduledTargets = new Set();
+    scheduledNetworkScans.forEach(s => {
+        (s.targets || []).forEach(t => {
+            const cleanT = String(t).toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, '').trim();
+            if (cleanT) scheduledTargets.add(cleanT);
+        });
+    });
+
+    let liveFiltered = liveNetworkScans.filter(scan => {
+        const domainName = (scan.domain || '').toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, '').trim();
+        if (scheduledTargets.has(domainName) || Array.from(scheduledTargets).some(st => domainName.includes(st) || st.includes(domainName))) {
+            return false;
+        }
+        if (searchInput && !domainName.includes(searchInput)) return false;
+        return true;
+    });
+
+    let dbFiltered = networkScans.filter(scan => {
+        const domainName = (scan.domains?.domain_name || '').toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, '').trim();
+        const ip = (scan.domains?.ip_address || '').toLowerCase();
+        if (scheduledTargets.has(domainName) || Array.from(scheduledTargets).some(st => domainName.includes(st) || st.includes(domainName))) {
+            return false;
+        }
+        if (searchInput && !domainName.includes(searchInput) && !ip.includes(searchInput)) return false;
+        return true;
+    });
+
+    filteredNetworkScans = [...scheduledFiltered, ...liveFiltered, ...dbFiltered];
 
     if (!preservePage) {
         netCurrentPage = 1;
     }
     renderNetworkScans();
+}
+
+window.collapsedSchedules = window.collapsedSchedules || new Set();
+window.userExpandedSchedules = window.userExpandedSchedules || new Set();
+
+function isScheduleCollapsed(scan) {
+    if (window.userExpandedSchedules.has(scan.id)) return false;
+    if (window.collapsedSchedules.has(scan.id)) return true;
+    const isInactive = scan.status === 'completed' || scan.status === 'cancelled';
+    return isInactive;
+}
+
+function toggleScheduleCollapse(scheduleId, currentlyCollapsed) {
+    if (!window.collapsedSchedules) window.collapsedSchedules = new Set();
+    if (!window.userExpandedSchedules) window.userExpandedSchedules = new Set();
+
+    if (currentlyCollapsed) {
+        window.collapsedSchedules.delete(scheduleId);
+        window.userExpandedSchedules.add(scheduleId);
+    } else {
+        window.userExpandedSchedules.delete(scheduleId);
+        window.collapsedSchedules.add(scheduleId);
+    }
+    if (typeof applyWebFilters === 'function') applyWebFilters(true);
+    if (typeof applyNetworkFilters === 'function') applyNetworkFilters(true);
+}
+
+function renderScheduledGroupRow(scan, category = 'web') {
+    const isWindowMode = !!scan.window_end_at || scan.frequency === 'window';
+    const isRunningWindow = scan.status === 'running';
+
+    const targetList = scan.targets || [];
+    const domainName = targetList.join(', ') || 'Target Scan';
+
+    const startStr = scan.scheduled_at ? scan.scheduled_at.replace('T', ' ').slice(0, 16) : '-';
+    const endStr = scan.window_end_at ? scan.window_end_at.replace('T', ' ').slice(11, 16) : '-';
+
+    let rangeText = isWindowMode 
+        ? `Rentang Waktu: <strong style="color: var(--color-accent); font-weight: 600;">${startStr} s/d ${endStr} WIB</strong>`
+        : `Waktu Eksekusi: <strong style="color: var(--color-accent); font-weight: 600;">${startStr} WIB</strong>`;
+
+    let headerBadge = '';
+    let headerActionBtn = '';
+
+    if (scan.status === 'running') {
+        headerBadge = `<span style="font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">Berjalan (Rentang Waktu)</span>`;
+        headerActionBtn = `<button type="button" class="btn btn-outline" onclick="cancelScheduledScan(${scan.id}, '${scan.status}')" style="border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, 0.06); font-size: 12px; padding: 6px 14px; border-radius: 6px; font-weight: 600;" onmouseover="this.style.background='#ef4444'; this.style.color='#ffffff';" onmouseout="this.style.background='rgba(239, 68, 68, 0.06)'; this.style.color='#ef4444';">Batalkan Jadwal</button>`;
+    } else if (scan.status === 'cancelled') {
+        headerBadge = `<span style="font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 12px; background: rgba(239, 68, 68, 0.12); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">Dibatalkan</span>`;
+        headerActionBtn = '';
+    } else if (scan.status === 'completed') {
+        headerBadge = `<span style="font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 12px; background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.25);">Selesai</span>`;
+        headerActionBtn = '';
+    } else {
+        headerBadge = `<span style="font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 12px; background: rgba(0, 88, 189, 0.08); color: var(--color-accent); border: 1px solid rgba(0, 88, 189, 0.25);">${isWindowMode ? 'Terjadwal (Rentang Waktu)' : 'Terjadwal'}</span>`;
+        headerActionBtn = `<button type="button" class="btn btn-outline" onclick="cancelScheduledScan(${scan.id}, '${scan.status}')" style="border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, 0.06); font-size: 12px; padding: 6px 14px; border-radius: 6px; font-weight: 600;" onmouseover="this.style.background='#ef4444'; this.style.color='#ffffff';" onmouseout="this.style.background='rgba(239, 68, 68, 0.06)'; this.style.color='#ef4444';">Batalkan Jadwal</button>`;
+    }
+
+    // Collapse State Determination
+    const isCollapsed = isScheduleCollapsed(scan);
+
+    // Sub-scans lookup with strict timeframe matching
+    const liveScans = (category === 'network' ? liveNetworkScans : liveWebScans) || [];
+    const dbScans = (category === 'network' ? networkScans : webScans) || [];
+
+    const normTargets = targetList.map(t => String(t).toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, ''));
+
+    const matchingLive = liveScans.filter(s => {
+        const dom = String(s.domain || '').toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, '');
+        return normTargets.some(nt => dom.includes(nt) || nt.includes(dom));
+    });
+
+    const schStart = new Date(scan.scheduled_at || scan.created_at).getTime() - 10 * 60 * 1000;
+    const schEnd = scan.window_end_at 
+        ? new Date(scan.window_end_at).getTime() + 60 * 60 * 1000
+        : new Date(scan.last_run_at || scan.scheduled_at || scan.created_at).getTime() + 60 * 60 * 1000;
+
+    const matchingDb = dbScans.filter(s => {
+        const dom = String(s.domains?.domain_name || '').toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, '');
+        const isDomainMatch = normTargets.some(nt => dom.includes(nt) || nt.includes(dom));
+        if (!isDomainMatch) return false;
+
+        if (s.scan_date) {
+            const sTime = new Date(s.scan_date).getTime();
+            if (sTime < schStart || sTime > schEnd) return false;
+        }
+        return true;
+    });
+
+    let subIndex = 0;
+    let subItemsHtml = '';
+
+    // Render completed DB scans
+    matchingDb.forEach(dbItem => {
+        subIndex += 1;
+        const dom = dbItem.domains?.domain_name || domainName;
+        const time = dbItem.scan_date ? dbItem.scan_date.replace('T', ' ').slice(0, 16) : startStr;
+        const vulns = dbItem.vulnerabilities || [];
+        
+        let cCount = vulns.filter(v => (v.risk_level || v.severity || '').toUpperCase() === 'CRITICAL').length;
+        let hCount = vulns.filter(v => (v.risk_level || v.severity || '').toUpperCase() === 'HIGH').length;
+        let mCount = vulns.filter(v => (v.risk_level || v.severity || '').toUpperCase() === 'MEDIUM').length;
+        let lCount = vulns.filter(v => (v.risk_level || v.severity || '').toUpperCase() === 'LOW' || (v.risk_level || v.severity || '').toUpperCase() === 'INFO').length;
+
+        let vulnBadges = `
+            <div style="display: flex; gap: 4px; align-items: center;">
+                <span class="severity-badge critical" style="font-size: 10px; padding: 2px 6px;">${cCount}</span>
+                <span class="severity-badge high" style="font-size: 10px; padding: 2px 6px;">${hCount}</span>
+                <span class="severity-badge medium" style="font-size: 10px; padding: 2px 6px;">${mCount}</span>
+                <span class="severity-badge low" style="font-size: 10px; padding: 2px 6px;">${lCount}</span>
+            </div>
+        `;
+
+        subItemsHtml += `
+            <div class="schedule-sub-item">
+                <!-- Col 1: SCANS (14%) -->
+                <div class="schedule-col-scans">
+                    <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 5px; background: rgba(0, 88, 189, 0.12); color: var(--color-accent); border: 1px solid rgba(0, 88, 189, 0.2);">
+                        Scan ${subIndex}
+                    </span>
+                </div>
+
+                <!-- Col 2: STATUS (12%) -->
+                <div class="schedule-col-status">
+                    <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: #10b981; background: rgba(16, 185, 129, 0.1); padding: 3px 8px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.25);">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        Selesai
+                    </span>
+                </div>
+
+                <!-- Col 3: TARGET (27%) -->
+                <div class="schedule-col-target">
+                    <div style="font-weight: 600; font-size: 13px; color: var(--color-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(dom)}">${escapeHtml(dom)}</div>
+                    <div style="font-size: 11px; color: var(--color-muted);">Eksekusi Ke-${subIndex}</div>
+                </div>
+
+                <!-- Col 4: SUMMARY (23%) -->
+                <div class="schedule-col-summary">
+                    ${vulnBadges}
+                </div>
+
+                <!-- Col 5: DATE (14%) -->
+                <div class="schedule-col-date">
+                    ${time}
+                </div>
+
+                <!-- Col 6: ACTION (10%) -->
+                <div class="schedule-col-action">
+                    <button type="button" class="btn btn-outline btn-schedule-action" onclick="openScanModalByScanId(${dbItem.id})">
+                        View Report
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+
+    // Render active live scans
+    matchingLive.forEach(liveItem => {
+        subIndex += 1;
+        const dom = liveItem.domain || domainName;
+        const progress = liveItem.progress || 0;
+        const time = liveItem.start_time ? liveItem.start_time.replace('T', ' ').slice(0, 16) : startStr;
+
+        subItemsHtml += `
+            <div class="schedule-sub-item is-running">
+                <!-- Col 1: SCANS (14%) -->
+                <div class="schedule-col-scans">
+                    <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 5px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">
+                        Scan ${subIndex}
+                    </span>
+                </div>
+
+                <!-- Col 2: STATUS (12%) -->
+                <div class="schedule-col-status">
+                    <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: #10b981;">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        Berjalan (${progress}%)
+                    </span>
+                </div>
+
+                <!-- Col 3: TARGET (27%) -->
+                <div class="schedule-col-target">
+                    <div style="font-weight: 600; font-size: 13px; color: var(--color-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(dom)}">${escapeHtml(dom)}</div>
+                    <div style="font-size: 11px; color: var(--color-muted);">Eksekusi Ke-${subIndex} (Aktif)</div>
+                </div>
+
+                <!-- Col 4: SUMMARY (23%) -->
+                <div class="schedule-col-summary">
+                    <div style="width: 110px; height: 6px; background: rgba(0,0,0,0.1); border-radius: 3px; overflow: hidden;">
+                        <div style="width: ${progress}%; height: 100%; background: #10b981; transition: width 0.3s;"></div>
+                    </div>
+                </div>
+
+                <!-- Col 5: DATE (14%) -->
+                <div class="schedule-col-date">
+                    ${time}
+                </div>
+
+                <!-- Col 6: ACTION (10%) -->
+                <div class="schedule-col-action">
+                    <button type="button" class="btn btn-outline btn-schedule-action" onclick="stopActiveScan('${liveItem.scan_id}')" style="border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, 0.08);">
+                        Hentikan
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+
+    // Default if no scans run yet
+    if (subIndex === 0) {
+        subItemsHtml += `
+            <div class="schedule-sub-item">
+                <!-- Col 1: SCANS (14%) -->
+                <div class="schedule-col-scans">
+                    <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 5px; background: rgba(0, 88, 189, 0.1); color: var(--color-muted); border: 1px solid rgba(0, 88, 189, 0.2);">
+                        Scan 1
+                    </span>
+                </div>
+
+                <!-- Col 2: STATUS (12%) -->
+                <div class="schedule-col-status">
+                    <span style="font-size: 11px; font-weight: 600; color: var(--color-accent); background: rgba(0, 88, 189, 0.08); padding: 3px 8px; border-radius: 12px; border: 1px solid rgba(0, 88, 189, 0.2);">
+                        Menunggu
+                    </span>
+                </div>
+
+                <!-- Col 3: TARGET (27%) -->
+                <div class="schedule-col-target">
+                    <div style="font-weight: 600; font-size: 13px; color: var(--color-ink);">${escapeHtml(domainName)}</div>
+                    <div style="font-size: 11px; color: var(--color-muted);">Eksekusi Pertama</div>
+                </div>
+
+                <!-- Col 4: SUMMARY (23%) -->
+                <div class="schedule-col-summary">
+                    <span style="font-size: 11px; color: var(--color-muted);">-</span>
+                </div>
+
+                <!-- Col 5: DATE (14%) -->
+                <div class="schedule-col-date">
+                    ${startStr} WIB
+                </div>
+
+                <!-- Col 6: ACTION (10%) -->
+                <div class="schedule-col-action">
+                    <span style="font-size: 11px; color: var(--color-muted);">-</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // Outer Container Wrap (Single TR with colspan="6")
+    return `
+        <tr class="schedule-group-row" style="background: transparent;">
+            <td colspan="6" style="padding: 10px 4px; border-bottom: 1px solid var(--color-border);">
+                <div class="schedule-card-box">                    <!-- Header Bar (Clickable Anywhere, Aligned to 6 Table Columns) -->
+                    <div class="schedule-header-bar ${isCollapsed ? '' : 'has-border'}" onclick="toggleScheduleCollapse(${scan.id}, ${isCollapsed})">
+                        <!-- Col 1: SCANS (14%) -->
+                        <div class="schedule-col-scans">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(0, 88, 189, 0.12); display: flex; align-items: center; justify-content: center; color: var(--color-accent); flex-shrink: 0;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                </div>
+                                <span style="font-weight: 700; font-size: 13px; color: var(--color-ink); white-space: nowrap;">Jadwal #${scan.id}</span>
+                            </div>
+                        </div>
+
+                        <!-- Col 2: STATUS (12%) -->
+                        <div class="schedule-col-status">
+                            ${headerBadge}
+                        </div>
+
+                        <!-- Col 3: TARGET (27%) -->
+                        <div class="schedule-col-target">
+                            <div style="font-weight: 600; font-size: 13px; color: var(--color-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(domainName)}">${escapeHtml(domainName)}</div>
+                            <div style="font-size: 11px; color: var(--color-muted);">Tipe Scan: <strong style="color: var(--color-ink);">${(scan.scan_type || 'deep').toUpperCase()}</strong></div>
+                        </div>
+
+                        <!-- Col 4: SUMMARY (23%) -->
+                        <div class="schedule-col-summary">
+                            <span style="font-size: 11px; color: var(--color-muted); font-weight: 500;">
+                                ${subIndex > 0 ? `${subIndex} Scan Dijalankan` : 'Belum Ada Scan'}
+                            </span>
+                        </div>
+
+                        <!-- Col 5: DATE (14%) -->
+                        <div class="schedule-col-date" style="flex-direction: column; align-items: flex-start; justify-content: center; line-height: 1.3;">
+                            <div style="font-size: 11px; font-weight: 600; color: var(--color-accent);">${isWindowMode ? `${startStr}` : startStr}</div>
+                            ${isWindowMode ? `<div style="font-size: 10px; color: var(--color-muted);">s/d ${endStr} WIB</div>` : `<div style="font-size: 10px; color: var(--color-muted);">WIB</div>`}
+                        </div>
+
+                        <!-- Col 6: ACTION (10%) -->
+                        <div class="schedule-col-action" onclick="event.stopPropagation();">
+                            <div style="display: flex; align-items: center; gap: 6px; justify-content: flex-end; width: 100%;">
+                                ${headerActionBtn}
+
+                                <button type="button" class="btn btn-outline btn-schedule-action" onclick="toggleScheduleCollapse(${scan.id}, ${isCollapsed}); event.stopPropagation();" title="${isCollapsed ? 'Tampilkan Detail' : 'Sembunyikan'}">
+                                    <span>${isCollapsed ? 'Detail' : 'Tutup'}</span>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform: ${isCollapsed ? 'rotate(0deg)' : 'rotate(180deg)'}; transition: transform 0.2s;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>                </div>
+
+                    <!-- Inner Sub-Scans List -->
+                    <div style="display: ${isCollapsed ? 'none' : 'flex'}; flex-direction: column; gap: 6px;">
+                        ${subItemsHtml}
+                    </div>
+
+                </div>
+            </td>
+        </tr>
+    `;
 }
 
 function renderNetworkScans() {
@@ -2289,38 +2629,7 @@ function renderNetworkScans() {
         let actualIndex = -1;
 
         if (isScheduled) {
-            domainName = (scan.targets || []).join(', ') || 'Target Scan';
-            targetSubtitle = `Tipe Scan: ${(scan.scan_type || 'deep').toUpperCase()}`;
-            scanIdLabel = 'Network Scan (Jadwal)';
-            dateStr = scan.scheduled_at ? scan.scheduled_at.replace('T', ' ').slice(0, 19) : '-';
-
-            statusHtml = `
-                <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; background: rgba(0, 88, 189, 0.08); color: var(--color-accent); border: 1px solid rgba(0, 88, 189, 0.2); font-size: 11px; font-weight: 600;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                    Terjadwal
-                </div>
-            `;
-            summaryHtml = `<span style="color: var(--color-muted); font-size: 12px; font-weight: 500;">Menunggu Eksekusi</span>`;
-            actionBtn = `<button type="button" class="btn btn-outline" onclick="cancelScheduledScan(${scan.id})" style="border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, 0.04); font-size: 12px; padding: 5px 12px; border-radius: 6px;" onmouseover="this.style.background='#ef4444'; this.style.color='#ffffff';" onmouseout="this.style.background='rgba(239, 68, 68, 0.04)'; this.style.color='#ef4444';">Batalkan Jadwal</button>`;
-
-            return `
-                <tr style="cursor: default; transition: background 0.2s;">
-                    <td style="padding: 16px; min-width: 140px;">
-                        <div style="display:flex; align-items:center; gap:8px; color: var(--color-accent); font-weight: 600; font-size: 13px;">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                            ${scanIdLabel}
-                        </div>
-                    </td>
-                    <td style="padding: 16px;">${statusHtml}</td>
-                    <td style="padding: 16px;">
-                        <div style="font-weight: 600; font-size: 13px; color: var(--color-ink); margin-bottom: 4px;">${escapeHtml(domainName)}</div>
-                        <div style="font-size: 12px; color: var(--color-muted);">${escapeHtml(targetSubtitle)}</div>
-                    </td>
-                    <td style="padding: 16px; min-width: 120px;">${summaryHtml}</td>
-                    <td style="padding: 16px; font-size: 13px; color: var(--color-ink); font-weight: 500; white-space: nowrap;">${dateStr}</td>
-                    <td style="padding: 16px; text-align:center;">${actionBtn}</td>
-                </tr>
-            `;
+            return renderScheduledGroupRow(scan, 'network');
         }
 
         // ID UNIK & CEK MEMORI UNTUK CHECKBOX (Anti-Amnesia)
@@ -2844,6 +3153,15 @@ function openScanModalIndex(index) {
     const scan = allVulns[index];
     if (scan) {
         openScanModal(scan);
+    }
+}
+
+function openScanModalByScanId(scanId) {
+    const scan = allVulns.find(v => v.id === scanId);
+    if (scan) {
+        openScanModal(scan);
+    } else {
+        showToast('Error', 'Detail laporan scan tidak ditemukan.', '');
     }
 }
 
@@ -5871,8 +6189,8 @@ function fetchScheduledScans() {
         .then(data => {
             if (data.status === 'success' || data.status === 'ok') {
                 allScheduledScans = (data.data || []).map(item => ({ ...item, is_scheduled: true }));
-                scheduledWebScans = allScheduledScans.filter(s => s.scan_category === 'web' && s.status === 'pending');
-                scheduledNetworkScans = allScheduledScans.filter(s => s.scan_category === 'network' && s.status === 'pending');
+                scheduledWebScans = allScheduledScans.filter(s => (s.scan_category || 'web') === 'web');
+                scheduledNetworkScans = allScheduledScans.filter(s => s.scan_category === 'network');
 
                 if (typeof applyWebFilters === 'function') applyWebFilters(true);
                 if (typeof applyNetworkFilters === 'function') applyNetworkFilters(true);
@@ -5883,18 +6201,41 @@ function fetchScheduledScans() {
         });
 }
 
-async function cancelScheduledScan(scheduleId) {
-    const isConfirmed = await customConfirm({
-        title: 'Batalkan Jadwal Scan',
-        message: 'Apakah Anda yakin ingin membatalkan jadwal scan ini?',
-        confirmText: 'Ya, Batalkan Jadwal',
-        cancelText: 'Batal',
-        variant: 'danger'
-    });
+async function cancelScheduledScan(scheduleId, status = '') {
+    let stopActive = false;
 
-    if (!isConfirmed) return;
+    if (status === 'running') {
+        const choice = await customConfirm({
+            title: 'Pembatalan Scan Berjalan',
+            message: 'Jadwal scan ini sedang BERJALAN di latar belakang. Silakan pilih opsi pembatalan:',
+            confirmText: 'Hentikan Jadwal & Pemindaian',
+            secondaryText: 'Hanya Batalkan Jadwal',
+            cancelText: 'Batal',
+            variant: 'danger'
+        });
 
-    fetch(`${API_BASE}/api/scans/schedules/${scheduleId}`, {
+        if (choice === 'cancel' || !choice) {
+            return;
+        }
+
+        if (choice === 'confirm') {
+            stopActive = true;
+        } else if (choice === 'secondary') {
+            stopActive = false;
+        }
+    } else {
+        const isConfirmed = await customConfirm({
+            title: 'Batalkan Jadwal Scan',
+            message: 'Apakah Anda yakin ingin membatalkan jadwal scan ini?',
+            confirmText: 'Ya, Batalkan Jadwal',
+            cancelText: 'Batal',
+            variant: 'danger'
+        });
+
+        if (!isConfirmed) return;
+    }
+
+    fetch(`${API_BASE}/api/scans/schedules/${scheduleId}?stop_active=${stopActive}`, {
         method: 'DELETE'
     })
         .then(res => res.json())
@@ -5902,6 +6243,7 @@ async function cancelScheduledScan(scheduleId) {
             if (data.status === 'success' || data.status === 'ok') {
                 showToast('Success', data.message || 'Jadwal scan berhasil dibatalkan.', '');
                 fetchScheduledScans();
+                if (typeof fetchActiveScans === 'function') fetchActiveScans();
             } else {
                 showToast('Error', data.detail || data.message || 'Gagal membatalkan jadwal scan.', '');
             }
@@ -5958,26 +6300,40 @@ function processWebScans(preservePage = false) {
 function applyWebFilters(preservePage = false) {
     const searchInput = document.getElementById('webScannerSearch')?.value.toLowerCase() || '';
 
-    let dbFiltered = webScans.filter(scan => {
-        const domainName = (scan.domains?.domain_name || '').toLowerCase();
-        const ip = (scan.domains?.ip_address || '').toLowerCase();
-        if (searchInput && !domainName.includes(searchInput) && !ip.includes(searchInput)) return false;
-        return true;
-    });
-
-    let liveFiltered = liveWebScans.filter(scan => {
-        const domainName = (scan.domain || '').toLowerCase();
-        if (searchInput && !domainName.includes(searchInput)) return false;
-        return true;
-    });
-
     let scheduledFiltered = scheduledWebScans.filter(scan => {
         const targetsStr = (scan.targets || []).join(' ').toLowerCase();
         if (searchInput && !targetsStr.includes(searchInput)) return false;
         return true;
     });
 
-    filteredWebScans = [...liveFiltered, ...scheduledFiltered, ...dbFiltered];
+    const scheduledTargets = new Set();
+    scheduledWebScans.forEach(s => {
+        (s.targets || []).forEach(t => {
+            const cleanT = String(t).toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, '').trim();
+            if (cleanT) scheduledTargets.add(cleanT);
+        });
+    });
+
+    let liveFiltered = liveWebScans.filter(scan => {
+        const domainName = (scan.domain || '').toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, '').trim();
+        if (scheduledTargets.has(domainName) || Array.from(scheduledTargets).some(st => domainName.includes(st) || st.includes(domainName))) {
+            return false;
+        }
+        if (searchInput && !domainName.includes(searchInput)) return false;
+        return true;
+    });
+
+    let dbFiltered = webScans.filter(scan => {
+        const domainName = (scan.domains?.domain_name || '').toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, '').trim();
+        const ip = (scan.domains?.ip_address || '').toLowerCase();
+        if (scheduledTargets.has(domainName) || Array.from(scheduledTargets).some(st => domainName.includes(st) || st.includes(domainName))) {
+            return false;
+        }
+        if (searchInput && !domainName.includes(searchInput) && !ip.includes(searchInput)) return false;
+        return true;
+    });
+
+    filteredWebScans = [...scheduledFiltered, ...liveFiltered, ...dbFiltered];
 
     if (!preservePage) {
         webCurrentPage = 1;
@@ -6023,38 +6379,7 @@ function renderWebScannerTable() {
         let actualIndex = -1;
 
         if (isScheduled) {
-            domainName = (scan.targets || []).join(', ') || 'Target Scan';
-            targetSubtitle = `Tipe Scan: ${(scan.scan_type || 'deep').toUpperCase()}`;
-            scanIdLabel = 'Website Scan (Jadwal)';
-            dateStr = scan.scheduled_at ? scan.scheduled_at.replace('T', ' ').slice(0, 19) : '-';
-
-            statusHtml = `
-                <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; background: rgba(0, 88, 189, 0.08); color: var(--color-accent); border: 1px solid rgba(0, 88, 189, 0.2); font-size: 11px; font-weight: 600;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                    Terjadwal
-                </div>
-            `;
-            summaryHtml = `<span style="color: var(--color-muted); font-size: 12px; font-weight: 500;">Menunggu Eksekusi</span>`;
-            actionBtn = `<button type="button" class="btn btn-outline" onclick="cancelScheduledScan(${scan.id})" style="border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, 0.04); font-size: 12px; padding: 5px 12px; border-radius: 6px;" onmouseover="this.style.background='#ef4444'; this.style.color='#ffffff';" onmouseout="this.style.background='rgba(239, 68, 68, 0.04)'; this.style.color='#ef4444';">Batalkan Jadwal</button>`;
-
-            return `
-                <tr style="cursor: default; transition: background 0.2s;">
-                    <td style="padding: 16px; min-width: 140px;">
-                        <div style="display:flex; align-items:center; gap:8px; color: var(--color-accent); font-weight: 600; font-size: 13px;">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                            ${scanIdLabel}
-                        </div>
-                    </td>
-                    <td style="padding: 16px;">${statusHtml}</td>
-                    <td style="padding: 16px;">
-                        <div style="font-weight: 600; font-size: 13px; color: var(--color-ink); margin-bottom: 4px;">${escapeHtml(domainName)}</div>
-                        <div style="font-size: 12px; color: var(--color-muted);">${escapeHtml(targetSubtitle)}</div>
-                    </td>
-                    <td style="padding: 16px; min-width: 120px;">${summaryHtml}</td>
-                    <td style="padding: 16px; font-size: 13px; color: var(--color-ink); font-weight: 500; white-space: nowrap;">${dateStr}</td>
-                    <td style="padding: 16px; text-align:center;">${actionBtn}</td>
-                </tr>
-            `;
+            return renderScheduledGroupRow(scan, 'web');
         }
 
         // ID UNIK & CEK MEMORI UNTUK CHECKBOX (Anti-Amnesia)
@@ -6665,54 +6990,81 @@ function closeSelectScanTypeModal() {
 
 // --- Custom Interactive Schedule Calendar & Time Picker ---
 // --- Custom Interactive Schedule Sub-Modal Pop-Up Controller ---
+// --- Custom Interactive Schedule Sub-Modal Pop-Up Controller ---
 let currentSchedulePickerPrefix = 'web';
+
+const createDefaultTimeObj = (offsetHours = 1) => {
+    const d = new Date(Date.now() + offsetHours * 3600000);
+    let rawMin = Math.floor(d.getMinutes() / 5) * 5;
+    return {
+        year: d.getFullYear(),
+        month: d.getMonth(),
+        day: d.getDate(),
+        hour: String(d.getHours()).padStart(2, '0'),
+        minute: String(rawMin).padStart(2, '0')
+    };
+};
+
 const schedulePickerState = {
-    web: { year: new Date().getFullYear(), month: new Date().getMonth(), day: new Date().getDate(), hour: '12', minute: '00' },
-    network: { year: new Date().getFullYear(), month: new Date().getMonth(), day: new Date().getDate(), hour: '12', minute: '00' }
+    web: {
+        mode: 'once',
+        duration_hours: 3,
+        start: createDefaultTimeObj(1)
+    },
+    network: {
+        mode: 'once',
+        duration_hours: 3,
+        start: createDefaultTimeObj(1)
+    }
 };
 
 const modalSchedulePickerState = {
-    year: new Date().getFullYear(),
-    month: new Date().getMonth(),
-    day: new Date().getDate(),
-    hour: '12',
-    minute: '00'
+    mode: 'once',
+    duration_hours: 3,
+    start: createDefaultTimeObj(1)
 };
 
 function initScheduleCalendar(prefix = 'web') {
     const state = schedulePickerState[prefix];
-    const defaultTime = new Date(Date.now() + 3600000); // +1 hour
-
-    state.year = defaultTime.getFullYear();
-    state.month = defaultTime.getMonth();
-    state.day = defaultTime.getDate();
-    state.hour = String(defaultTime.getHours()).padStart(2, '0');
-
-    let rawMinute = Math.floor(defaultTime.getMinutes() / 5) * 5;
-    state.minute = String(rawMinute).padStart(2, '0');
-
+    state.start = createDefaultTimeObj(1);
+    state.duration_hours = state.duration_hours || 3;
     updateScheduleValueAndLabel(prefix);
 }
+
+function setSchedulePickerMode(mode) {
+    modalSchedulePickerState.mode = mode;
+    renderScheduleCalendarModal();
+}
+
+function setScheduleDurationPreset(hours) {
+    modalSchedulePickerState.duration_hours = parseInt(hours, 10) || 1;
+    const customInput = document.getElementById('modalScheduleCustomDurationInput');
+    if (customInput) customInput.value = modalSchedulePickerState.duration_hours;
+    renderScheduleCalendarModal();
+}
+
+function onScheduleCustomDurationInput(val) {
+    let cleanVal = val.replace(/\D/g, '');
+    let num = parseInt(cleanVal, 10);
+    if (isNaN(num) || num < 1) num = 1;
+    if (num > 168) num = 168;
+    modalSchedulePickerState.duration_hours = num;
+    updateScheduleModalFooterLabel();
+}
+
+window.setScheduleDurationPreset = setScheduleDurationPreset;
+window.onScheduleCustomDurationInput = onScheduleCustomDurationInput;
 
 function openSchedulePickerModal(prefix = 'web') {
     currentSchedulePickerPrefix = prefix;
     const currentState = schedulePickerState[prefix];
 
-    modalSchedulePickerState.year = currentState.year;
-    modalSchedulePickerState.month = currentState.month;
-    modalSchedulePickerState.day = currentState.day;
-    modalSchedulePickerState.hour = currentState.hour;
-    modalSchedulePickerState.minute = currentState.minute;
+    modalSchedulePickerState.mode = currentState.mode || 'once';
+    modalSchedulePickerState.duration_hours = currentState.duration_hours || 3;
+    modalSchedulePickerState.start = { ...currentState.start };
 
-    // Populate Year select
-    const yearSelect = document.getElementById('modalScheduleYearSelect');
-    if (yearSelect && yearSelect.options.length === 0) {
-        let options = '';
-        for (let y = modalSchedulePickerState.year; y <= modalSchedulePickerState.year + 5; y++) {
-            options += `<option value="${y}">${y}</option>`;
-        }
-        yearSelect.innerHTML = options;
-    }
+    const customInput = document.getElementById('modalScheduleCustomDurationInput');
+    if (customInput) customInput.value = modalSchedulePickerState.duration_hours;
 
     const modal = document.getElementById('schedulePickerModalOverlay');
     if (modal) modal.classList.add('active');
@@ -6730,41 +7082,49 @@ function applySchedulePickerSelection() {
     formatScheduleTimeInput('minute');
 
     const now = new Date();
-    const selectedDate = new Date(modalSchedulePickerState.year, modalSchedulePickerState.month, modalSchedulePickerState.day, parseInt(modalSchedulePickerState.hour, 10) || 0, parseInt(modalSchedulePickerState.minute, 10) || 0, 0);
 
-    if (selectedDate < now) {
-        showToast('Peringatan', 'Waktu eksekusi tidak boleh di masa lalu. Harap pilih tanggal dan jam yang akan datang.', '❌');
+    const startDt = new Date(
+        modalSchedulePickerState.start.year,
+        modalSchedulePickerState.start.month,
+        modalSchedulePickerState.start.day,
+        parseInt(modalSchedulePickerState.start.hour, 10) || 0,
+        parseInt(modalSchedulePickerState.start.minute, 10) || 0,
+        0
+    );
+
+    if (startDt < now) {
+        showToast('Peringatan', 'Waktu mulai tidak boleh di masa lalu. Harap pilih tanggal dan jam yang akan datang.', '❌');
         return;
     }
 
     const targetState = schedulePickerState[currentSchedulePickerPrefix];
-    targetState.year = modalSchedulePickerState.year;
-    targetState.month = modalSchedulePickerState.month;
-    targetState.day = modalSchedulePickerState.day;
-    targetState.hour = modalSchedulePickerState.hour;
-    targetState.minute = modalSchedulePickerState.minute;
+    targetState.mode = modalSchedulePickerState.mode;
+    targetState.duration_hours = modalSchedulePickerState.duration_hours || 3;
+    targetState.start = { ...modalSchedulePickerState.start };
 
     updateScheduleValueAndLabel(currentSchedulePickerPrefix);
     closeSchedulePickerModal();
 }
 
 function selectScheduleDayModal(day) {
+    const activeState = modalSchedulePickerState.start;
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-    const targetDate = new Date(modalSchedulePickerState.year, modalSchedulePickerState.month, day, 23, 59, 59);
+    const targetDate = new Date(activeState.year, activeState.month, day, 23, 59, 59);
 
     if (targetDate < todayStart) {
         return;
     }
 
-    modalSchedulePickerState.day = day;
+    activeState.day = day;
     renderScheduleCalendarModal();
 }
 
 function navigateScheduleMonthModal(delta) {
+    const activeState = modalSchedulePickerState.start;
     const now = new Date();
-    let newMonth = modalSchedulePickerState.month + delta;
-    let newYear = modalSchedulePickerState.year;
+    let newMonth = activeState.month + delta;
+    let newYear = activeState.year;
 
     if (newMonth < 0) {
         newMonth = 11;
@@ -6778,23 +7138,24 @@ function navigateScheduleMonthModal(delta) {
         return;
     }
 
-    modalSchedulePickerState.month = newMonth;
-    modalSchedulePickerState.year = newYear;
+    activeState.month = newMonth;
+    activeState.year = newYear;
 
-    if (newYear === now.getFullYear() && newMonth === now.getMonth() && modalSchedulePickerState.day < now.getDate()) {
-        modalSchedulePickerState.day = now.getDate();
+    if (newYear === now.getFullYear() && newMonth === now.getMonth() && activeState.day < now.getDate()) {
+        activeState.day = now.getDate();
     }
 
     renderScheduleCalendarModal();
 }
 
 function onScheduleDropdownChangeModal() {
+    const activeState = modalSchedulePickerState.start;
     const monthSelect = document.getElementById('modalScheduleMonthSelect');
     const yearSelect = document.getElementById('modalScheduleYearSelect');
     const now = new Date();
 
-    let selectedMonth = monthSelect ? parseInt(monthSelect.value, 10) : modalSchedulePickerState.month;
-    let selectedYear = yearSelect ? parseInt(yearSelect.value, 10) : modalSchedulePickerState.year;
+    let selectedMonth = monthSelect ? parseInt(monthSelect.value, 10) : activeState.month;
+    let selectedYear = yearSelect ? parseInt(yearSelect.value, 10) : activeState.year;
 
     if (selectedYear < now.getFullYear() || (selectedYear === now.getFullYear() && selectedMonth < now.getMonth())) {
         selectedYear = now.getFullYear();
@@ -6803,11 +7164,11 @@ function onScheduleDropdownChangeModal() {
         if (yearSelect) yearSelect.value = selectedYear;
     }
 
-    modalSchedulePickerState.month = selectedMonth;
-    modalSchedulePickerState.year = selectedYear;
+    activeState.month = selectedMonth;
+    activeState.year = selectedYear;
 
-    if (selectedYear === now.getFullYear() && selectedMonth === now.getMonth() && modalSchedulePickerState.day < now.getDate()) {
-        modalSchedulePickerState.day = now.getDate();
+    if (selectedYear === now.getFullYear() && selectedMonth === now.getMonth() && activeState.day < now.getDate()) {
+        activeState.day = now.getDate();
     }
 
     renderScheduleCalendarModal();
@@ -6816,10 +7177,56 @@ function onScheduleDropdownChangeModal() {
 window.selectScheduleDayModal = selectScheduleDayModal;
 window.navigateScheduleMonthModal = navigateScheduleMonthModal;
 window.onScheduleDropdownChangeModal = onScheduleDropdownChangeModal;
+window.setSchedulePickerMode = setSchedulePickerMode;
 
 function renderScheduleCalendarModal() {
-    const state = modalSchedulePickerState;
+    const mode = modalSchedulePickerState.mode || 'once';
+    const activeState = modalSchedulePickerState.start;
     const now = new Date();
+
+    // Mode Buttons Styling
+    const btnOnce = document.getElementById('btnScheduleModeOnce');
+    const btnWindow = document.getElementById('btnScheduleModeWindow');
+    if (btnOnce && btnWindow) {
+        if (mode === 'once') {
+            btnOnce.className = 'btn btn-sm btn-primary-solid';
+            btnOnce.style.background = 'var(--primary)';
+            btnOnce.style.color = '#ffffff';
+            btnWindow.className = 'btn btn-sm btn-outline';
+            btnWindow.style.background = 'transparent';
+            btnWindow.style.color = 'var(--color-ink)';
+        } else {
+            btnWindow.className = 'btn btn-sm btn-primary-solid';
+            btnWindow.style.background = 'var(--primary)';
+            btnWindow.style.color = '#ffffff';
+            btnOnce.className = 'btn btn-sm btn-outline';
+            btnOnce.style.background = 'transparent';
+            btnOnce.style.color = 'var(--color-ink)';
+        }
+    }
+
+    // Duration Container Visibility
+    const durationContainer = document.getElementById('modalScheduleDurationContainer');
+    if (durationContainer) {
+        durationContainer.style.display = mode === 'window' ? 'block' : 'none';
+    }
+
+    const durBtns = document.querySelectorAll('.schedule-dur-btn');
+    durBtns.forEach(btn => {
+        const durVal = parseInt(btn.getAttribute('data-dur'), 10);
+        if (durVal === modalSchedulePickerState.duration_hours) {
+            btn.style.borderColor = 'var(--color-accent)';
+            btn.style.color = 'var(--color-accent)';
+            btn.style.background = 'rgba(0, 88, 189, 0.08)';
+            btn.style.fontWeight = '700';
+        } else {
+            btn.style.borderColor = 'var(--color-border)';
+            btn.style.color = 'var(--color-muted)';
+            btn.style.background = 'transparent';
+            btn.style.fontWeight = '500';
+        }
+    });
+
     const monthSelect = document.getElementById('modalScheduleMonthSelect');
     const yearSelect = document.getElementById('modalScheduleYearSelect');
     const hourInput = document.getElementById('modalScheduleHourInput');
@@ -6832,83 +7239,84 @@ function renderScheduleCalendarModal() {
             options += `<option value="${y}">${y}</option>`;
         }
         yearSelect.innerHTML = options;
-        yearSelect.value = state.year < now.getFullYear() ? now.getFullYear() : state.year;
+        yearSelect.value = activeState.year < now.getFullYear() ? now.getFullYear() : activeState.year;
     }
 
     if (monthSelect) {
         Array.from(monthSelect.options).forEach(opt => {
             const mVal = parseInt(opt.value, 10);
-            if (state.year === now.getFullYear() && mVal < now.getMonth()) {
+            if (activeState.year === now.getFullYear() && mVal < now.getMonth()) {
                 opt.disabled = true;
             } else {
                 opt.disabled = false;
             }
         });
-        monthSelect.value = state.month;
+        monthSelect.value = activeState.month;
     }
 
     if (prevBtn) {
-        const isCurrentOrPastMonth = (state.year <= now.getFullYear() && state.month <= now.getMonth());
+        const isCurrentOrPastMonth = (activeState.year <= now.getFullYear() && activeState.month <= now.getMonth());
         prevBtn.disabled = isCurrentOrPastMonth;
         prevBtn.style.opacity = isCurrentOrPastMonth ? '0.35' : '1';
         prevBtn.style.cursor = isCurrentOrPastMonth ? 'not-allowed' : 'pointer';
     }
 
-    if (hourInput) hourInput.value = state.hour;
-    if (minuteInput) minuteInput.value = state.minute;
+    if (hourInput) hourInput.value = activeState.hour;
+    if (minuteInput) minuteInput.value = activeState.minute;
 
     const grid = document.getElementById('modalScheduleDaysGrid');
-    if (!grid) return;
+    if (grid) {
+        const daysOfWeek = ['Mg', 'Sn', 'Sl', 'Rb', 'Km', 'Jm', 'Sb'];
+        let html = daysOfWeek.map(d => `<div style="font-size: 11px; font-weight: 700; color: #94a3b8; padding: 4px 0;">${d}</div>`).join('');
 
-    const daysOfWeek = ['Mg', 'Sn', 'Sl', 'Rb', 'Km', 'Jm', 'Sb'];
-    let html = daysOfWeek.map(d => `<div style="font-size: 11px; font-weight: 700; color: #94a3b8; padding: 4px 0;">${d}</div>`).join('');
+        const firstDayIndex = new Date(activeState.year, activeState.month, 1).getDay();
+        const totalDaysInMonth = new Date(activeState.year, activeState.month + 1, 0).getDate();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
 
-    const firstDayIndex = new Date(state.year, state.month, 1).getDay();
-    const totalDaysInMonth = new Date(state.year, state.month + 1, 0).getDate();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        for (let i = 0; i < firstDayIndex; i++) {
+            html += `<div></div>`;
+        }
 
-    for (let i = 0; i < firstDayIndex; i++) {
-        html += `<div></div>`;
+        for (let day = 1; day <= totalDaysInMonth; day++) {
+            const cellDate = new Date(activeState.year, activeState.month, day, 23, 59, 59);
+            const isPastDay = cellDate < todayStart;
+            const isSelected = day === activeState.day;
+
+            let bg = isSelected ? 'var(--primary)' : 'transparent';
+            let color = isSelected ? '#ffffff' : (isPastDay ? '#94a3b8' : 'var(--color-ink)');
+            let fontWeight = isSelected ? '700' : '500';
+            let cursor = isPastDay ? 'not-allowed' : 'pointer';
+            let opacity = isPastDay ? '0.35' : '1';
+            let textDecor = isPastDay ? 'line-through' : 'none';
+            let onClickAttr = isPastDay ? '' : `onclick="selectScheduleDayModal(${day})"`;
+
+            html += `
+                <div ${onClickAttr}
+                     style="padding: 5px 0; font-size: 12px; cursor: ${cursor}; opacity: ${opacity}; background: ${bg}; color: ${color}; border-radius: 6px; font-weight: ${fontWeight}; text-decoration: ${textDecor}; transition: all 0.12s; text-align: center;">
+                    ${day}
+                </div>
+            `;
+        }
+
+        const totalFilledCells = firstDayIndex + totalDaysInMonth;
+        const totalGridCells = totalFilledCells > 35 ? 42 : 35;
+        const trailingEmptyCells = totalGridCells - totalFilledCells;
+        for (let t = 0; t < trailingEmptyCells; t++) {
+            html += `<div></div>`;
+        }
+
+        grid.innerHTML = html;
     }
-
-    for (let day = 1; day <= totalDaysInMonth; day++) {
-        const cellDate = new Date(state.year, state.month, day, 23, 59, 59);
-        const isPastDay = cellDate < todayStart;
-        const isSelected = day === state.day;
-
-        let bg = isSelected ? 'var(--primary)' : 'transparent';
-        let color = isSelected ? '#ffffff' : (isPastDay ? '#94a3b8' : 'var(--color-ink)');
-        let fontWeight = isSelected ? '700' : '500';
-        let cursor = isPastDay ? 'not-allowed' : 'pointer';
-        let opacity = isPastDay ? '0.35' : '1';
-        let textDecor = isPastDay ? 'line-through' : 'none';
-        let onClickAttr = isPastDay ? '' : `onclick="selectScheduleDayModal(${day})"`;
-
-        html += `
-            <div ${onClickAttr}
-                 style="padding: 5px 0; font-size: 12px; cursor: ${cursor}; opacity: ${opacity}; background: ${bg}; color: ${color}; border-radius: 6px; font-weight: ${fontWeight}; text-decoration: ${textDecor}; transition: all 0.12s; text-align: center;">
-                ${day}
-            </div>
-        `;
-    }
-
-    const totalFilledCells = firstDayIndex + totalDaysInMonth;
-    const totalGridCells = totalFilledCells > 35 ? 42 : 35;
-    const trailingEmptyCells = totalGridCells - totalFilledCells;
-    for (let t = 0; t < trailingEmptyCells; t++) {
-        html += `<div></div>`;
-    }
-
-    grid.innerHTML = html;
     updateScheduleModalFooterLabel();
 }
 
 function validateScheduleTimeInput(type) {
+    const activeState = modalSchedulePickerState.start;
     const inputId = type === 'hour' ? 'modalScheduleHourInput' : 'modalScheduleMinuteInput';
     const input = document.getElementById(inputId);
     if (!input) return;
 
-    let cleanVal = input.value.replace(/\D/g, ''); // Strip non-numeric
+    let cleanVal = input.value.replace(/\D/g, '');
     if (cleanVal.length > 2) cleanVal = cleanVal.slice(0, 2);
 
     const maxVal = type === 'hour' ? 23 : 59;
@@ -6920,12 +7328,13 @@ function validateScheduleTimeInput(type) {
 
     input.value = cleanVal;
     const padded = cleanVal === '' ? '00' : String(parseInt(cleanVal, 10)).padStart(2, '0');
-    modalSchedulePickerState[type] = padded;
+    activeState[type] = padded;
 
     updateScheduleModalFooterLabel();
 }
 
 function formatScheduleTimeInput(type) {
+    const activeState = modalSchedulePickerState.start;
     const inputId = type === 'hour' ? 'modalScheduleHourInput' : 'modalScheduleMinuteInput';
     const input = document.getElementById(inputId);
     if (!input) return;
@@ -6940,31 +7349,29 @@ function formatScheduleTimeInput(type) {
 
     const padded = String(num).padStart(2, '0');
     input.value = padded;
-    modalSchedulePickerState[type] = padded;
+    activeState[type] = padded;
 
     updateScheduleModalFooterLabel();
 }
 
 function updateScheduleModalFooterLabel() {
-    const state = modalSchedulePickerState;
+    const mode = modalSchedulePickerState.mode || 'once';
+    const start = modalSchedulePickerState.start;
+    const durHours = modalSchedulePickerState.duration_hours || 3;
     const now = new Date();
-    const year = state.year;
-    const dayStr = String(state.day).padStart(2, '0');
-    const hourStr = state.hour || '00';
-    const minStr = state.minute || '00';
-    const monthNamesIndoFull = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
-    const selectedDateTime = new Date(state.year, state.month, state.day, parseInt(state.hour, 10) || 0, parseInt(state.minute, 10) || 0, 0);
-    const isPastTime = selectedDateTime < now;
-
+    const startDt = new Date(start.year, start.month, start.day, parseInt(start.hour, 10) || 0, parseInt(start.minute, 10) || 0, 0);
     const labelSpan = document.getElementById('modalScheduleDisplayLabel');
     const applyBtn = document.getElementById('modalScheduleApplyBtn');
 
-    if (isPastTime) {
+    const isPast = startDt < now;
+    const dayStr = String(start.day).padStart(2, '0');
+
+    if (isPast) {
         if (labelSpan) {
-            labelSpan.textContent = `Waktu eksekusi tidak boleh di masa lalu (${dayStr} ${monthNamesIndoFull[state.month]} ${year} ${hourStr}:${minStr} WIB)`;
+            labelSpan.textContent = `Waktu eksekusi tidak boleh di masa lalu (${dayStr} ${monthNames[start.month]} ${start.year} ${start.hour}:${start.minute} WIB)`;
             labelSpan.style.color = '#ef4444';
-            labelSpan.style.fontWeight = '600';
         }
         if (applyBtn) {
             applyBtn.disabled = true;
@@ -6972,11 +7379,23 @@ function updateScheduleModalFooterLabel() {
             applyBtn.style.cursor = 'not-allowed';
         }
     } else {
-        if (labelSpan) {
-            labelSpan.textContent = `Waktu Terpilih: ${dayStr} ${monthNamesIndoFull[state.month]} ${year} pukul ${hourStr}:${minStr} WIB`;
-            labelSpan.style.color = 'var(--color-accent)';
-            labelSpan.style.fontWeight = '600';
+        if (mode === 'once') {
+            if (labelSpan) {
+                labelSpan.textContent = `Waktu Terpilih: ${dayStr} ${monthNames[start.month]} ${start.year} pukul ${start.hour}:${start.minute} WIB`;
+                labelSpan.style.color = 'var(--color-accent)';
+            }
+        } else {
+            const endDt = new Date(startDt.getTime() + durHours * 3600000);
+            const endDayStr = String(endDt.getDate()).padStart(2, '0');
+            const endHourStr = String(endDt.getHours()).padStart(2, '0');
+            const endMinStr = String(endDt.getMinutes()).padStart(2, '0');
+
+            if (labelSpan) {
+                labelSpan.textContent = `Waktu Mulai: ${dayStr} ${monthNames[start.month]} ${start.hour}:${start.minute} WIB (Berulang ${durHours} Jam s/d ${endHourStr}:${endMinStr} WIB)`;
+                labelSpan.style.color = 'var(--color-accent)';
+            }
         }
+
         if (applyBtn) {
             applyBtn.disabled = false;
             applyBtn.style.opacity = '1';
@@ -6985,81 +7404,89 @@ function updateScheduleModalFooterLabel() {
     }
 }
 
+function updateScheduleValueAndLabel(prefix) {
+    const state = schedulePickerState[prefix];
+    const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    
+    const startStr = `${state.start.year}-${String(state.start.month + 1).padStart(2, '0')}-${String(state.start.day).padStart(2, '0')}T${state.start.hour}:${state.start.minute}:00`;
+    
+    const hiddenInput = document.getElementById(`${prefix}ScanScheduleTime`);
+    if (hiddenInput) hiddenInput.value = startStr;
+
+    const labelSpan = document.getElementById(`${prefix}ScheduleDisplayLabel`);
+    if (labelSpan) {
+        const startDt = new Date(state.start.year, state.start.month, state.start.day, parseInt(state.start.hour, 10) || 0, parseInt(state.start.minute, 10) || 0, 0);
+        const dayStr = String(state.start.day).padStart(2, '0');
+
+        if (state.mode === 'window') {
+            const durHours = state.duration_hours || 3;
+            const endDt = new Date(startDt.getTime() + durHours * 3600000);
+            const endHourStr = String(endDt.getHours()).padStart(2, '0');
+            const endMinStr = String(endDt.getMinutes()).padStart(2, '0');
+            labelSpan.textContent = `Waktu Terpilih: ${dayStr} ${monthNames[state.start.month]} ${state.start.hour}:${state.start.minute} WIB (Berulang ${durHours} Jam s/d ${endHourStr}:${endMinStr} WIB)`;
+        } else {
+            labelSpan.textContent = `Waktu Terpilih: ${dayStr} ${monthNames[state.start.month]} ${state.start.year} pukul ${state.start.hour}:${state.start.minute} WIB`;
+        }
+    }
+}
+
 function setQuickSchedulePresetModal(presetType) {
-    const state = modalSchedulePickerState;
+    const activeState = getActiveModalSubState();
     const now = new Date();
 
     if (presetType === 'tonight') {
-        state.year = now.getFullYear();
-        state.month = now.getMonth();
-        state.day = now.getDate();
-        state.hour = '23';
-        state.minute = '00';
+        activeState.year = now.getFullYear();
+        activeState.month = now.getMonth();
+        activeState.day = now.getDate();
+        activeState.hour = '23';
+        activeState.minute = '00';
     } else if (presetType === 'tomorrow_morning') {
         const tomorrow = new Date(now.getTime() + 86400000);
-        state.year = tomorrow.getFullYear();
-        state.month = tomorrow.getMonth();
-        state.day = tomorrow.getDate();
-        state.hour = '08';
-        state.minute = '00';
+        activeState.year = tomorrow.getFullYear();
+        activeState.month = tomorrow.getMonth();
+        activeState.day = tomorrow.getDate();
+        activeState.hour = '08';
+        activeState.minute = '00';
     } else if (presetType === 'tomorrow_afternoon') {
         const tomorrow = new Date(now.getTime() + 86400000);
-        state.year = tomorrow.getFullYear();
-        state.month = tomorrow.getMonth();
-        state.day = tomorrow.getDate();
-        state.hour = '14';
-        state.minute = '00';
+        activeState.year = tomorrow.getFullYear();
+        activeState.month = tomorrow.getMonth();
+        activeState.day = tomorrow.getDate();
+        activeState.hour = '14';
+        activeState.minute = '00';
     }
 
     renderScheduleCalendarModal();
 }
 
-function updateScheduleValueAndLabel(prefix) {
-    const state = schedulePickerState[prefix];
-    const year = state.year;
-    const monthStr = String(state.month + 1).padStart(2, '0');
-    const dayStr = String(state.day).padStart(2, '0');
-    const hourStr = state.hour || '12';
-    const minStr = state.minute || '00';
-
-    const isoStr = `${year}-${monthStr}-${dayStr}T${hourStr}:${minStr}`;
-    const hiddenInput = document.getElementById(`${prefix}ScanScheduleTime`);
-    if (hiddenInput) hiddenInput.value = isoStr;
-
-    const monthNamesIndoFull = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-    const formattedText = `Waktu Terpilih: ${dayStr} ${monthNamesIndoFull[state.month]} ${year} pukul ${hourStr}:${minStr} WIB`;
-
-    const labelSpan = document.getElementById(`${prefix}ScheduleDisplayLabel`);
-    if (labelSpan) labelSpan.textContent = formattedText;
-}
-
 function setQuickSchedulePreset(prefix, presetType) {
     const state = schedulePickerState[prefix];
+    const targetSubState = state.start;
     const now = new Date();
 
     if (presetType === 'tonight') {
-        state.year = now.getFullYear();
-        state.month = now.getMonth();
-        state.day = now.getDate();
-        state.hour = '23';
-        state.minute = '00';
+        targetSubState.year = now.getFullYear();
+        targetSubState.month = now.getMonth();
+        targetSubState.day = now.getDate();
+        targetSubState.hour = '23';
+        targetSubState.minute = '00';
     } else if (presetType === 'tomorrow_morning') {
         const tomorrow = new Date(now.getTime() + 86400000);
-        state.year = tomorrow.getFullYear();
-        state.month = tomorrow.getMonth();
-        state.day = tomorrow.getDate();
-        state.hour = '08';
-        state.minute = '00';
+        targetSubState.year = tomorrow.getFullYear();
+        targetSubState.month = tomorrow.getMonth();
+        targetSubState.day = tomorrow.getDate();
+        targetSubState.hour = '08';
+        targetSubState.minute = '00';
     } else if (presetType === 'tomorrow_afternoon') {
         const tomorrow = new Date(now.getTime() + 86400000);
-        state.year = tomorrow.getFullYear();
-        state.month = tomorrow.getMonth();
-        state.day = tomorrow.getDate();
-        state.hour = '14';
-        state.minute = '00';
+        targetSubState.year = tomorrow.getFullYear();
+        targetSubState.month = tomorrow.getMonth();
+        targetSubState.day = tomorrow.getDate();
+        targetSubState.hour = '14';
+        targetSubState.minute = '00';
     }
 
-    renderScheduleCalendar(prefix);
+    updateScheduleValueAndLabel(prefix);
 }
 
 function toggleScanScheduleFields(category) {
@@ -7256,12 +7683,16 @@ function submitWebScan() {
     const originalText = btnTextSpan ? btnTextSpan.textContent : 'Launch Scan';
 
     if (isSchedule) {
-        const timeInput = document.getElementById('webScanScheduleTime');
-        const scheduledTime = timeInput ? timeInput.value : '';
+        const state = schedulePickerState.web;
+        const startStr = `${state.start.year}-${String(state.start.month + 1).padStart(2, '0')}-${String(state.start.day).padStart(2, '0')}T${state.start.hour}:${state.start.minute}:00`;
+        let windowEndStr = null;
+        let freq = state.mode || 'once';
 
-        if (!scheduledTime) {
-            showToast('Error', 'Silakan pilih tanggal dan jam eksekusi jadwal scan.');
-            return;
+        if (freq === 'window') {
+            const startDt = new Date(state.start.year, state.start.month, state.start.day, parseInt(state.start.hour, 10) || 0, parseInt(state.start.minute, 10) || 0, 0);
+            const durHours = state.duration_hours || 3;
+            const endDt = new Date(startDt.getTime() + durHours * 3600000);
+            windowEndStr = `${endDt.getFullYear()}-${String(endDt.getMonth() + 1).padStart(2, '0')}-${String(endDt.getDate()).padStart(2, '0')}T${String(endDt.getHours()).padStart(2, '0')}:${String(endDt.getMinutes()).padStart(2, '0')}:00`;
         }
 
         btnSubmit.disabled = true;
@@ -7275,8 +7706,9 @@ function submitWebScan() {
                 scan_category: 'web',
                 scan_type: selectedScanType,
                 targets: selectedDomains,
-                scheduled_at: scheduledTime,
-                frequency: 'once'
+                scheduled_at: startStr,
+                window_end_at: windowEndStr,
+                frequency: freq
             })
         })
             .then(res => res.json())
@@ -7462,12 +7894,16 @@ function submitNetworkScan() {
     const originalText = btnTextSpan ? btnTextSpan.textContent : 'Launch Scan';
 
     if (isSchedule) {
-        const timeInput = document.getElementById('networkScanScheduleTime');
-        const scheduledTime = timeInput ? timeInput.value : '';
+        const state = schedulePickerState.network;
+        const startStr = `${state.start.year}-${String(state.start.month + 1).padStart(2, '0')}-${String(state.start.day).padStart(2, '0')}T${state.start.hour}:${state.start.minute}:00`;
+        let windowEndStr = null;
+        let freq = state.mode || 'once';
 
-        if (!scheduledTime) {
-            showToast('Error', 'Silakan pilih tanggal dan jam eksekusi jadwal scan.');
-            return;
+        if (freq === 'window') {
+            const startDt = new Date(state.start.year, state.start.month, state.start.day, parseInt(state.start.hour, 10) || 0, parseInt(state.start.minute, 10) || 0, 0);
+            const durHours = state.duration_hours || 3;
+            const endDt = new Date(startDt.getTime() + durHours * 3600000);
+            windowEndStr = `${endDt.getFullYear()}-${String(endDt.getMonth() + 1).padStart(2, '0')}-${String(endDt.getDate()).padStart(2, '0')}T${String(endDt.getHours()).padStart(2, '0')}:${String(endDt.getMinutes()).padStart(2, '0')}:00`;
         }
 
         btnSubmit.disabled = true;
@@ -7481,8 +7917,9 @@ function submitNetworkScan() {
                 scan_category: 'network',
                 scan_type: selectedScanType,
                 targets: selectedDomains,
-                scheduled_at: scheduledTime,
-                frequency: 'once'
+                scheduled_at: startStr,
+                window_end_at: windowEndStr,
+                frequency: freq
             })
         })
             .then(res => res.json())

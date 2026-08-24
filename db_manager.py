@@ -1487,12 +1487,17 @@ def ensure_scheduled_scans_table():
                     scan_type VARCHAR(50) NOT NULL DEFAULT 'deep',
                     targets JSONB NOT NULL,
                     scheduled_at TIMESTAMPTZ NOT NULL,
+                    window_end_at TIMESTAMPTZ,
                     frequency VARCHAR(50) NOT NULL DEFAULT 'once',
                     status VARCHAR(50) NOT NULL DEFAULT 'pending',
                     created_by VARCHAR(100),
                     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                     last_run_at TIMESTAMPTZ
                 )
+            """)
+            cur.execute("""
+                ALTER TABLE public.scheduled_scans 
+                ADD COLUMN IF NOT EXISTS window_end_at TIMESTAMPTZ
             """)
             conn.commit()
     except Exception as e:
@@ -1501,7 +1506,7 @@ def ensure_scheduled_scans_table():
     finally:
         conn.close()
 
-def create_scheduled_scan(scan_category, scan_type, targets, scheduled_at, frequency='once', created_by='Admin'):
+def create_scheduled_scan(scan_category, scan_type, targets, scheduled_at, window_end_at=None, frequency='once', created_by='Admin'):
     ensure_scheduled_scans_table()
     conn = get_db_connection()
     if not conn: return None
@@ -1509,16 +1514,18 @@ def create_scheduled_scan(scan_category, scan_type, targets, scheduled_at, frequ
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             targets_json = json.dumps(targets) if isinstance(targets, list) else targets
             cur.execute("""
-                INSERT INTO public.scheduled_scans (scan_category, scan_type, targets, scheduled_at, frequency, status, created_by)
-                VALUES (%s, %s, %s, %s, %s, 'pending', %s)
+                INSERT INTO public.scheduled_scans (scan_category, scan_type, targets, scheduled_at, window_end_at, frequency, status, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, 'pending', %s)
                 RETURNING *
-            """, (scan_category, scan_type, targets_json, scheduled_at, frequency, created_by))
+            """, (scan_category, scan_type, targets_json, scheduled_at, window_end_at, frequency, created_by))
             res = cur.fetchone()
             conn.commit()
             if res:
                 row = dict(res)
                 if hasattr(row.get('scheduled_at'), 'isoformat'):
                     row['scheduled_at'] = row['scheduled_at'].isoformat()
+                if hasattr(row.get('window_end_at'), 'isoformat') and row.get('window_end_at'):
+                    row['window_end_at'] = row['window_end_at'].isoformat()
                 if hasattr(row.get('created_at'), 'isoformat'):
                     row['created_at'] = row['created_at'].isoformat()
                 return row
@@ -1543,9 +1550,11 @@ def get_scheduled_scans_list():
                 row = dict(r)
                 if hasattr(row.get('scheduled_at'), 'isoformat'):
                     row['scheduled_at'] = row['scheduled_at'].isoformat()
+                if hasattr(row.get('window_end_at'), 'isoformat') and row.get('window_end_at'):
+                    row['window_end_at'] = row['window_end_at'].isoformat()
                 if hasattr(row.get('created_at'), 'isoformat'):
                     row['created_at'] = row['created_at'].isoformat()
-                if hasattr(row.get('last_run_at'), 'isoformat'):
+                if hasattr(row.get('last_run_at'), 'isoformat') and row.get('last_run_at'):
                     row['last_run_at'] = row['last_run_at'].isoformat()
                 result.append(row)
             return result
@@ -1560,7 +1569,7 @@ def delete_scheduled_scan(schedule_id):
     if not conn: return False
     try:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM public.scheduled_scans WHERE id = %s RETURNING id", (schedule_id,))
+            cur.execute("UPDATE public.scheduled_scans SET status = 'cancelled' WHERE id = %s RETURNING id", (schedule_id,))
             res = cur.fetchone()
             conn.commit()
             return bool(res)
@@ -1568,6 +1577,26 @@ def delete_scheduled_scan(schedule_id):
         if conn: conn.rollback()
         print(f"[-] Error delete_scheduled_scan: {e}")
         return False
+    finally:
+        conn.close()
+
+def get_scheduled_scan_by_id(schedule_id):
+    conn = get_db_connection()
+    if not conn: return None
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM public.scheduled_scans WHERE id = %s", (schedule_id,))
+            res = cur.fetchone()
+            if not res: return None
+            row = dict(res)
+            if hasattr(row.get('scheduled_at'), 'isoformat'):
+                row['scheduled_at'] = row['scheduled_at'].isoformat()
+            if hasattr(row.get('window_end_at'), 'isoformat') and row.get('window_end_at'):
+                row['window_end_at'] = row['window_end_at'].isoformat()
+            return row
+    except Exception as e:
+        print(f"[-] Error get_scheduled_scan_by_id: {e}")
+        return None
     finally:
         conn.close()
 
@@ -1587,6 +1616,8 @@ def get_pending_scheduled_scans_due():
                 row = dict(r)
                 if hasattr(row.get('scheduled_at'), 'isoformat'):
                     row['scheduled_at'] = row['scheduled_at'].isoformat()
+                if hasattr(row.get('window_end_at'), 'isoformat') and row.get('window_end_at'):
+                    row['window_end_at'] = row['window_end_at'].isoformat()
                 result.append(row)
             return result
     except Exception as e:
@@ -1601,6 +1632,32 @@ def mark_scheduled_scan_running(schedule_id):
     try:
         with conn.cursor() as cur:
             cur.execute("UPDATE public.scheduled_scans SET status = 'running' WHERE id = %s", (schedule_id,))
+            conn.commit()
+    except Exception as e:
+        if conn: conn.rollback()
+    finally:
+        conn.close()
+
+def mark_scheduled_scan_completed(schedule_id):
+    conn = get_db_connection()
+    if not conn: return
+    now_iso = datetime.now(timezone(timedelta(hours=7))).isoformat()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE public.scheduled_scans SET status = 'completed', last_run_at = %s WHERE id = %s", (now_iso, schedule_id))
+            conn.commit()
+    except Exception as e:
+        if conn: conn.rollback()
+    finally:
+        conn.close()
+
+def update_scheduled_scan_last_run(schedule_id):
+    conn = get_db_connection()
+    if not conn: return
+    now_iso = datetime.now(timezone(timedelta(hours=7))).isoformat()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE public.scheduled_scans SET last_run_at = %s WHERE id = %s", (now_iso, schedule_id))
             conn.commit()
     except Exception as e:
         if conn: conn.rollback()

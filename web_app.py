@@ -37,6 +37,75 @@ app = FastAPI(title="DSTI UNDIP Pentest Dashboard API")
 # Seeding admin secara otomatis saat file dimuat
 db_manager.seed_default_admin()
 
+async def run_window_scheduled_scan(schedule_id: int, category: str, scan_type: str, targets: List[str], window_end_at_iso: str):
+    """Fungsi latar belakang untuk mengeksekusi scan berulang dari Jam A hingga Jam B (window_end_at)."""
+    print(f"[*] Starting Time Window Continuous Scheduled Scan (ID: {schedule_id}) s/d {window_end_at_iso}")
+    db_manager.mark_scheduled_scan_running(schedule_id)
+    
+    try:
+        window_end_dt = datetime.fromisoformat(window_end_at_iso.replace('Z', '+00:00'))
+    except Exception as e:
+        print(f"[-] Error parsing window_end_at {window_end_at_iso}: {e}")
+        db_manager.mark_scheduled_scan_completed(schedule_id)
+        return
+
+    scan_run_count = 0
+    while True:
+        # Periksa apakah jadwal dibatalkan oleh pengguna
+        sc_check = db_manager.get_scheduled_scan_by_id(schedule_id)
+        if not sc_check or sc_check.get('status') == 'cancelled':
+            print(f"[!] Continuous Scheduled Scan ID {schedule_id} dibatalkan oleh pengguna. Menghentikan loop pemindaian.")
+            break
+
+        scan_run_count += 1
+        print(f"[🚀 WINDOW SCAN RUN #{scan_run_count}] ID: {schedule_id} | Category: {category.upper()} | Targets: {len(targets)}")
+        db_manager.update_scheduled_scan_last_run(schedule_id)
+
+        await manager.broadcast_to_admins({
+            "event": "new_notification",
+            "notification": {
+                "id": uuid.uuid4().hex,
+                "title": f"Jadwal {category.upper()} Scan (Iterasi #{scan_run_count})",
+                "message": f"Scan berulang ke-{scan_run_count} untuk {len(targets)} target sedang berjalan.",
+                "type": "scan_started",
+                "created_at": datetime.now(config.WIB).isoformat()
+            }
+        })
+
+        if category == 'network':
+            await run_network_scan_background(targets, scan_type)
+        else:
+            await run_web_scan_background(targets, scan_type)
+
+        # Periksa kembali jika jadwal dibatalkan saat proses scan berjalan
+        sc_check_after = db_manager.get_scheduled_scan_by_id(schedule_id)
+        if not sc_check_after or sc_check_after.get('status') == 'cancelled':
+            print(f"[!] Continuous Scheduled Scan ID {schedule_id} dibatalkan saat scan berjalan. Menghentikan loop.")
+            break
+
+        now_wib = datetime.now(config.WIB)
+        if window_end_dt.tzinfo is None:
+            window_end_dt = window_end_dt.replace(tzinfo=config.WIB)
+        
+        if now_wib >= window_end_dt:
+            print(f"[✅ WINDOW SCAN COMPLETE] ID: {schedule_id} reached end time {window_end_at_iso}. Total runs: {scan_run_count}. This was the last scan.")
+            db_manager.mark_scheduled_scan_completed(schedule_id)
+            
+            await manager.broadcast_to_admins({
+                "event": "new_notification",
+                "notification": {
+                    "id": uuid.uuid4().hex,
+                    "title": f"Rentang Waktu {category.upper()} Scan Selesai",
+                    "message": f"Seluruh pemindaian berulang untuk {len(targets)} target telah selesai (Total: {scan_run_count} kali scan).",
+                    "type": "scan_finished",
+                    "created_at": datetime.now(config.WIB).isoformat()
+                }
+            })
+            break
+        else:
+            print(f"[*] Window scan ID: {schedule_id} still active (now {now_wib.isoformat()} < {window_end_dt.isoformat()}). Triggering next run in 5 seconds...")
+            await asyncio.sleep(5)
+
 async def scheduled_scan_worker():
     """Background worker loop yang mengeksekusi scan terjadwal saat sudah masuk waktunya."""
     print("[*] Scheduled Scan Worker started.")
@@ -53,32 +122,32 @@ async def scheduled_scan_worker():
                     except: targets = []
 
                 freq = scan.get('frequency', 'once')
-                
-                print(f"[🚀 SCHEDULED EXECUTION] Menjalankan {category.upper()} Scan (ID: {s_id}) untuk {len(targets)} target!")
+                window_end = scan.get('window_end_at')
 
-                # Update status running
-                db_manager.mark_scheduled_scan_running(s_id)
-
-                # Trigger scan execution background task
-                if category == 'network':
-                    asyncio.create_task(run_network_scan_background(targets, scan_type))
+                if freq == 'window' or window_end:
+                    print(f"[🚀 WINDOW SCHEDULED EXECUTION] Menjalankan {category.upper()} Scan (ID: {s_id}) dari Jam A s/d Jam B ({window_end})!")
+                    asyncio.create_task(run_window_scheduled_scan(s_id, category, scan_type, targets, window_end))
                 else:
-                    asyncio.create_task(run_web_scan_background(targets, scan_type))
+                    print(f"[🚀 SCHEDULED EXECUTION] Menjalankan {category.upper()} Scan (ID: {s_id}) untuk {len(targets)} target!")
+                    db_manager.mark_scheduled_scan_running(s_id)
 
-                # Update schedule recurrence or complete
-                db_manager.update_scheduled_scan_after_run(s_id, freq)
+                    if category == 'network':
+                        asyncio.create_task(run_network_scan_background(targets, scan_type))
+                    else:
+                        asyncio.create_task(run_web_scan_background(targets, scan_type))
 
-                # Broadcast WebSocket notification
-                await manager.broadcast_to_admins({
-                    "event": "new_notification",
-                    "notification": {
-                        "id": uuid.uuid4().hex,
-                        "title": f"Jadwal {category.upper()} Scan Dieksekusi",
-                        "message": f"Scan terjadwal untuk {len(targets)} target telah otomatis dimulai.",
-                        "type": "scan_started",
-                        "created_at": datetime.now(config.WIB).isoformat()
-                    }
-                })
+                    db_manager.update_scheduled_scan_after_run(s_id, freq)
+
+                    await manager.broadcast_to_admins({
+                        "event": "new_notification",
+                        "notification": {
+                            "id": uuid.uuid4().hex,
+                            "title": f"Jadwal {category.upper()} Scan Dieksekusi",
+                            "message": f"Scan terjadwal untuk {len(targets)} target telah otomatis dimulai.",
+                            "type": "scan_started",
+                            "created_at": datetime.now(config.WIB).isoformat()
+                        }
+                    })
 
         except Exception as e:
             print(f"[-] Error in scheduled_scan_worker: {e}")
@@ -1409,7 +1478,8 @@ class ScheduleScanRequest(BaseModel):
     scan_type: Optional[str] = "deep"  # 'deep' or 'light'
     targets: List[str]
     scheduled_at: str  # ISO string
-    frequency: Optional[str] = "once"  # 'once', 'daily', 'weekly'
+    window_end_at: Optional[str] = None  # ISO string Jam B
+    frequency: Optional[str] = "once"  # 'once', 'window', 'daily', 'weekly'
 
 @app.post("/api/scans/schedule")
 async def create_scan_schedule(
@@ -1428,6 +1498,7 @@ async def create_scan_schedule(
         scan_type=payload.scan_type,
         targets=payload.targets,
         scheduled_at=payload.scheduled_at,
+        window_end_at=payload.window_end_at,
         frequency=payload.frequency,
         created_by=current_user.get("username", "Admin")
     )
@@ -1448,16 +1519,58 @@ async def get_scheduled_scans(current_user = Depends(get_current_user)):
     return {"status": "success", "data": data}
 
 @app.delete("/api/scans/schedules/{schedule_id}")
-async def cancel_scheduled_scan(schedule_id: int, current_user = Depends(get_current_user)):
-    """Membatalkan jadwal scan."""
+async def cancel_scheduled_scan(
+    schedule_id: int, 
+    stop_active: bool = Query(False),
+    current_user = Depends(get_current_user)
+):
+    """Membatalkan jadwal scan dan opsional menghentikan scan Pentest-Tools yang sedang berjalan."""
     if current_user.get("role") not in ["admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk melakukan aksi ini.")
 
-    success = db_manager.delete_scheduled_scan(schedule_id)
-    if not success:
+    sc = db_manager.get_scheduled_scan_by_id(schedule_id)
+    if not sc:
         raise HTTPException(status_code=404, detail="Jadwal scan tidak ditemukan.")
 
-    return {"status": "success", "message": "Jadwal scan berhasil dibatalkan."}
+    success = db_manager.delete_scheduled_scan(schedule_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Gagal membatalkan jadwal scan.")
+
+    stopped_count = 0
+    if stop_active:
+        targets = sc.get('targets', [])
+        if isinstance(targets, str):
+            try: targets = json.loads(targets)
+            except: targets = []
+
+        normalized_targets = set()
+        for t in targets:
+            clean_t = str(t).lower().replace("http://", "").replace("https://", "").strip("/")
+            if clean_t: normalized_targets.add(clean_t)
+
+        try:
+            active_resp = await get_active_scans(current_user)
+            active_list = active_resp.get("data", [])
+            for active_item in active_list:
+                active_domain = str(active_item.get("domain", "")).lower().replace("http://", "").replace("https://", "").strip("/")
+                scan_id = active_item.get("scan_id")
+                if scan_id and (active_domain in normalized_targets or any(nt in active_domain for nt in normalized_targets)):
+                    try:
+                        await stop_active_scan(StopScanRequest(scan_id=scan_id), current_user)
+                        stopped_count += 1
+                    except Exception as stop_e:
+                        print(f"[-] Error stopping live scan {scan_id}: {stop_e}")
+        except Exception as e:
+            print(f"[-] Error stopping active scans for schedule {schedule_id}: {e}")
+
+    msg = f"Jadwal scan #{schedule_id} berhasil dibatalkan."
+    if stop_active:
+        if stopped_count > 0:
+            msg += f" {stopped_count} pemindaian aktif yang berjalan juga telah dihentikan."
+        else:
+            msg += " Tidak ada pemindaian aktif yang perlu dihentikan saat ini."
+
+    return {"status": "success", "message": msg}
 
 @app.post("/api/trigger-pentest")
 async def trigger_pentest(domain_name: str, background_tasks: BackgroundTasks, current_user = Depends(get_current_user)):
