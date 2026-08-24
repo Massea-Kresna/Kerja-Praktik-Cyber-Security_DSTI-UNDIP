@@ -55,13 +55,86 @@ def ensure_database_schema():
     if not conn: return
     try:
         with conn.cursor() as cur:
+            # 1. UUID Extension
+            try:
+                cur.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
+            except Exception:
+                pass
 
+            # 2. Table: domains
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS public.domains (
+                    id SERIAL PRIMARY KEY,
+                    domain_name VARCHAR(255) NOT NULL UNIQUE,
+                    ip_address VARCHAR(45),
+                    discovered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN DEFAULT true,
+                    approval_status VARCHAR(50) DEFAULT 'approved',
+                    requested_by TEXT
+                )
+            """)
             cur.execute("ALTER TABLE public.domains ADD COLUMN IF NOT EXISTS approval_status VARCHAR(50) DEFAULT 'approved'")
             cur.execute("ALTER TABLE public.domains ADD COLUMN IF NOT EXISTS requested_by TEXT")
             cur.execute("UPDATE public.domains SET approval_status = 'approved' WHERE approval_status IS NULL")
-            
+
+            # 3. Table: scan_history
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS public.scan_history (
+                    id SERIAL PRIMARY KEY,
+                    domain_id INTEGER NOT NULL REFERENCES public.domains(id) ON DELETE CASCADE,
+                    scan_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    risk_score DOUBLE PRECISION DEFAULT 0.0,
+                    risk_level VARCHAR(50) DEFAULT 'SAFE',
+                    raw_json JSONB
+                )
+            """)
+
+            # 4. Table: scan_result
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS public.scan_result (
+                    id SERIAL PRIMARY KEY,
+                    history_id INTEGER NOT NULL REFERENCES public.scan_history(id) ON DELETE CASCADE,
+                    severity VARCHAR(20) NOT NULL,
+                    check_type VARCHAR(100),
+                    title VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    recommendation TEXT,
+                    epss_score DOUBLE PRECISION,
+                    epss_percentile DOUBLE PRECISION,
+                    cisa_kev BOOLEAN DEFAULT false,
+                    cve VARCHAR(100),
+                    cvss_v3 VARCHAR(50),
+                    cwe VARCHAR(255),
+                    evidence TEXT
+                )
+            """)
+
+            # 5. Table: users
+            try:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS public.users (
+                        id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+                        username TEXT NOT NULL UNIQUE,
+                        password TEXT NOT NULL,
+                        role TEXT NOT NULL CHECK (role IN ('superadmin', 'admin', 'user')),
+                        is_online BOOLEAN DEFAULT false,
+                        last_online TIMESTAMP WITH TIME ZONE,
+                        timeout_until TIMESTAMP WITH TIME ZONE,
+                        session_id TEXT,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        created_by TEXT
+                    )
+                """)
+            except Exception:
+                pass
+
             cur.execute("ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_by TEXT")
-            
+            cur.execute("ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_online BOOLEAN DEFAULT false")
+            cur.execute("ALTER TABLE public.users ADD COLUMN IF NOT EXISTS last_online TIMESTAMPTZ")
+            cur.execute("ALTER TABLE public.users ADD COLUMN IF NOT EXISTS timeout_until TIMESTAMPTZ")
+            cur.execute("ALTER TABLE public.users ADD COLUMN IF NOT EXISTS session_id TEXT")
+
+            # 6. Table: system_notifications
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS public.system_notifications (
                     id SERIAL PRIMARY KEY,
@@ -73,16 +146,47 @@ def ensure_database_schema():
                     is_read BOOLEAN DEFAULT false
                 )
             """)
+
+            # 7. Table: scheduled_scans
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS public.scheduled_scans (
+                    id SERIAL PRIMARY KEY,
+                    scan_category VARCHAR(50) NOT NULL,
+                    scan_type VARCHAR(50) NOT NULL DEFAULT 'deep',
+                    targets JSONB NOT NULL,
+                    scheduled_at TIMESTAMPTZ NOT NULL,
+                    window_end_at TIMESTAMPTZ,
+                    frequency VARCHAR(50) NOT NULL DEFAULT 'once',
+                    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+                    created_by VARCHAR(100),
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    last_run_at TIMESTAMPTZ
+                )
+            """)
+            cur.execute("ALTER TABLE public.scheduled_scans ADD COLUMN IF NOT EXISTS window_end_at TIMESTAMPTZ")
             
-            try:
-                cur.execute("SELECT setval('domains_id_seq', COALESCE((SELECT MAX(id) FROM domains), 1))")
-            except Exception:
-                pass
+            # Sequence setvals for smooth auto-increment
+            sequences = [
+                ('domains_id_seq', 'domains'),
+                ('scan_history_id_seq', 'scan_history'),
+                ('scan_result_id_seq', 'scan_result'),
+                ('system_notifications_id_seq', 'system_notifications'),
+                ('scheduled_scans_id_seq', 'scheduled_scans')
+            ]
+            for seq_name, table_name in sequences:
+                try:
+                    cur.execute(f"SELECT setval('public.{seq_name}', COALESCE((SELECT MAX(id) FROM public.{table_name}), 1))")
+                except Exception:
+                    pass
+
             conn.commit()
     except Exception as e:
         if conn: conn.rollback()
+        print(f"[-] Error ensure_database_schema: {e}")
     finally:
         conn.close()
+    
+    ensure_scheduled_scans_table()
 
 def check_db_connection():
     conn = get_db_connection()
@@ -1499,6 +1603,10 @@ def ensure_scheduled_scans_table():
                 ALTER TABLE public.scheduled_scans 
                 ADD COLUMN IF NOT EXISTS window_end_at TIMESTAMPTZ
             """)
+            try:
+                cur.execute("SELECT setval('public.scheduled_scans_id_seq', COALESCE((SELECT MAX(id) FROM public.scheduled_scans), 1))")
+            except Exception:
+                pass
             conn.commit()
     except Exception as e:
         if conn: conn.rollback()
