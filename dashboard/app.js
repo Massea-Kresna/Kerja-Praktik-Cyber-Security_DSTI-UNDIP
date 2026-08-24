@@ -3428,8 +3428,11 @@ function openThreatModal(vuln) {
     if (validCve) {
         document.getElementById('class_cve_container').style.display = 'block';
         
+        // Bersihkan kurung kurawal, kurung siku, dan kutip sebelum di-split
+        let cleanCveString = vuln.cve.replace(/[{}"'[\]]/g, '');
+        
         // Parse and generate hyperlinks for CVEs
-        const cves = vuln.cve.split(',').map(c => c.trim()).filter(c => c && c !== '{}');
+        const cves = cleanCveString.split(',').map(c => c.trim()).filter(c => c);
         const cveHtml = cves.map(c => `<a href="https://nvd.nist.gov/vuln/detail/${c}" target="_blank" style="color: #0d6efd; text-decoration: underline;">${c}</a>`).join(', ');
         
         document.getElementById('modalCve').innerHTML = cveHtml;
@@ -3449,8 +3452,11 @@ function openThreatModal(vuln) {
     if (vuln.cwe) {
         document.getElementById('class_cwe_container').style.display = 'block';
         
+        // Bersihkan karakter aneh pada CWE juga
+        let cleanCweString = vuln.cwe.replace(/[{}"'[\]]/g, '');
+        
         // Parse and generate hyperlinks for CWEs
-        const cwes = vuln.cwe.split(',').map(c => c.trim()).filter(c => c);
+        const cwes = cleanCweString.split(',').map(c => c.trim()).filter(c => c);
         const cweHtml = cwes.map(c => {
             // Extract the number from CWE-XXX
             const match = c.match(/CWE-(\d+)/i);
