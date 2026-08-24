@@ -4237,17 +4237,27 @@ function handleSuccessfulLogin(user) {
             topbarProfile.textContent = user.username;
         }
     }
+    
     const roleEl = document.getElementById('sidebar-user-role');
+    const navAdmin = document.getElementById('nav-admin');
+    
+    // TAMPILKAN MENU BERDASARKAN ROLE
     if (user.role === 'superadmin' || user.role === 'admin') {
         if (user.role === 'superadmin') {
             roleEl.innerHTML = `<span class="badge-superadmin-role">SUPER ADMIN</span>`;
         } else {
             roleEl.innerHTML = `<span class="badge-admin-role">ADMIN</span>`;
         }
-        document.getElementById('nav-admin').style.display = 'flex';
+        
+        // Paksa menu User Management untuk tampil (Cabut class hidden)
+        if (navAdmin) {
+            navAdmin.classList.remove('hidden');
+            navAdmin.style.display = 'flex';
+        }
+        
         document.getElementById('notifWrapper').style.display = 'block';
 
-        // Tampilkan menu khusus admin
+        // Tampilkan menu khusus admin lainnya
         const navInventory = document.querySelector('[onclick="switchView(\'inventory\')"]');
         const navWebScanner = document.querySelector('[onclick="switchView(\'web-scanner\')"]');
         const navNetworkScanner = document.querySelector('[onclick="switchView(\'network-scanner\')"]');
@@ -4256,11 +4266,17 @@ function handleSuccessfulLogin(user) {
         if (navNetworkScanner) navNetworkScanner.style.display = 'flex';
 
         fetchNotifications();
-        checkOvernightNotifications();
+        if (typeof checkOvernightNotifications === 'function') checkOvernightNotifications();
+        
     } else {
-
         roleEl.innerHTML = `<span class="badge-user-role">User</span>`;
-        document.getElementById('nav-admin').style.display = 'none';
+        
+        // Sembunyikan menu User Management untuk User biasa
+        if (navAdmin) {
+            navAdmin.classList.add('hidden');
+            navAdmin.style.display = 'none';
+        }
+        
         document.getElementById('notifWrapper').style.display = 'none';
 
         // Sembunyikan menu dari user biasa
@@ -4281,7 +4297,7 @@ function handleSuccessfulLogin(user) {
         }
     }
 
-    // Hubungkan WebSocket Live Session untuk semua user (baik admin maupun user biasa)
+    // Hubungkan WebSocket Live Session
     connectLiveWebSocket(user.session_id);
 
     // Clean inputs
@@ -4290,9 +4306,8 @@ function handleSuccessfulLogin(user) {
     document.getElementById('authErrorMsg').style.display = 'none';
 
     refreshData();
-    loadOverview(); // Load the overview/charts at least once on startup
+    loadOverview(); 
 
-    // Mulai refresh otomatis 5 detik HANYA setelah sukses login
     if (autoRefreshInterval) clearInterval(autoRefreshInterval);
     autoRefreshInterval = setInterval(() => refreshData(true), 5000);
 }
@@ -4666,43 +4681,20 @@ function renderUserTable() {
         const isProtectedSuperAdmin = u.role === 'superadmin' && currentUser.role !== 'superadmin';
         const isSuperAdminCaller = currentUser && currentUser.role === 'superadmin';
         
+        // 1. Tentukan Bentuk Lencana (Role Badge)
         let roleBadge = `<span class="badge-user-role">User</span>`;
         if (u.role === 'superadmin') {
-            if (isSuperAdminCaller) {
-                roleBadge = `
-                    <span class="badge-superadmin-role clickable-role-badge" onclick="showRoleInfoModal('${escapeHtml(u.username)}')" title="Klik untuk lihat detail Super Admin">
-                        Super Admin
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left:3px; opacity:0.85;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                    </span>`;
-            } else {
-                roleBadge = `<span class="badge-superadmin-role">Super Admin</span>`;
-            }
+            roleBadge = `<span style="background:#8b5cf6; color:white; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; letter-spacing:0.5px; cursor:pointer;" onclick="if(${isSuperAdminCaller}) showRoleInfoModal('${escapeHtml(u.username)}')">SUPER ADMIN</span>`;
         } else if (u.role === 'admin') {
-            if (isSuperAdminCaller) {
-                roleBadge = `
-                    <span class="badge-admin-role clickable-role-badge" onclick="showRoleInfoModal('${escapeHtml(u.username)}')" title="Klik untuk lihat user yang dibuat oleh admin ini">
-                        Admin
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left:3px; opacity:0.85;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                    </span>`;
-            } else {
-                roleBadge = `<span class="badge-admin-role">Admin</span>`;
-            }
+            roleBadge = `<span style="background:#3b82f6; color:white; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; letter-spacing:0.5px; cursor:pointer;" onclick="if(${isSuperAdminCaller}) showRoleInfoModal('${escapeHtml(u.username)}')">ADMIN</span>`;
         } else {
-            if (isSuperAdminCaller) {
-                roleBadge = `
-                    <span class="badge-user-role clickable-role-badge" onclick="showRoleInfoModal('${escapeHtml(u.username)}')" title="Klik untuk lihat admin pembuat user ini">
-                        User
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left:3px; opacity:0.85;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                    </span>`;
-            } else {
-                roleBadge = `<span class="badge-user-role">User</span>`;
-            }
+            roleBadge = `<span style="background:#64748b; color:white; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; letter-spacing:0.5px; cursor:pointer;" onclick="if(${isSuperAdminCaller}) showRoleInfoModal('${escapeHtml(u.username)}')">USER</span>`;
         }
 
         const isOnline = u.is_online;
         const lastActiveText = u.is_online ? "Baru saja" : formatRelativeTime(u.last_online);
 
-        // Logika check timeout
+        // 2. Logika check timeout
         let isTimedOut = false;
         let timeoutText = '';
         if (u.timeout_until) {
@@ -4726,11 +4718,16 @@ function renderUserTable() {
             statusBadge = `<span class="status-indicator status-offline">Offline</span>`;
         }
 
+        // 3. Tombol Aksi - Siapa Bisa Melakukan Apa
         let actionButtons = '';
         if (isSelf) {
             actionButtons = `<span style="color:var(--text-tertiary); font-style:italic;">Akun Anda</span>`;
         } else if (isProtectedSuperAdmin) {
+            // Admin biasa melihat Super Admin di-lock
             actionButtons = `<span style="color: #c084fc; font-weight: 600; font-size: 12px; font-style: italic;">Super Admin (Terproteksi)</span>`;
+        } else if (u.role === 'admin' && currentUser.role === 'admin') {
+            // Admin biasa melihat Admin lain di-lock
+            actionButtons = `<span style="color: #3b82f6; font-weight: 600; font-size: 12px; font-style: italic;">Admin (Terproteksi)</span>`;
         } else if (isTimedOut) {
             actionButtons = `
                 <div style="display: flex; flex-direction: column; gap: 4px; justify-content: center;">
