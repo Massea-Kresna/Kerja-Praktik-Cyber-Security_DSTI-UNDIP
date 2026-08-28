@@ -1416,17 +1416,24 @@ async def run_pentest_tools_background(domain_name: str):
         await telegram_notifier.notify_high_risk_scan(domain_name, risk_level)
 
     if risk_level in ["HIGH", "CRITICAL"]:
-        # 2. Siapkan notifikasi untuk WebSocket
-
-        notif = {
-            "id": uuid.uuid4().hex,
-            "title": "Scan Selesai",
-            "message": f"Scan untuk {domain_name} telah selesai.",
-            "type": "scan_finished",
-            "domain": domain_name,
-            "time": datetime.now(config.WIB).isoformat(),
-            "created_at": datetime.now(config.WIB).isoformat()
-        }
+        notif = db_manager.add_system_notification(
+            title=f"Scan Selesai: {domain_name}",
+            message=f"Scan untuk {domain_name} telah selesai dengan tingkat risiko {risk_level}.",
+            notif_type="scan_finished"
+        )
+        if isinstance(notif, dict):
+            notif["domain"] = domain_name
+            notif["time"] = datetime.now(config.WIB).isoformat()
+        else:
+            notif = {
+                "id": uuid.uuid4().hex,
+                "title": "Scan Selesai",
+                "message": f"Scan untuk {domain_name} telah selesai.",
+                "type": "scan_finished",
+                "domain": domain_name,
+                "time": datetime.now(config.WIB).isoformat(),
+                "created_at": datetime.now(config.WIB).isoformat()
+            }
         await manager.broadcast_to_admins({
             "event": "new_notification",
             "notification": notif
@@ -1628,16 +1635,24 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
                     await telegram_notifier.notify_high_risk_scan(target, risk_level)
 
                 if risk_level in ["HIGH", "CRITICAL"]:
-                    # 2. Siapkan notifikasi untuk WebSocket
-                    notif = {
-                        "id": uuid.uuid4().hex,
-                        "title": "Network Scan Selesai",
-                        "message": f"Network Scan untuk {target} telah selesai.",
-                        "type": "scan_finished",
-                        "domain": target,
-                        "time": datetime.now(config.WIB).isoformat(),
-                        "created_at": datetime.now(config.WIB).isoformat()
-                    }
+                    notif = db_manager.add_system_notification(
+                        title=f"Network Scan Selesai: {target}",
+                        message=f"Network Scan untuk {target} telah selesai dengan tingkat risiko {risk_level}.",
+                        notif_type="scan_finished"
+                    )
+                    if isinstance(notif, dict):
+                        notif["domain"] = target
+                        notif["time"] = datetime.now(config.WIB).isoformat()
+                    else:
+                        notif = {
+                            "id": uuid.uuid4().hex,
+                            "title": "Network Scan Selesai",
+                            "message": f"Network Scan untuk {target} telah selesai.",
+                            "type": "scan_finished",
+                            "domain": target,
+                            "time": datetime.now(config.WIB).isoformat(),
+                            "created_at": datetime.now(config.WIB).isoformat()
+                        }
                     await manager.broadcast_to_admins({
                         "event": "new_notification",
                         "notification": notif
@@ -1674,16 +1689,24 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
                     await telegram_notifier.notify_high_risk_scan(target, risk_level)
 
                 if risk_level in ["HIGH", "CRITICAL"]:
-                    # 2. Siapkan notifikasi untuk WebSocket
-                    notif = {
-                        "id": uuid.uuid4().hex,
-                        "title": "Web Scan Selesai",
-                        "message": f"Web Scan untuk {target} telah selesai.",
-                        "type": "scan_finished",
-                        "domain": target,
-                        "time": datetime.now(config.WIB).isoformat(),
-                        "created_at": datetime.now(config.WIB).isoformat()
-                    }
+                    notif = db_manager.add_system_notification(
+                        title=f"Web Scan Selesai: {target}",
+                        message=f"Web Scan untuk {target} telah selesai dengan tingkat risiko {risk_level}.",
+                        notif_type="scan_finished"
+                    )
+                    if isinstance(notif, dict):
+                        notif["domain"] = target
+                        notif["time"] = datetime.now(config.WIB).isoformat()
+                    else:
+                        notif = {
+                            "id": uuid.uuid4().hex,
+                            "title": "Web Scan Selesai",
+                            "message": f"Web Scan untuk {target} telah selesai.",
+                            "type": "scan_finished",
+                            "domain": target,
+                            "time": datetime.now(config.WIB).isoformat(),
+                            "created_at": datetime.now(config.WIB).isoformat()
+                        }
                     await manager.broadcast_to_admins({
                         "event": "new_notification",
                         "notification": notif
@@ -1968,17 +1991,7 @@ async def get_pdf_report(filename: str, current_user = Depends(get_current_user)
                     "recommendation": "Silakan lakukan pemindaian (Web Scan atau Network Scan) pada dashboard terlebih dahulu."
                 }
             ]
-            
-        try:
-            from scanner.pdf_generator import generate_pdf_report
-            generate_pdf_report(target_domain, ip_address, scan_date, risk_level, risk_score, open_ports, technologies, vulnerabilities, pdf_path)
-            if os.path.exists(pdf_path):
-                return FileResponse(pdf_path, media_type="application/pdf", filename=filename)
-        except Exception as e:
-            print(f"[-] Gagal generate PDF report: {e}")
-            raise HTTPException(status_code=500, detail=f"Gagal memproduksi PDF report secara dinamis: {e}")
-
-    raise HTTPException(status_code=404, detail="File PDF report tidak ditemukan.")
+        raise HTTPException(status_code=404, detail="File PDF report dari Pentest-Tools tidak ditemukan untuk target ini.")
 
 # ===================================================================
 # Mount Static Files — HARUS di bawah semua route API

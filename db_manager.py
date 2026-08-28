@@ -815,27 +815,17 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type='Web Scanne
             
             # Masukkan SEMUA kerentanan (termasuk LOW dan INFO) ke dalam scan_result
             scan_result.append(vuln_obj)
-            
-            if severity in ['HIGH', 'CRITICAL']:
-                risk_score += 3.0
-                high_count += 1
-            elif severity == 'MEDIUM':
-                risk_score += 2.0
-                med_count += 1
-            elif severity == 'LOW' or severity == 'INFO':
-                risk_score += 1.0
-                low_count += 1
-                
-        if risk_score >= 10.0 or high_count > 0:
-            risk_level = 'HIGH'
-        elif risk_score >= 5.0 or med_count > 0:
-            risk_level = 'MEDIUM'
-        elif risk_score > 0.0 or low_count > 0:
-            risk_level = 'LOW'
-        else:
+
+        all_vulns_for_calc = scan_result + (low_info_vulns if isinstance(low_info_vulns, list) else [])
+        try:
+            from scanner.risk_calculator import calculate_overall_risk
+            calc_res = calculate_overall_risk(all_vulns_for_calc)
+            risk_level = calc_res['risk_level']
+            final_risk_score = calc_res['risk_score']
+        except Exception as calc_err:
+            print(f"[-] Error calculating risk: {calc_err}")
             risk_level = 'SAFE'
-            
-        final_risk_score = min(risk_score, 10.0)
+            final_risk_score = 0.0
         
         raw_json_data = low_info_vulns if low_info_vulns else []
         if pt_scan_id:
@@ -1346,6 +1336,8 @@ def _write_local_notifs(notifs):
 
 def add_system_notification(title: str, message: str, notif_type: str = 'info', target_user: str = None):
     conn = get_db_connection()
+    new_id = None
+    created_at_str = datetime.now(config.WIB).isoformat()
     if conn:
         try:
             with conn.cursor() as cur:
@@ -1361,9 +1353,14 @@ def add_system_notification(title: str, message: str, notif_type: str = 'info', 
                     )
                 """)
                 cur.execute(
-                    "INSERT INTO system_notifications (title, message, notif_type, target_user) VALUES (%s, %s, %s, %s)",
+                    "INSERT INTO system_notifications (title, message, notif_type, target_user) VALUES (%s, %s, %s, %s) RETURNING id, created_at",
                     (title, message, notif_type, target_user)
                 )
+                res = cur.fetchone()
+                if res:
+                    new_id = str(res[0])
+                    if hasattr(res[1], 'isoformat'):
+                        created_at_str = res[1].isoformat()
                 conn.commit()
         except Exception as e:
             print(f"[-] Error add_system_notification PG: {e}")
@@ -1371,17 +1368,21 @@ def add_system_notification(title: str, message: str, notif_type: str = 'info', 
         finally:
             conn.close()
 
-    # Backup lokal JSON
-    notifs = _read_local_notifs()
+    if not new_id:
+        new_id = f"notif_{uuid.uuid4().hex[:8]}"
+
     new_n = {
-        "id": f"notif_{uuid.uuid4().hex[:8]}",
+        "id": new_id,
         "title": title,
         "message": message,
         "type": notif_type,
         "target_user": target_user,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": created_at_str,
         "is_read": False
     }
+
+    # Backup lokal JSON
+    notifs = _read_local_notifs()
     notifs.insert(0, new_n)
     _write_local_notifs(notifs[:50])
     return new_n

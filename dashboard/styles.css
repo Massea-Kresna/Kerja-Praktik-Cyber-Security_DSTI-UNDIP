@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
     /* TOKENS DARI DESAIN BARU */
@@ -29,9 +29,9 @@
     --sev-safe: #9CA3AF;
     --sev-safe-bg: #F3F4F6;
 
-    /* Typography */
-    --font-sans: 'Inter', sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
+    /* Typography (Single Unified Font System: Inter) */
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: var(--font-sans);
     --primary: var(--color-accent);
     --primary-light: var(--color-accent-soft);
 
@@ -308,6 +308,76 @@ button, input, select, textarea {
     letter-spacing: 0.55px;
     padding: 16px 24px 8px;
     white-space: nowrap;
+}
+
+/* Sidebar Nav Dropdowns */
+.nav-dropdown {
+    display: flex;
+    flex-direction: column;
+}
+
+.nav-dropdown-toggle {
+    justify-content: space-between;
+    cursor: pointer;
+}
+
+.nav-item-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dropdown-chevron {
+    transition: transform 0.2s ease;
+    opacity: 0.7;
+}
+
+.nav-dropdown.expanded .dropdown-chevron {
+    transform: rotate(180deg);
+    opacity: 1;
+}
+
+.nav-dropdown-menu {
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: 2px;
+    padding-bottom: 4px;
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.nav-dropdown.expanded .nav-dropdown-menu {
+    display: flex;
+}
+
+.nav-sub-item {
+    font-size: 13px !important;
+    padding: 8px 24px 8px 44px !important;
+    color: var(--color-navy-soft);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-left: 2px solid transparent;
+}
+
+.nav-sub-item:hover {
+    color: var(--color-ink);
+    background: var(--color-surface-hover);
+}
+
+.nav-sub-item.active {
+    color: var(--color-accent) !important;
+    font-weight: 600 !important;
+    border-left-color: var(--color-accent);
+    background: rgba(37, 99, 235, 0.06) !important;
+}
+
+.sidebar.collapsed .nav-dropdown-menu {
+    display: none !important;
+}
+
+.sidebar.collapsed .dropdown-chevron {
+    display: none !important;
 }
 
 .nav-item {
@@ -2509,7 +2579,7 @@ input[type=number] {
     border-radius: 8px;
     overflow: hidden;
     color: #d4d4d4;
-    font-family: monospace;
+    font-family: var(--font-sans);
     font-size: 0.85rem;
 }
 .evidence-terminal-header {
@@ -3474,13 +3544,24 @@ input[type=number] {
     border: 1px solid #e2e8f0;
     border-radius: 8px;
     padding: 8px 12px;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition: background 0.2s, border-color 0.2s;
     width: 100%;
+    cursor: pointer;
+}
+
+.schedule-sub-item:hover {
+    background: #f1f5f9;
+    border-color: rgba(0, 88, 189, 0.4);
 }
 
 [data-theme="dark"] .schedule-sub-item {
     background: #0f172a !important;
     border-color: #334155 !important;
+}
+
+[data-theme="dark"] .schedule-sub-item:hover {
+    background: #1e293b !important;
+    border-color: rgba(0, 88, 189, 0.5) !important;
 }
 
 .schedule-sub-item.is-running {

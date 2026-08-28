@@ -466,7 +466,81 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Navigation & Views
-function switchView(viewId) {
+window.toggleNavDropdown = function(dropdownId, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const dropdown = document.getElementById(dropdownId);
+    if (!dropdown) return;
+
+    const isExpanded = dropdown.classList.contains('expanded');
+    
+    // Close other dropdowns
+    document.querySelectorAll('.nav-dropdown').forEach(d => {
+        if (d.id !== dropdownId) d.classList.remove('expanded');
+    });
+
+    dropdown.classList.toggle('expanded', !isExpanded);
+};
+
+function switchView(viewId, event) {
+    if (event) {
+        event.stopPropagation();
+    }
+
+    // Deactivate all nav items & sub-items
+    document.querySelectorAll('.nav-item, .nav-sub-item').forEach(n => n.classList.remove('active'));
+
+    // Route sub-views
+    let targetView = `view-${viewId}`;
+    
+    if (viewId === 'web-scanner-single') {
+        targetView = 'view-web-scanner';
+        window.currentWebScanMode = 'single';
+        const titleEl = document.getElementById('webScannerTitle');
+        if (titleEl) titleEl.textContent = 'Website Scans — Manual Scan';
+        const webSearch = document.getElementById('webScannerSearch');
+        if (webSearch) webSearch.value = '';
+        applyWebFilters();
+    } else if (viewId === 'web-scanner-scheduled') {
+        targetView = 'view-web-scanner';
+        window.currentWebScanMode = 'scheduled';
+        const titleEl = document.getElementById('webScannerTitle');
+        if (titleEl) titleEl.textContent = 'Website Scans — Automated Scan';
+        const webSearch = document.getElementById('webScannerSearch');
+        if (webSearch) webSearch.value = '';
+        applyWebFilters();
+    } else if (viewId === 'web-scanner') {
+        targetView = 'view-web-scanner';
+        window.currentWebScanMode = 'all';
+        const titleEl = document.getElementById('webScannerTitle');
+        if (titleEl) titleEl.textContent = 'Website Scans';
+        applyWebFilters();
+    } else if (viewId === 'network-scanner-single') {
+        targetView = 'view-network-scanner';
+        window.currentNetworkScanMode = 'single';
+        const titleEl = document.getElementById('networkScannerTitle');
+        if (titleEl) titleEl.textContent = 'Network Scans — Manual Scan';
+        const netSearch = document.getElementById('netSearchInput');
+        if (netSearch) netSearch.value = '';
+        applyNetworkFilters();
+    } else if (viewId === 'network-scanner-scheduled') {
+        targetView = 'view-network-scanner';
+        window.currentNetworkScanMode = 'scheduled';
+        const titleEl = document.getElementById('networkScannerTitle');
+        if (titleEl) titleEl.textContent = 'Network Scans — Automated Scan';
+        const netSearch = document.getElementById('netSearchInput');
+        if (netSearch) netSearch.value = '';
+        applyNetworkFilters();
+    } else if (viewId === 'network-scanner') {
+        targetView = 'view-network-scanner';
+        window.currentNetworkScanMode = 'all';
+        const titleEl = document.getElementById('networkScannerTitle');
+        if (titleEl) titleEl.textContent = 'Network Scans';
+        applyNetworkFilters();
+    }
+
     // Hide all views
     document.querySelectorAll('.view-container').forEach(v => {
         v.classList.add('hidden');
@@ -474,21 +548,17 @@ function switchView(viewId) {
         v.style.display = 'none';
     });
 
-    // Deactivate nav items
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-
-    // Which view to show?
-    let targetView = `view-${viewId}`;
     if (!document.getElementById(targetView)) {
-        if (viewId === 'dashboard') targetView = 'view-overview';
-        else if (viewId === 'overview') targetView = 'view-overview';
+        if (viewId === 'dashboard' || viewId === 'overview') targetView = 'view-overview';
         else if (viewId === 'targets' || viewId === 'inventory') targetView = 'view-inventory';
         else if (viewId === 'vulnerabilities') targetView = 'view-vulnerabilities';
+        else if (viewId.startsWith('web-scanner')) targetView = 'view-web-scanner';
+        else if (viewId.startsWith('network-scanner')) targetView = 'view-network-scanner';
         else if (viewId === 'admin') targetView = 'view-admin';
         else targetView = 'view-overview';
     }
 
-    // Activate view
+    // Activate view element
     const viewEl = document.getElementById(targetView);
     if (viewEl) {
         viewEl.classList.remove('hidden');
@@ -496,9 +566,19 @@ function switchView(viewId) {
         viewEl.style.display = 'block';
     }
 
-    // Activate nav dynamically
-    document.querySelectorAll('.sidebar-nav .nav-item').forEach(n => {
-        if (n.getAttribute('onclick') && n.getAttribute('onclick').includes(`'${viewId}'`)) {
+    // Expand dropdown if a child item is active
+    if (viewId.startsWith('web-scanner')) {
+        const webDropdown = document.getElementById('navDropdownWeb');
+        if (webDropdown) webDropdown.classList.add('expanded');
+    } else if (viewId.startsWith('network-scanner')) {
+        const netDropdown = document.getElementById('navDropdownNetwork');
+        if (netDropdown) netDropdown.classList.add('expanded');
+    }
+
+    // Activate nav element dynamically
+    document.querySelectorAll('.sidebar-nav .nav-item, .sidebar-nav .nav-sub-item').forEach(n => {
+        const onclickAttr = n.getAttribute('onclick') || '';
+        if (onclickAttr.includes(`'${viewId}'`)) {
             n.classList.add('active');
         }
     });
@@ -510,7 +590,7 @@ function switchView(viewId) {
     }
 
     // Web Scanner & Network Scanner: start/stop polling for active scans & scheduled scans
-    if (viewId === 'web-scanner' || viewId === 'network-scanner') {
+    if (viewId.startsWith('web-scanner') || viewId.startsWith('network-scanner')) {
         fetchActiveScans();
         fetchScheduledScans();
         if (!activeScansInterval) {
@@ -2135,7 +2215,89 @@ function resetVulnFilters() {
 }
 
 
+function renderSingleScansTable() {
+    const container = document.getElementById('singleScansTableBody');
+    if (!container) return;
+
+    if (!allVulns || allVulns.length === 0) {
+        container.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:24px; color:var(--color-muted);">Tidak ada riwayat pemindaian satuan ditemukan.</td></tr>`;
+        return;
+    }
+
+    const singleScans = allVulns.filter(scan => !scan.is_scheduled);
+    const displayScans = singleScans.length > 0 ? singleScans : allVulns;
+
+    container.innerHTML = displayScans.map(scan => {
+        const actualIndex = allVulns.indexOf(scan);
+        const domainName = scan.domains?.domain_name || 'Unknown Target';
+        const riskLevel = scan.risk_level || 'SAFE';
+        const sevClass = getSeverityClass(riskLevel);
+        const date = formatDate(scan.scan_date);
+        const score = scan.risk_score ? scan.risk_score.toFixed(1) : '0.0';
+
+        let scanType = "Web Scanner";
+        if (scan.vulnerabilities && scan.vulnerabilities.length > 0) {
+            scanType = scan.vulnerabilities[0].check_type || "Web Scanner";
+        }
+
+        return `
+            <tr onclick="openScanModalIndex(${actualIndex})" style="cursor: pointer;">
+                <td><strong style="color: var(--color-ink);">${escapeHtml(domainName)}</strong></td>
+                <td><span style="color: var(--color-muted); font-size: 13px;">${escapeHtml(scanType)} (Single)</span></td>
+                <td><span class="badge badge-${sevClass}">${riskLevel.toUpperCase()}</span></td>
+                <td><span style="font-weight: 600;">${score} / 10.0</span></td>
+                <td style="color: var(--color-muted); font-size: 13px;">${date}</td>
+                <td>
+                    <button class="btn btn-outline btn-sm" style="font-size: 11px; padding: 3px 8px;" onclick="event.stopPropagation(); openScanModalIndex(${actualIndex});">Detail Report</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderScheduledScansTable() {
+    const container = document.getElementById('scheduledScansTableBody');
+    if (!container) return;
+
+    if (!allVulns || allVulns.length === 0) {
+        container.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:24px; color:var(--color-muted);">Tidak ada riwayat pemindaian terjadwal ditemukan.</td></tr>`;
+        return;
+    }
+
+    const scheduledScans = allVulns.filter(scan => scan.is_scheduled === true || scan.is_scheduled === 'true' || (scan.raw_json && scan.raw_json.pt_scan_id && scan.raw_json.is_scheduled));
+    const displayScans = scheduledScans.length > 0 ? scheduledScans : allVulns;
+
+    container.innerHTML = displayScans.map(scan => {
+        const actualIndex = allVulns.indexOf(scan);
+        const domainName = scan.domains?.domain_name || 'Unknown Target';
+        const riskLevel = scan.risk_level || 'SAFE';
+        const sevClass = getSeverityClass(riskLevel);
+        const date = formatDate(scan.scan_date);
+        const score = scan.risk_score ? scan.risk_score.toFixed(1) : '0.0';
+
+        let scanType = "Scheduled Auto-Scan";
+        if (scan.vulnerabilities && scan.vulnerabilities.length > 0) {
+            scanType = (scan.vulnerabilities[0].check_type || "Web Scanner") + " (Auto)";
+        }
+
+        return `
+            <tr onclick="openScanModalIndex(${actualIndex})" style="cursor: pointer;">
+                <td><strong style="color: var(--color-ink);">${escapeHtml(domainName)}</strong></td>
+                <td><span style="color: #047857; font-weight: 500; font-size: 13px;">${escapeHtml(scanType)}</span></td>
+                <td><span class="badge badge-${sevClass}">${riskLevel.toUpperCase()}</span></td>
+                <td><span style="font-weight: 600;">${score} / 10.0</span></td>
+                <td style="color: var(--color-muted); font-size: 13px;">${date}</td>
+                <td>
+                    <button class="btn btn-outline btn-sm" style="font-size: 11px; padding: 3px 8px;" onclick="event.stopPropagation(); openScanModalIndex(${actualIndex});">Detail Report</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
 function renderVulnerabilitiesList() {
+    renderSingleScansTable();
+    renderScheduledScansTable();
     const container = document.getElementById('vulnListContainer');
     const paginationControls = document.getElementById('vulnPaginationControls');
 
@@ -2273,7 +2435,13 @@ function applyNetworkFilters(preservePage = false) {
         return true;
     });
 
-    filteredNetworkScans = [...scheduledFiltered, ...liveFiltered, ...dbFiltered];
+    if (window.currentNetworkScanMode === 'single') {
+        filteredNetworkScans = [...liveFiltered, ...dbFiltered];
+    } else if (window.currentNetworkScanMode === 'scheduled') {
+        filteredNetworkScans = [...scheduledFiltered];
+    } else {
+        filteredNetworkScans = [...scheduledFiltered, ...liveFiltered, ...dbFiltered];
+    }
 
     if (!preservePage) {
         netCurrentPage = 1;
@@ -2384,16 +2552,16 @@ function renderScheduledGroupRow(scan, category = 'web') {
         let lCount = vulns.filter(v => (v.risk_level || v.severity || '').toUpperCase() === 'LOW' || (v.risk_level || v.severity || '').toUpperCase() === 'INFO').length;
 
         let vulnBadges = `
-            <div style="display: flex; gap: 4px; align-items: center;">
-                <span class="severity-badge critical" style="font-size: 10px; padding: 2px 6px;">${cCount}</span>
-                <span class="severity-badge high" style="font-size: 10px; padding: 2px 6px;">${hCount}</span>
-                <span class="severity-badge medium" style="font-size: 10px; padding: 2px 6px;">${mCount}</span>
-                <span class="severity-badge low" style="font-size: 10px; padding: 2px 6px;">${lCount}</span>
+            <div style="display:flex; gap:6px; align-items:center;">
+                <span style="background:var(--sev-critical); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${cCount}</span>
+                <span style="background:var(--sev-high); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${hCount}</span>
+                <span style="background:var(--sev-medium); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${mCount}</span>
+                <span style="background:var(--sev-low); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;">${lCount}</span>
             </div>
         `;
 
         subItemsHtml += `
-            <div class="schedule-sub-item">
+            <div class="schedule-sub-item" onclick="openScanModalByScanId(${dbItem.id})">
                 <!-- Col 1: SCANS (14%) -->
                 <div class="schedule-col-scans">
                     <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 5px; background: rgba(0, 88, 189, 0.12); color: var(--color-accent); border: 1px solid rgba(0, 88, 189, 0.2);">
@@ -2427,13 +2595,44 @@ function renderScheduledGroupRow(scan, category = 'web') {
 
                 <!-- Col 6: ACTION (10%) -->
                 <div class="schedule-col-action">
-                    <button type="button" class="btn btn-outline btn-schedule-action" onclick="openScanModalByScanId(${dbItem.id})">
+                    <button type="button" class="btn btn-outline btn-schedule-action" onclick="event.stopPropagation(); openScanModalByScanId(${dbItem.id})">
                         View Report
                     </button>
                 </div>
             </div>
         `;
     });
+
+    // Calculate aggregated parent row summary badges
+    let parentCrit = 0, parentHigh = 0, parentMed = 0, parentLow = 0;
+    matchingDb.forEach(dbItem => {
+        const vulns = dbItem.vulnerabilities || [];
+        vulns.forEach(v => {
+            const s = (v.risk_level || v.severity || '').toUpperCase();
+            if (s === 'CRITICAL') parentCrit++;
+            else if (s === 'HIGH') parentHigh++;
+            else if (s === 'MEDIUM') parentMed++;
+            else if (s === 'LOW' || s === 'INFO') parentLow++;
+        });
+    });
+
+    let parentSummaryHtml = '';
+    if (matchingDb.length > 0) {
+        parentSummaryHtml = `
+            <div style="display:flex; gap:6px; align-items:center;">
+                <span style="background:var(--sev-critical); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;" title="Critical">${parentCrit}</span>
+                <span style="background:var(--sev-high); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;" title="High">${parentHigh}</span>
+                <span style="background:var(--sev-medium); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;" title="Medium">${parentMed}</span>
+                <span style="background:var(--sev-low); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; min-width:24px; text-align:center; display:inline-block;" title="Low">${parentLow}</span>
+            </div>
+        `;
+    } else {
+        parentSummaryHtml = `
+            <span style="font-size: 11px; color: var(--color-muted); font-weight: 500;">
+                ${subIndex > 0 ? `${subIndex} Scan Dijalankan` : 'Belum Ada Scan'}
+            </span>
+        `;
+    }
 
     // Render active live scans
     matchingLive.forEach(liveItem => {
@@ -2513,7 +2712,7 @@ function renderScheduledGroupRow(scan, category = 'web') {
 
                 <!-- Col 4: SUMMARY (23%) -->
                 <div class="schedule-col-summary">
-                    <span style="font-size: 11px; color: var(--color-muted);">-</span>
+                    <span style="font-size: 11px; color: var(--color-muted); font-weight: 500;">-</span>
                 </div>
 
                 <!-- Col 5: DATE (14%) -->
@@ -2523,7 +2722,7 @@ function renderScheduledGroupRow(scan, category = 'web') {
 
                 <!-- Col 6: ACTION (10%) -->
                 <div class="schedule-col-action">
-                    <span style="font-size: 11px; color: var(--color-muted);">-</span>
+                    <span style="font-size: 11px; color: var(--color-muted); font-weight: 500;">-</span>
                 </div>
             </div>
         `;
@@ -2558,9 +2757,7 @@ function renderScheduledGroupRow(scan, category = 'web') {
 
                         <!-- Col 4: SUMMARY (23%) -->
                         <div class="schedule-col-summary">
-                            <span style="font-size: 11px; color: var(--color-muted); font-weight: 500;">
-                                ${subIndex > 0 ? `${subIndex} Scan Dijalankan` : 'Belum Ada Scan'}
-                            </span>
+                            ${parentSummaryHtml}
                         </div>
 
                         <!-- Col 5: DATE (14%) -->
@@ -2991,60 +3188,82 @@ function renderLowerGrid() {
         return;
     }
 
-    // 1. Process Target Risk Ranking
-    let allAlerts = [];
+    // 1. Process Target Risk Ranking (Cumulative Domain Risk Score)
+    const domainRiskMap = {};
+
     allVulns.forEach((scan, scanIdx) => {
         const domainName = scan.domains?.domain_name || 'Unknown Target';
-        const scanDate = scan.scan_date;
-        if (scan.vulnerabilities && scan.vulnerabilities.length > 0) {
+        const scanDate = new Date(scan.scan_date).getTime();
+        const rawDate = scan.scan_date;
+
+        if (!domainRiskMap[domainName]) {
+            domainRiskMap[domainName] = {
+                target: domainName,
+                critical: 0,
+                high: 0,
+                medium: 0,
+                low: 0,
+                totalVulns: 0,
+                latestDate: scanDate,
+                rawDate: rawDate,
+                globalIndex: scanIdx
+            };
+        }
+
+        const d = domainRiskMap[domainName];
+        if (scanDate >= d.latestDate) {
+            d.latestDate = scanDate;
+            d.rawDate = rawDate;
+            d.globalIndex = scanIdx;
+        }
+
+        if (scan.vulnerabilities && Array.isArray(scan.vulnerabilities)) {
             scan.vulnerabilities.forEach(v => {
                 const sev = (v.severity || '').toUpperCase();
-                if (['CRITICAL', 'HIGH', 'MEDIUM'].includes(sev)) {
-                    allAlerts.push({
-                        severity: sev,
-                        title: v.title || v.check_type || 'Unknown Vulnerability',
-                        target: domainName,
-                        date: new Date(scanDate).getTime(),
-                        rawDate: scanDate,
-                        vulnCount: scan.vulnerabilities.length,
-                        globalIndex: scanIdx
-                    });
-                }
+                if (sev === 'CRITICAL') d.critical++;
+                else if (sev === 'HIGH') d.high++;
+                else if (sev === 'MEDIUM') d.medium++;
+                else if (sev === 'LOW' || sev === 'INFO') d.low++;
             });
         }
     });
 
-    const SEV_WEIGHT = { 'CRITICAL': 3, 'HIGH': 2, 'MEDIUM': 1 };
-    allAlerts.sort((a, b) => {
-        const wA = SEV_WEIGHT[a.severity] || 0;
-        const wB = SEV_WEIGHT[b.severity] || 0;
-        if (wA !== wB) return wB - wA;
-        return b.date - a.date;
+    // Calculate Risk Score & Highest Severity level per domain
+    const rankedDomains = Object.values(domainRiskMap).map(d => {
+        d.totalVulns = d.critical + d.high + d.medium + d.low;
+        // Formula Bobot Skor Risiko (CVSS Severity Weightings)
+        d.score = (d.critical * 100) + (d.high * 40) + (d.medium * 15) + (d.low * 2);
+
+        if (d.critical > 0) d.severity = 'CRITICAL';
+        else if (d.high > 0) d.severity = 'HIGH';
+        else if (d.medium > 0) d.severity = 'MEDIUM';
+        else if (d.low > 0) d.severity = 'LOW';
+        else d.severity = 'SAFE';
+
+        return d;
+    }).filter(d => d.totalVulns > 0);
+
+    // Sorting: 1. Skor Risiko (DESC), 2. Jumlah Vuln (DESC), 3. Tanggal Scan (DESC)
+    rankedDomains.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (b.totalVulns !== a.totalVulns) return b.totalVulns - a.totalVulns;
+        return b.latestDate - a.latestDate;
     });
 
-    const uniqueDomainAlerts = [];
-    const seenDomains = new Set();
-    for (const alert of allAlerts) {
-        if (!seenDomains.has(alert.target)) {
-            uniqueDomainAlerts.push(alert);
-            seenDomains.add(alert.target);
-        }
-    }
-
-    const topAlerts = uniqueDomainAlerts.slice(0, 5);
+    const topAlerts = rankedDomains.slice(0, 5);
 
     if (alertsBody) {
         if (topAlerts.length === 0) {
-            alertsBody.innerHTML = `<tr><td colspan="5" class="empty-state">No high/critical alerts found.</td></tr>`;
+            alertsBody.innerHTML = `<tr><td colspan="5" class="empty-state">Tidak ada target berisiko terdeteksi.</td></tr>`;
         } else {
             alertsBody.innerHTML = topAlerts.map((alert, idx) => {
                 const sevClass = getSeverityClass(alert.severity);
                 return `
                     <tr onclick="openScanModalByGlobalIndex(${alert.globalIndex})" style="cursor: pointer;">
                         <td style="text-align: center; font-weight: 600; color: var(--color-muted);">${idx + 1}</td>
-                        <td class="font-mono" style="font-size: 12px; font-weight: 600; color: var(--color-ink);">${escapeHtml(alert.target)}</td>
+                        <td style="font-size: 13px; font-weight: 500; color: var(--color-ink); font-family: var(--font-sans);">${escapeHtml(alert.target)}</td>
                         <td style="font-size: 12px; font-weight: 500;">
-                            <span style="font-weight: 700; color: var(--primary);">${alert.vulnCount}</span> Vulns
+                            <span style="font-weight: 700; color: var(--primary);">${alert.totalVulns}</span> Vulns
                         </td>
                         <td><span class="badge badge-${sevClass}" style="font-weight: 700;">${alert.severity}</span></td>
                         <td style="color: var(--color-muted); font-size: 11px;">${formatDate(alert.rawDate)}</td>
@@ -3194,6 +3413,20 @@ if (addDomainBtn) {
         domainModalOverlay.classList.add('active');
     });
 }
+
+window.openAddDomainFromScanModal = function (prefillDomain = '') {
+    const webModal = document.getElementById('webScanModalOverlay');
+    const netModal = document.getElementById('networkScanModalOverlay');
+    if (webModal) webModal.classList.remove('active');
+    if (netModal) netModal.classList.remove('active');
+
+    if (domainIdInput) domainIdInput.value = '';
+    if (domainNameInput) domainNameInput.value = prefillDomain || '';
+    if (domainIpInput) domainIpInput.value = '';
+    if (domainErrorMsg) domainErrorMsg.style.display = 'none';
+    if (domainModalTitle) domainModalTitle.textContent = 'Tambah Domain Target';
+    if (domainModalOverlay) domainModalOverlay.classList.add('active');
+};
 
 if (closeDomainModalBtn) {
     closeDomainModalBtn.addEventListener('click', () => {
@@ -3928,7 +4161,7 @@ function openThreatModal(vuln) {
                 } else if (evJson.type === 'vuln_evidence' && evJson.data && evJson.data.type === 'text') {
                     evidenceContainer.innerHTML = `
                     <div class="evidence-card">
-                        <div class="evidence-desc" style="white-space: pre-wrap; font-family: monospace; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; color: #334155;">${linkify(escapeHtml(evJson.data.data))}</div>
+                        <div class="evidence-desc" style="white-space: pre-wrap; font-family: inherit; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; color: #334155;">${linkify(escapeHtml(evJson.data.data))}</div>
                     </div>`;
                 } else {
                     // Jika ada format JSON lain, fallback
@@ -4037,7 +4270,7 @@ function createEvidenceCard(inst) {
     
     // Fallback if neither URL nor trace was rendered, just dump JSON
     if (!html) {
-        html = `<div class="evidence-desc" style="white-space: pre-wrap; font-family: monospace;">${escapeHtml(JSON.stringify(inst, null, 2))}</div>`;
+        html = `<div class="evidence-desc" style="white-space: pre-wrap; font-family: inherit;">${escapeHtml(JSON.stringify(inst, null, 2))}</div>`;
     }
     
     card.innerHTML = html;
@@ -5485,31 +5718,6 @@ async function fetchNotifications() {
             allNotifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
             renderNotificationList();
-            
-            // === TAMBAHAN KODE: BATAS WAKTU 24 JAM ===
-            const now = new Date();
-            const ONE_DAY_MS = 24 * 60 * 60 * 1000; // 24 jam dalam satuan milidetik
-
-            allNotifications.forEach(n => {
-                let isRecent = true;
-                
-                // Periksa usia notifikasi
-                if (n.timestamp) {
-                    const notifDate = new Date(n.timestamp);
-                    // Jika selisih waktu sekarang dan waktu notifikasi lebih dari 1 hari, tandai false
-                    if (!isNaN(notifDate.getTime()) && (now - notifDate) > ONE_DAY_MS) {
-                        isRecent = false;
-                    }
-                }
-
-                // Tampilkan pop-up HANYA jika statusnya unread DAN usianya di bawah 24 jam
-                if (n.type === 'scan_finished' && n.unread && isRecent) {
-                    showScanFinishedToast(n);
-                } else if (n.type === 'domain_found' && n.unread && isRecent) {
-                    showDomainFoundToast(n); 
-                }
-            });
-            // =========================================
         }
     } catch (e) {
         console.error('Gagal fetch notifikasi', e);
@@ -6333,7 +6541,13 @@ function applyWebFilters(preservePage = false) {
         return true;
     });
 
-    filteredWebScans = [...scheduledFiltered, ...liveFiltered, ...dbFiltered];
+    if (window.currentWebScanMode === 'single') {
+        filteredWebScans = [...liveFiltered, ...dbFiltered];
+    } else if (window.currentWebScanMode === 'scheduled') {
+        filteredWebScans = [...scheduledFiltered];
+    } else {
+        filteredWebScans = [...scheduledFiltered, ...liveFiltered, ...dbFiltered];
+    }
 
     if (!preservePage) {
         webCurrentPage = 1;
@@ -6857,7 +7071,7 @@ function renderBatchStatusTargetList() {
         <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: 8px; background: var(--color-surface); border: 1px solid var(--color-border); transition: all 0.15s;">
             <div>
                 <span style="font-size: 13px; font-weight: 600; color: var(--color-ink); display: block;">${escapeHtml(d.domain_name)}</span>
-                ${d.ip_address ? `<span style="font-size: 11px; color: var(--color-muted); font-family: monospace;">${escapeHtml(d.ip_address)}</span>` : ''}
+                ${d.ip_address ? `<span style="font-size: 11px; color: var(--color-muted); font-family: inherit;">${escapeHtml(d.ip_address)}</span>` : ''}
             </div>
             <div style="display: flex; align-items: center; gap: 10px;">
                 <button type="button"
@@ -7592,7 +7806,16 @@ function renderWebScanTargetList() {
     if (!container) return;
 
     if (!allDomains || allDomains.length === 0) {
-        container.innerHTML = '<div style="padding: 12px; color: var(--color-muted); font-size: 13px;">Tidak ada domain di inventory</div>';
+        container.innerHTML = `
+            <div style="padding: 20px 16px; text-align: center; color: var(--color-muted); font-size: 13px;">
+                <div>Tidak ada domain di inventory</div>
+                <div style="margin-top: 8px;">
+                    <a href="#" onclick="openAddDomainFromScanModal(); return false;" style="color: var(--color-accent); font-weight: 600; text-decoration: underline; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        Tambah Domain Pertama Sekarang &rarr;
+                    </a>
+                </div>
+            </div>`;
         return;
     }
 
@@ -7625,14 +7848,24 @@ function renderWebScanTargetList() {
             </div>
         </div>
         <div style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 4px;">
-            ${filtered.length === 0 ? '<div style="padding: 16px; text-align: center; color: var(--color-muted); font-size: 13px;">Tidak ada domain/IP yang cocok dengan pencarian</div>' : 
+            ${filtered.length === 0 ? `
+                <div style="padding: 20px 16px; text-align: center; color: var(--color-muted); font-size: 13px;">
+                    <div>Tidak ada domain/IP yang cocok dengan pencarian</div>
+                    <div style="margin-top: 8px;">
+                        <a href="#" onclick="openAddDomainFromScanModal('${escapeHtml(webScanSearchQuery.trim())}'); return false;" style="color: var(--color-accent); font-weight: 600; text-decoration: underline; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            Domain yang dicari tidak ada? Tambahkan dulu di sini &rarr;
+                        </a>
+                    </div>
+                </div>
+            ` : 
             filtered.map(d => `
                 <label style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 6px; background: var(--color-surface); cursor: pointer; border: 1px solid var(--color-border); transition: all 0.15s;">
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <input type="checkbox" name="webTargetDomain" value="${escapeHtml(d.domain_name)}" class="web-target-checkbox" onchange="updateSelectedWebTargetsCount()" style="accent-color: var(--primary); width: 15px; height: 15px; cursor: pointer;">
                         <div>
                             <span style="font-size: 13px; font-weight: 500; color: var(--color-ink); display: block;">${escapeHtml(d.domain_name)}</span>
-                            ${d.ip_address ? `<span style="font-size: 11px; color: var(--color-muted); font-family: monospace;">${escapeHtml(d.ip_address)}</span>` : ''}
+                            ${d.ip_address ? `<span style="font-size: 11px; color: var(--color-muted); font-family: inherit;">${escapeHtml(d.ip_address)}</span>` : ''}
                         </div>
                     </div>
                     <span class="badge ${d.is_active ? 'badge-active' : 'badge-inactive'}" style="margin: 0; font-size: 10px; padding: 2px 6px;">
@@ -7803,7 +8036,16 @@ function renderNetworkScanTargetList() {
     if (!container) return;
 
     if (!allDomains || allDomains.length === 0) {
-        container.innerHTML = '<div style="padding: 12px; color: var(--color-muted); font-size: 13px;">Tidak ada domain di inventory</div>';
+        container.innerHTML = `
+            <div style="padding: 20px 16px; text-align: center; color: var(--color-muted); font-size: 13px;">
+                <div>Tidak ada domain di inventory</div>
+                <div style="margin-top: 8px;">
+                    <a href="#" onclick="openAddDomainFromScanModal(); return false;" style="color: var(--color-accent); font-weight: 600; text-decoration: underline; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        Tambah Domain Pertama Sekarang &rarr;
+                    </a>
+                </div>
+            </div>`;
         return;
     }
 
@@ -7836,14 +8078,24 @@ function renderNetworkScanTargetList() {
             </div>
         </div>
         <div style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 4px;">
-            ${filtered.length === 0 ? '<div style="padding: 16px; text-align: center; color: var(--color-muted); font-size: 13px;">Tidak ada domain/IP yang cocok dengan pencarian</div>' : 
+            ${filtered.length === 0 ? `
+                <div style="padding: 20px 16px; text-align: center; color: var(--color-muted); font-size: 13px;">
+                    <div>Tidak ada domain/IP yang cocok dengan pencarian</div>
+                    <div style="margin-top: 8px;">
+                        <a href="#" onclick="openAddDomainFromScanModal('${escapeHtml(networkScanSearchQuery.trim())}'); return false;" style="color: var(--color-accent); font-weight: 600; text-decoration: underline; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            Domain yang dicari tidak ada? Tambahkan dulu di sini &rarr;
+                        </a>
+                    </div>
+                </div>
+            ` : 
             filtered.map(d => `
                 <label style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 6px; background: var(--color-surface); cursor: pointer; border: 1px solid var(--color-border); transition: all 0.15s;">
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <input type="checkbox" name="networkTargetDomain" value="${escapeHtml(d.domain_name)}" class="network-target-checkbox" onchange="updateSelectedNetworkTargetsCount()" style="accent-color: var(--primary); width: 15px; height: 15px; cursor: pointer;">
                         <div>
                             <span style="font-size: 13px; font-weight: 500; color: var(--color-ink); display: block;">${escapeHtml(d.domain_name)}</span>
-                            ${d.ip_address ? `<span style="font-size: 11px; color: var(--color-muted); font-family: monospace;">${escapeHtml(d.ip_address)}</span>` : ''}
+                            ${d.ip_address ? `<span style="font-size: 11px; color: var(--color-muted); font-family: inherit;">${escapeHtml(d.ip_address)}</span>` : ''}
                         </div>
                     </div>
                     <span class="badge ${d.is_active ? 'badge-active' : 'badge-inactive'}" style="margin: 0; font-size: 10px; padding: 2px 6px;">
@@ -8673,20 +8925,25 @@ window.toggleSidebar = function () {
 function showScanFinishedToast(notif) {
     if (!currentUser) return; 
 
+    const notifId = String(notif.id || '');
+    const domainName = String(notif.domain || '');
+
     // Cek apakah notifikasi ini sudah pernah ditekan "Cek Detail"
     const readNotifs = JSON.parse(localStorage.getItem('dsti_read_notifs') || '[]');
-    if (readNotifs.includes(notif.id)) return;
+    if (notifId && readNotifs.includes(notifId)) return;
 
-    // Cek apakah notifikasi sudah tampil di layar untuk mencegah duplikasi
-    const existingToast = document.getElementById(`scan-toast-${notif.id}`);
-    if (existingToast) return;
+    // Cek apakah notifikasi sudah tampil di layar (berdasarkan ID atau Domain) untuk mencegah duplikasi
+    const existingById = notifId ? document.getElementById(`scan-toast-${notifId}`) : null;
+    const existingByDomain = domainName ? document.querySelector(`.toast-notification[data-domain="${domainName}"]`) : null;
+    if (existingById || existingByDomain) return;
 
     const container = document.getElementById('toast-container');
     if (!container) return;
 
     const toast = document.createElement('div');
-    toast.id = `scan-toast-${notif.id}`;
-    // Meminjam gaya (style) CSS yang sudah ada dari overnight-toast
+    toast.id = `scan-toast-${notifId || Date.now()}`;
+    if (domainName) toast.setAttribute('data-domain', domainName);
+    if (notifId) toast.setAttribute('data-notif-id', notifId);
     toast.className = 'toast-notification overnight-toast';
 
     toast.innerHTML = `
