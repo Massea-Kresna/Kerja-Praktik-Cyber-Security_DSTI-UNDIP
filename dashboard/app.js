@@ -6055,23 +6055,25 @@ function setReportAction(action) {
     const btnProcess = document.getElementById('btnProcessReportAction');
 
     if (action === 'download') {
-        cardDownload.style.borderColor = 'var(--primary)';
-        cardDownload.style.background = '#f8fafc';
-        cardDownload.querySelector('svg').style.color = 'var(--primary)';
+        // Terapkan variabel CSS dinamis
+        cardDownload.style.borderColor = 'var(--color-accent)';
+        cardDownload.style.background = 'rgba(0, 88, 189, 0.04)';
+        cardDownload.querySelector('svg').style.color = 'var(--color-accent)';
 
         cardShare.style.borderColor = 'var(--color-border)';
-        cardShare.style.background = '#ffffff';
+        cardShare.style.background = 'var(--color-surface)';
         cardShare.querySelector('svg').style.color = 'var(--color-muted)';
 
         emailContainer.style.display = 'none';
         btnProcess.textContent = 'Download';
     } else {
-        cardShare.style.borderColor = 'var(--primary)';
-        cardShare.style.background = '#f8fafc';
-        cardShare.querySelector('svg').style.color = 'var(--primary)';
+        // Terapkan variabel CSS dinamis untuk mode Email
+        cardShare.style.borderColor = 'var(--color-accent)';
+        cardShare.style.background = 'rgba(0, 88, 189, 0.04)';
+        cardShare.querySelector('svg').style.color = 'var(--color-accent)';
 
         cardDownload.style.borderColor = 'var(--color-border)';
-        cardDownload.style.background = '#ffffff';
+        cardDownload.style.background = 'var(--color-surface)';
         cardDownload.querySelector('svg').style.color = 'var(--color-muted)';
 
         emailContainer.style.display = 'block';
@@ -7736,10 +7738,15 @@ function submitWebScan() {
         btnSubmit.style.opacity = '0.5';
         if (btnTextSpan) btnTextSpan.textContent = `Launching (${selectedDomains.length} target)...`;
 
-        fetch(`${API_BASE}/api/web-scan`, {
+        // Menggunakan endpoint Celery yang baru
+        fetch(`${API_BASE}/api/scans/launch-now`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ targets: selectedDomains, scan_type: selectedScanType })
+            body: JSON.stringify({ 
+                targets: selectedDomains, 
+                scan_type: selectedScanType,
+                scan_category: "web"
+            })
         })
             .then(res => res.json())
             .then(data => {
@@ -9088,3 +9095,60 @@ window.triggerRejectDomain = async function(domainId, domainName) {
         showToast("Gagal menghubungi server.", "error");
     }
 };
+
+async function submitScanRequest() {
+    // 1. Tarik data dari elemen UI Anda
+    const selectedDomains = getSelectedDomainsList(); // Fungsi untuk mengambil array ["domain1.com", "domain2.com"]
+    const scanType = document.querySelector('input[name="scanType"]:checked').value; // 'deep' atau 'light'
+    const executionTime = document.querySelector('input[name="executionTime"]:checked').value; // 'now' atau 'schedule'
+    
+    let endpoint = "";
+    let payload = {
+        targets: selectedDomains,
+        scan_type: scanType,
+        scan_category: "web" // atau "network", sesuaikan dengan UI
+    };
+
+    // 2. Routing logika berdasarkan pilihan pengguna
+    if (executionTime === "now") {
+        // TIPE 1: EKSEKUSI LANGSUNG
+        endpoint = "/api/scans/launch-now";
+        
+    } else if (executionTime === "schedule") {
+        const scheduleMode = document.querySelector('.active-tab').dataset.mode; // 'once' atau 'recurring'
+        const scheduledDateTime = getSelectedDateTimeISO(); // Ambil dari input kalender, format: "2026-08-28T17:15:00Z"
+        
+        if (scheduleMode === "once") {
+            // TIPE 2: 1 KALI EKSEKUSI
+            endpoint = "/api/scans/schedule-eta";
+            payload.scheduled_time = scheduledDateTime;
+        } else {
+            // TIPE 3: PEMINDAIAN BERULANG (DURASI)
+            endpoint = "/api/scans/schedule-recurring";
+            payload.start_time = scheduledDateTime;
+            payload.duration_hours = parseInt(document.getElementById('durationInput').value); // Ambil angka "3" jam
+        }
+    }
+
+    // 3. Kirim Payload ke FastAPI
+    try {
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert("Berhasil: " + result.message);
+            closeModal(); // Tutup popup UI
+        } else {
+            alert("Gagal: " + result.detail);
+        }
+    } catch (error) {
+        console.error("Terjadi kesalahan jaringan:", error);
+    }
+}
