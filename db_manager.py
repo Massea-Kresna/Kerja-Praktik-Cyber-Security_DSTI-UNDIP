@@ -133,6 +133,7 @@ def ensure_database_schema():
             cur.execute("ALTER TABLE public.users ADD COLUMN IF NOT EXISTS last_online TIMESTAMPTZ")
             cur.execute("ALTER TABLE public.users ADD COLUMN IF NOT EXISTS timeout_until TIMESTAMPTZ")
             cur.execute("ALTER TABLE public.users ADD COLUMN IF NOT EXISTS session_id TEXT")
+            cur.execute("ALTER TABLE public.users ADD COLUMN IF NOT EXISTS session_created_at TIMESTAMPTZ")
 
             # 6. Table: system_notifications
             cur.execute("""
@@ -164,6 +165,28 @@ def ensure_database_schema():
                 )
             """)
             cur.execute("ALTER TABLE public.scheduled_scans ADD COLUMN IF NOT EXISTS window_end_at TIMESTAMPTZ")
+
+            # 8. Table: system_settings
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS public.system_settings (
+                    key VARCHAR(100) PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    updated_by TEXT
+                )
+            """)
+            default_settings = {
+                "force_logout_superadmin": "19:00",
+                "force_logout_admin": "16:00",
+                "force_logout_user_minutes": "60",
+                "scheduled_scan_hour": "00:00"
+            }
+            for k, v in default_settings.items():
+                cur.execute("""
+                    INSERT INTO public.system_settings (key, value, updated_by)
+                    VALUES (%s, %s, 'System')
+                    ON CONFLICT (key) DO NOTHING
+                """, (k, v))
             
             # Sequence setvals for smooth auto-increment
             sequences = [
@@ -357,16 +380,28 @@ def create_user(username: str, password_plain: str, role: str, created_by: str =
     _write_local_users(users)
     return new_user
 
-def update_user_session(username: str, session_id: str or None, is_online: bool):
+def update_user_session(username: str, session_id: str or None, is_online: bool, reset_session_time: bool = False):
     now_iso = datetime.now(timezone.utc).isoformat()
     conn = get_db_connection()
     if conn:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 if is_online:
-                    cur.execute('UPDATE users SET session_id = %s, is_online = %s, last_online = %s WHERE username = %s RETURNING *', (session_id, is_online, now_iso, username))
+                    if reset_session_time:
+                        cur.execute(
+                            'UPDATE users SET session_id = %s, is_online = %s, last_online = %s, session_created_at = %s WHERE username = %s RETURNING *',
+                            (session_id, is_online, now_iso, now_iso, username)
+                        )
+                    else:
+                        cur.execute(
+                            'UPDATE users SET session_id = %s, is_online = %s, last_online = %s, session_created_at = COALESCE(session_created_at, %s) WHERE username = %s RETURNING *',
+                            (session_id, is_online, now_iso, now_iso, username)
+                        )
                 else:
-                    cur.execute('UPDATE users SET session_id = %s, is_online = %s WHERE username = %s RETURNING *', (session_id, is_online, username))
+                    cur.execute(
+                        'UPDATE users SET session_id = %s, is_online = %s, session_created_at = NULL WHERE username = %s RETURNING *',
+                        (session_id, is_online, username)
+                    )
                 res = cur.fetchone()
                 conn.commit()
                 return dict(res) if res else None
@@ -381,7 +416,12 @@ def update_user_session(username: str, session_id: str or None, is_online: bool)
         if u['username'] == username:
             u['session_id'] = session_id
             u['is_online'] = is_online
-            if is_online: u['last_online'] = now_iso
+            if is_online:
+                u['last_online'] = now_iso
+                if reset_session_time or not u.get('session_created_at'):
+                    u['session_created_at'] = now_iso
+            else:
+                u['session_created_at'] = None
             _write_local_users(users)
             return u
     return None
@@ -1513,10 +1553,12 @@ def get_overnight_high_critical_scans(limit=20):
                 FROM scan_history sh
                 JOIN domains d ON sh.domain_id = d.id
                 WHERE UPPER(sh.risk_level) IN ('HIGH', 'CRITICAL')
-                  AND DATE(sh.scan_date) = (
-                      SELECT DATE(scan_date) 
+                  AND EXTRACT(HOUR FROM (sh.scan_date AT TIME ZONE 'Asia/Jakarta')) < 8
+                  AND DATE(sh.scan_date AT TIME ZONE 'Asia/Jakarta') = (
+                      SELECT DATE(scan_date AT TIME ZONE 'Asia/Jakarta') 
                       FROM scan_history 
                       WHERE UPPER(risk_level) IN ('HIGH', 'CRITICAL')
+                        AND EXTRACT(HOUR FROM (scan_date AT TIME ZONE 'Asia/Jakarta')) < 8
                       ORDER BY scan_date DESC LIMIT 1
                   )
                 ORDER BY sh.scan_date DESC
@@ -1801,5 +1843,86 @@ def update_scheduled_scan_after_run(schedule_id, frequency):
     except Exception as e:
         if conn: conn.rollback()
         print(f"[-] Error update_scheduled_scan_after_run: {e}")
+    finally:
+        conn.close()
+
+# ==============================================================================
+# SYSTEM SETTINGS MANAGEMENT (JAM FORCE LOGOUT & JAM SCAN MALAM)
+# ==============================================================================
+
+DEFAULT_SYSTEM_SETTINGS = {
+    "force_logout_superadmin": "19:00",
+    "force_logout_admin": "16:00",
+    "force_logout_user_minutes": "60",
+    "scheduled_scan_hour": "00:00"
+}
+
+def ensure_system_settings_table():
+    conn = get_db_connection()
+    if not conn: return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS public.system_settings (
+                    key VARCHAR(100) PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    updated_by TEXT
+                )
+            """)
+            for key, val in DEFAULT_SYSTEM_SETTINGS.items():
+                cur.execute("""
+                    INSERT INTO public.system_settings (key, value, updated_by)
+                    VALUES (%s, %s, 'System')
+                    ON CONFLICT (key) DO NOTHING
+                """, (key, val))
+            conn.commit()
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"[-] Error ensure_system_settings_table: {e}")
+    finally:
+        conn.close()
+
+def get_all_system_settings():
+    ensure_system_settings_table()
+    conn = get_db_connection()
+    result = dict(DEFAULT_SYSTEM_SETTINGS)
+    if not conn: return result
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT key, value FROM public.system_settings")
+            rows = cur.fetchall()
+            for r in (rows or []):
+                result[r["key"]] = r["value"]
+            return result
+    except Exception as e:
+        print(f"[-] Error get_all_system_settings: {e}")
+        return result
+    finally:
+        conn.close()
+
+def get_system_setting(key: str, default_val: str = ""):
+    all_s = get_all_system_settings()
+    return all_s.get(key, default_val or DEFAULT_SYSTEM_SETTINGS.get(key, ""))
+
+def update_system_settings(settings_dict: dict, updated_by: str = "Super Admin"):
+    ensure_system_settings_table()
+    conn = get_db_connection()
+    if not conn: return False
+    now_iso = datetime.now(timezone(timedelta(hours=7))).isoformat()
+    try:
+        with conn.cursor() as cur:
+            for k, v in settings_dict.items():
+                cur.execute("""
+                    INSERT INTO public.system_settings (key, value, updated_at, updated_by)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by
+                """, (str(k), str(v), now_iso, updated_by))
+            conn.commit()
+            return True
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"[-] Error update_system_settings: {e}")
+        return False
     finally:
         conn.close()

@@ -52,6 +52,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof initOvernightNotificationScheduler === 'function') {
         initOvernightNotificationScheduler();
     }
+    if (typeof initRoleSessionTimer === 'function') {
+        initRoleSessionTimer();
+    }
 
     // Pastikan filter tanggal tren di-reset pada saat dimuat (refresh)
     ['vulnTrend', 'sevTrend'].forEach(prefix => {
@@ -555,6 +558,7 @@ function switchView(viewId, event) {
         else if (viewId.startsWith('web-scanner')) targetView = 'view-web-scanner';
         else if (viewId.startsWith('network-scanner')) targetView = 'view-network-scanner';
         else if (viewId === 'admin') targetView = 'view-admin';
+        else if (viewId === 'system-settings') targetView = 'view-system-settings';
         else targetView = 'view-overview';
     }
 
@@ -587,6 +591,8 @@ function switchView(viewId, event) {
     if (viewId === 'admin') {
         loadAdminUsers();
         fetchNotifications();
+    } else if (viewId === 'system-settings') {
+        loadSystemSettings();
     }
 
     // Web Scanner & Network Scanner: start/stop polling for active scans & scheduled scans
@@ -676,87 +682,73 @@ function hexToRgb(hex) {
 
 // --- Toast Notification System & Custom Confirm Dialog ---
 
-function showToast(message, type = 'info', duration = 4000) {
-    const container = document.getElementById('toastContainer');
+function getToastIconSvg(rawIcon, titleText, messageText) {
+    const combinedStr = `${rawIcon || ''} ${titleText || ''} ${messageText || ''}`.toLowerCase();
+    
+    if (rawIcon && (rawIcon.startsWith('<') || rawIcon.includes('svg') || rawIcon.length === 1 || rawIcon.length === 2)) {
+        return rawIcon;
+    }
+
+    if (combinedStr.includes('active') || combinedStr.includes('success') || combinedStr.includes('tersalin') || combinedStr.includes('sukses') || combinedStr.includes('berhasil')) {
+        return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+    }
+    
+    if (combinedStr.includes('inactive') || combinedStr.includes('nonaktif') || combinedStr.includes('warning') || combinedStr.includes('peringatan') || combinedStr.includes('timeout')) {
+        return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+    }
+
+    if (combinedStr.includes('error') || combinedStr.includes('gagal') || combinedStr.includes('batal') || combinedStr.includes('hapus')) {
+        return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
+    }
+
+    return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0058bd" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+}
+
+function showToast(arg1, arg2, arg3) {
+    const container = document.getElementById('toast-container') || document.getElementById('toastContainer');
     if (!container) return;
 
+    let title = '';
+    let message = '';
+    let iconRaw = '';
+
+    const knownTypes = ['success', 'error', 'warning', 'info'];
+
+    if (arg2 && knownTypes.includes(String(arg2).toLowerCase())) {
+        message = arg1 || '';
+        title = String(arg2).toUpperCase();
+        iconRaw = arg2;
+    } else {
+        title = arg1 || 'Notification';
+        message = arg2 || '';
+        iconRaw = arg3 || '';
+    }
+
+    const iconSvg = getToastIconSvg(iconRaw, title, message);
+
     const toast = document.createElement('div');
-    toast.className = `toast-item toast-${type}`;
-
-    const icons = {
-        success: '',
-        error: '️',
-        warning: '',
-        info: 'ℹ️'
-    };
-
-    const iconStr = icons[type] || 'ℹ️';
+    toast.className = 'toast-notification';
 
     toast.innerHTML = `
-        <div class="toast-icon">${iconStr}</div>
-        <div class="toast-content">
-            <div class="toast-message">${message}</div>
+        <div class="toast-icon" style="display:flex; align-items:center; justify-content:center; width:24px; height:24px; flex-shrink:0;">${iconSvg}</div>
+        <div class="toast-body" style="display:flex; flex-direction:column; gap:2px;">
+            <div class="toast-title" style="font-weight:700; font-size:13px; color:var(--color-ink);">${title}</div>
+            <div class="toast-message" style="font-size:12px; color:var(--color-muted); line-height:1.4;">${message}</div>
         </div>
-        <button type="button" class="toast-close-btn" aria-label="Tutup">&times;</button>
-        <div class="toast-progress"></div>
     `;
 
     container.appendChild(toast);
 
-    const progressBar = toast.querySelector('.toast-progress');
-    const closeBtn = toast.querySelector('.toast-close-btn');
-
-    let startTime = Date.now();
-    let remainingTime = duration;
-    let timer = null;
-    let animFrame = null;
-
-    const startDismissTimer = () => {
-        startTime = Date.now();
-        timer = setTimeout(() => {
-            dismiss();
-        }, remainingTime);
-
-        const updateProgress = () => {
-            const elapsed = Date.now() - startTime;
-            const percentage = Math.max(0, 1 - (elapsed / remainingTime));
-            if (progressBar) {
-                progressBar.style.transform = `scaleX(${percentage})`;
-            }
-            if (percentage > 0) {
-                animFrame = requestAnimationFrame(updateProgress);
-            }
-        };
-        animFrame = requestAnimationFrame(updateProgress);
-    };
-
-    const pauseDismissTimer = () => {
-        clearTimeout(timer);
-        cancelAnimationFrame(animFrame);
-        remainingTime -= (Date.now() - startTime);
-    };
-
-    const dismiss = () => {
-        clearTimeout(timer);
-        cancelAnimationFrame(animFrame);
-        toast.classList.add('toast-leaving');
-        toast.addEventListener('animationend', () => {
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        toast.style.transition = 'all 0.3s ease';
+        setTimeout(() => {
             if (toast.parentNode) {
                 toast.parentNode.removeChild(toast);
             }
-        });
-    };
-
-    toast.addEventListener('mouseenter', pauseDismissTimer);
-    toast.addEventListener('mouseleave', () => {
-        if (remainingTime > 0) startDismissTimer();
-    });
-
-    if (closeBtn) {
-        closeBtn.addEventListener('click', dismiss);
-    }
-
-    startDismissTimer();
+        }, 300);
+    }, 4000);
 }
 
 function customConfirm({
@@ -1326,11 +1318,11 @@ window.renderSevTrendChart = function () {
     updateDropdownLabel('sevTrendDropdown', 'All Severities');
 
     const sevColors = {
-        'Critical': '#8A2E2E',
-        'High': '#FF4A4A',
-        'Medium': '#FF9F2A',
-        'Low': '#4287F5',
-        'Info': '#00D182'
+        'Critical': '#991b1b',
+        'High': '#ef4444',
+        'Medium': '#f97316',
+        'Low': '#3b82f6',
+        'Info': '#10b981'
     };
 
     let baseDatasets = rawSevTrendData.datasets || [];
@@ -1615,7 +1607,7 @@ function applyVulnFilters(preservePage = false) {
 
         // Filter berdasarkan pencarian nama domain
         if (domainSearchInput) {
-            const domainName = (scan.domains?.domain_name || '').toLowerCase();
+            const domainName = (scan.domains?.domain_name || scan.domain_name || scan.target || '').toLowerCase();
             if (!domainName.includes(domainSearchInput)) return false;
         }
 
@@ -1640,8 +1632,8 @@ function applyVulnFilters(preservePage = false) {
             valA = new Date(a.scan_date).getTime() || 0;
             valB = new Date(b.scan_date).getTime() || 0;
         } else if (vulnSortCol === 'domain') {
-            valA = (a.domains?.domain_name || '').toLowerCase();
-            valB = (b.domains?.domain_name || '').toLowerCase();
+            valA = (a.domains?.domain_name || a.domain_name || a.target || '').toLowerCase();
+            valB = (b.domains?.domain_name || b.domain_name || b.target || '').toLowerCase();
         } else if (vulnSortCol === 'type') {
             valA = (a.vulnerabilities && a.vulnerabilities.length > 0 && a.vulnerabilities[0].check_type || '').toLowerCase();
             valB = (b.vulnerabilities && b.vulnerabilities.length > 0 && b.vulnerabilities[0].check_type || '').toLowerCase();
@@ -2171,9 +2163,9 @@ function renderSeverityChips() {
 
     const chips = [
         { id: 'ALL', label: 'All Severities', count: counts.ALL, bg: '#f1f5f9', color: '#475569', border: '#cbd5e1' },
-        { id: 'CRITICAL', label: 'Critical', count: counts.CRITICAL, bg: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '#fca5a5' },
-        { id: 'HIGH', label: 'High', count: counts.HIGH, bg: 'rgba(249, 115, 22, 0.1)', color: '#f97316', border: '#fdba74' },
-        { id: 'MEDIUM', label: 'Medium', count: counts.MEDIUM, bg: 'rgba(234, 179, 8, 0.1)', color: '#eab308', border: '#fde047' },
+        { id: 'CRITICAL', label: 'Critical', count: counts.CRITICAL, bg: 'rgba(153, 27, 27, 0.12)', color: '#991b1b', border: '#f87171' },
+        { id: 'HIGH', label: 'High', count: counts.HIGH, bg: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '#fca5a5' },
+        { id: 'MEDIUM', label: 'Medium', count: counts.MEDIUM, bg: 'rgba(249, 115, 22, 0.1)', color: '#f97316', border: '#fdba74' },
         { id: 'LOW', label: 'Low', count: counts.LOW, bg: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', border: '#93c5fd' },
         { id: 'SAFE', label: 'Safe', count: counts.SAFE, bg: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '#6ee7b7' }
     ];
@@ -2229,7 +2221,7 @@ function renderSingleScansTable() {
 
     container.innerHTML = displayScans.map(scan => {
         const actualIndex = allVulns.indexOf(scan);
-        const domainName = scan.domains?.domain_name || 'Unknown Target';
+        const domainName = scan.domains?.domain_name || scan.domain_name || scan.target || 'Unknown Target';
         const riskLevel = scan.risk_level || 'SAFE';
         const sevClass = getSeverityClass(riskLevel);
         const date = formatDate(scan.scan_date);
@@ -2269,7 +2261,7 @@ function renderScheduledScansTable() {
 
     container.innerHTML = displayScans.map(scan => {
         const actualIndex = allVulns.indexOf(scan);
-        const domainName = scan.domains?.domain_name || 'Unknown Target';
+        const domainName = scan.domains?.domain_name || scan.domain_name || scan.target || 'Unknown Target';
         const riskLevel = scan.risk_level || 'SAFE';
         const sevClass = getSeverityClass(riskLevel);
         const date = formatDate(scan.scan_date);
@@ -2330,7 +2322,7 @@ function renderVulnerabilitiesList() {
     container.innerHTML = paginatedVulns.map((scan) => {
         // PENTING: Cari indeks asli dari allVulns agar pop-up detail tidak tertukar saat difilter
         const actualIndex = allVulns.indexOf(scan);
-        const domainName = scan.domains?.domain_name || 'Unknown Target';
+        const domainName = scan.domains?.domain_name || scan.domain_name || scan.target || 'Unknown Target';
         const riskLevel = scan.risk_level || 'SAFE';
         const sevClass = getSeverityClass(riskLevel);
         const date = formatDate(scan.scan_date);
@@ -2417,20 +2409,18 @@ function applyNetworkFilters(preservePage = false) {
     });
 
     let liveFiltered = liveNetworkScans.filter(scan => {
+        const isSubRun = scan.is_scheduled === true || scan.raw_json?.is_scheduled === true || scan.schedule_id || scan.raw_json?.schedule_id;
+        if (isSubRun) return false;
         const domainName = (scan.domain || '').toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, '').trim();
-        if (scheduledTargets.has(domainName) || Array.from(scheduledTargets).some(st => domainName.includes(st) || st.includes(domainName))) {
-            return false;
-        }
         if (searchInput && !domainName.includes(searchInput)) return false;
         return true;
     });
 
     let dbFiltered = networkScans.filter(scan => {
+        const isSubRun = scan.is_scheduled === true || scan.raw_json?.is_scheduled === true || scan.schedule_id || scan.raw_json?.schedule_id;
+        if (isSubRun) return false;
         const domainName = (scan.domains?.domain_name || '').toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, '').trim();
         const ip = (scan.domains?.ip_address || '').toLowerCase();
-        if (scheduledTargets.has(domainName) || Array.from(scheduledTargets).some(st => domainName.includes(st) || st.includes(domainName))) {
-            return false;
-        }
         if (searchInput && !domainName.includes(searchInput) && !ip.includes(searchInput)) return false;
         return true;
     });
@@ -2515,25 +2505,32 @@ function renderScheduledGroupRow(scan, category = 'web') {
     const normTargets = targetList.map(t => String(t).toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, ''));
 
     const matchingLive = liveScans.filter(s => {
+        if (s.is_manual === true || s.is_scheduled === false) return false;
+        const sSchedId = s.schedule_id || s.raw_json?.schedule_id;
+        if (sSchedId !== undefined && sSchedId !== null) {
+            return String(sSchedId) === String(scan.id);
+        }
         const dom = String(s.domain || '').toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, '');
-        return normTargets.some(nt => dom.includes(nt) || nt.includes(dom));
+        return (s.is_scheduled === true || s.raw_json?.is_scheduled === true) && normTargets.some(nt => dom.includes(nt) || nt.includes(dom));
     });
 
-    const schStart = new Date(scan.scheduled_at || scan.created_at).getTime() - 10 * 60 * 1000;
+    const schStart = new Date(scan.scheduled_at || scan.created_at).getTime() - 5 * 60 * 1000;
     const schEnd = scan.window_end_at 
-        ? new Date(scan.window_end_at).getTime() + 60 * 60 * 1000
-        : new Date(scan.last_run_at || scan.scheduled_at || scan.created_at).getTime() + 60 * 60 * 1000;
+        ? new Date(scan.window_end_at).getTime() + 10 * 60 * 1000
+        : new Date(scan.last_run_at || scan.scheduled_at || scan.created_at).getTime() + 15 * 60 * 1000;
 
     const matchingDb = dbScans.filter(s => {
+        if (s.is_manual === true || s.raw_json?.is_manual === true || s.is_scheduled === false) return false;
+        const sSchedId = s.schedule_id || s.raw_json?.schedule_id;
+        if (sSchedId !== undefined && sSchedId !== null) {
+            return String(sSchedId) === String(scan.id);
+        }
+        const isScheduledFlag = s.is_scheduled === true || s.raw_json?.is_scheduled === true;
         const dom = String(s.domains?.domain_name || '').toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, '');
         const isDomainMatch = normTargets.some(nt => dom.includes(nt) || nt.includes(dom));
         if (!isDomainMatch) return false;
-
-        if (s.scan_date) {
-            const sTime = new Date(s.scan_date).getTime();
-            if (sTime < schStart || sTime > schEnd) return false;
-        }
-        return true;
+        if (isScheduledFlag) return true;
+        return false;
     });
 
     let subIndex = 0;
@@ -3188,65 +3185,41 @@ function renderLowerGrid() {
         return;
     }
 
-    // 1. Process Target Risk Ranking (Cumulative Domain Risk Score)
+    // 1. Process Target Risk Ranking (Per-Domain Risk & Scan Frequency)
     const domainRiskMap = {};
 
-    allVulns.forEach((scan, scanIdx) => {
-        const domainName = scan.domains?.domain_name || 'Unknown Target';
+    allVulns.forEach(scan => {
+        const domainName = scan.domains?.domain_name || scan.domain_name || scan.target || 'Unknown Target';
+        const vulns = Array.isArray(scan.vulnerabilities) ? scan.vulnerabilities : [];
+        const vulnCount = vulns.length;
         const scanDate = new Date(scan.scan_date).getTime();
         const rawDate = scan.scan_date;
 
         if (!domainRiskMap[domainName]) {
             domainRiskMap[domainName] = {
                 target: domainName,
-                critical: 0,
-                high: 0,
-                medium: 0,
-                low: 0,
-                totalVulns: 0,
+                totalVulns: vulnCount,
+                scanCount: 1,
                 latestDate: scanDate,
-                rawDate: rawDate,
-                globalIndex: scanIdx
+                rawDate: rawDate
             };
-        }
-
-        const d = domainRiskMap[domainName];
-        if (scanDate >= d.latestDate) {
-            d.latestDate = scanDate;
-            d.rawDate = rawDate;
-            d.globalIndex = scanIdx;
-        }
-
-        if (scan.vulnerabilities && Array.isArray(scan.vulnerabilities)) {
-            scan.vulnerabilities.forEach(v => {
-                const sev = (v.severity || '').toUpperCase();
-                if (sev === 'CRITICAL') d.critical++;
-                else if (sev === 'HIGH') d.high++;
-                else if (sev === 'MEDIUM') d.medium++;
-                else if (sev === 'LOW' || sev === 'INFO') d.low++;
-            });
+        } else {
+            const entry = domainRiskMap[domainName];
+            entry.scanCount += 1;
+            entry.totalVulns += vulnCount; // Kumulatif total temuan dari seluruh pemindaian
+            if (scanDate > entry.latestDate) {
+                entry.latestDate = scanDate;
+                entry.rawDate = rawDate;
+            }
         }
     });
 
-    // Calculate Risk Score & Highest Severity level per domain
-    const rankedDomains = Object.values(domainRiskMap).map(d => {
-        d.totalVulns = d.critical + d.high + d.medium + d.low;
-        // Formula Bobot Skor Risiko (CVSS Severity Weightings)
-        d.score = (d.critical * 100) + (d.high * 40) + (d.medium * 15) + (d.low * 2);
+    const rankedDomains = Object.values(domainRiskMap).filter(d => d.totalVulns > 0);
 
-        if (d.critical > 0) d.severity = 'CRITICAL';
-        else if (d.high > 0) d.severity = 'HIGH';
-        else if (d.medium > 0) d.severity = 'MEDIUM';
-        else if (d.low > 0) d.severity = 'LOW';
-        else d.severity = 'SAFE';
-
-        return d;
-    }).filter(d => d.totalVulns > 0);
-
-    // Sorting: 1. Skor Risiko (DESC), 2. Jumlah Vuln (DESC), 3. Tanggal Scan (DESC)
+    // Sorting: 1. Total Vulns (DESC), 2. Total Scan (DESC), 3. Tanggal Scan Terakhir (DESC)
     rankedDomains.sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
         if (b.totalVulns !== a.totalVulns) return b.totalVulns - a.totalVulns;
+        if (b.scanCount !== a.scanCount) return b.scanCount - a.scanCount;
         return b.latestDate - a.latestDate;
     });
 
@@ -3254,93 +3227,77 @@ function renderLowerGrid() {
 
     if (alertsBody) {
         if (topAlerts.length === 0) {
-            alertsBody.innerHTML = `<tr><td colspan="5" class="empty-state">Tidak ada target berisiko terdeteksi.</td></tr>`;
+            alertsBody.innerHTML = `<tr><td colspan="6" class="empty-state">Tidak ada target berisiko terdeteksi.</td></tr>`;
         } else {
             alertsBody.innerHTML = topAlerts.map((alert, idx) => {
-                const sevClass = getSeverityClass(alert.severity);
+                const safeDomainName = escapeHtml(alert.target);
+                let rankBadgeBg = 'rgba(203, 213, 225, 0.25)';
+                let rankBadgeColor = '#64748b';
+                if (idx === 0) { rankBadgeBg = 'rgba(245, 158, 11, 0.18)'; rankBadgeColor = '#b45309'; }
+                else if (idx === 1) { rankBadgeBg = 'rgba(100, 116, 139, 0.15)'; rankBadgeColor = '#334155'; }
+                else if (idx === 2) { rankBadgeBg = 'rgba(234, 88, 12, 0.15)'; rankBadgeColor = '#c2410c'; }
+
                 return `
-                    <tr onclick="openScanModalByGlobalIndex(${alert.globalIndex})" style="cursor: pointer;">
-                        <td style="text-align: center; font-weight: 600; color: var(--color-muted);">${idx + 1}</td>
-                        <td style="font-size: 13px; font-weight: 500; color: var(--color-ink); font-family: var(--font-sans);">${escapeHtml(alert.target)}</td>
-                        <td style="font-size: 12px; font-weight: 500;">
-                            <span style="font-weight: 700; color: var(--primary);">${alert.totalVulns}</span> Vulns
+                    <tr onclick="navigateToFilteredHistory('${safeDomainName}', event)" style="cursor: pointer; transition: background 0.15s;" title="Klik untuk melihat riwayat hasil scan ${safeDomainName}">
+                        <td style="text-align: center;">
+                            <span style="background: ${rankBadgeBg}; color: ${rankBadgeColor}; font-weight: 800; border-radius: 50%; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px;">${idx + 1}</span>
                         </td>
-                        <td><span class="badge badge-${sevClass}" style="font-weight: 700;">${alert.severity}</span></td>
-                        <td style="color: var(--color-muted); font-size: 11px;">${formatDate(alert.rawDate)}</td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                                <span style="font-size: 13px; font-weight: 600; color: var(--color-ink); font-family: var(--font-sans);">${safeDomainName}</span>
+                            </div>
+                        </td>
+                        <td style="text-align: center;">
+                            <span style="display: inline-block; padding: 3px 12px; background: rgba(225, 29, 72, 0.08); color: #e11d48; font-weight: 700; font-size: 12px; border-radius: 12px;">${alert.totalVulns}</span>
+                        </td>
+                        <td style="text-align: center;">
+                            <span style="display: inline-block; padding: 3px 12px; background: rgba(100, 116, 139, 0.08); color: #475569; font-weight: 700; font-size: 12px; border-radius: 12px;">${alert.scanCount}</span>
+                        </td>
+                        <td style="text-align: center; color: var(--color-muted); font-size: 12px; font-weight: 500;">${formatDate(alert.rawDate)}</td>
+                        <td style="text-align: center; color: var(--color-muted);">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </td>
                     </tr>
                 `;
             }).join('');
         }
     }
 
-    // 2. Process Monitored Domains List
+    // 2. Process Monitored Domains List (Domain Aktif Jadwal Scan Malam)
     if (domainsList) {
-        const DOMAIN_RISK_WEIGHT = { 'CRITICAL': 6, 'HIGH': 5, 'MEDIUM': 4, 'LOW': 3, 'INFO': 2, 'SAFE': 1 };
-        const domainMap = {};
-        
-        allVulns.forEach(scan => {
-            const domainName = scan.domains?.domain_name || 'Unknown Target';
-            const riskLevel = (scan.risk_level || 'SAFE').toUpperCase();
-            const scanDate = new Date(scan.scan_date).getTime();
+        fetch(`${API_BASE}/api/domains`)
+            .then(res => res.json())
+            .then(resData => {
+                const rawList = Array.isArray(resData) ? resData : (resData.data || []);
+                const activeDomains = rawList.filter(d => d.is_active !== false && (d.approval_status === 'approved' || !d.approval_status));
 
-            if (!domainMap[domainName]) {
-                domainMap[domainName] = {
-                    domain: domainName,
-                    risk: riskLevel,
-                    date: scanDate,
-                    ip: scan.domains?.ip_address || '-'
-                };
-            } else {
-                const currentWeight = DOMAIN_RISK_WEIGHT[domainMap[domainName].risk] || 0;
-                const newWeight = DOMAIN_RISK_WEIGHT[riskLevel] || 0;
-                if (newWeight > currentWeight) {
-                    domainMap[domainName].risk = riskLevel;
-                }
-                if (scanDate > domainMap[domainName].date) {
-                    domainMap[domainName].date = scanDate;
-                    domainMap[domainName].ip = scan.domains?.ip_address || '-';
-                }
-            }
-        });
-
-        const topDomains = Object.values(domainMap).sort((a, b) => {
-            const wA = DOMAIN_RISK_WEIGHT[a.risk] || 0;
-            const wB = DOMAIN_RISK_WEIGHT[b.risk] || 0;
-            if (wA !== wB) return wB - wA;
-            return b.date - a.date;
-        }).slice(0, 5);
-
-        if (topDomains.length === 0) {
-            domainsList.innerHTML = `<li class="domain-item" style="justify-content: center;"><span class="empty-state">Tidak ada domain terpantau.</span></li>`;
-        } else {
-            domainsList.innerHTML = topDomains.map(d => {
-                let statusLabel = 'SECURE';
-                let statusClass = 'secure';
-
-                if (d.risk === 'CRITICAL' || d.risk === 'HIGH') {
-                    statusLabel = 'AT RISK';
-                    statusClass = 'at-risk';
-                } else if (d.risk === 'MEDIUM' || d.risk === 'LOW') {
-                    statusLabel = 'REVIEW';
-                    statusClass = 'review';
+                if (!activeDomains || activeDomains.length === 0) {
+                    domainsList.innerHTML = `<li class="domain-item" style="justify-content: center;"><span class="empty-state">Tidak ada domain aktif untuk scan malam.</span></li>`;
+                    return;
                 }
 
-                const safeDomainName = escapeHtml(d.domain);
-                return `
-                    <li class="domain-item" onclick="filterHistoryFromMonitoredDomain('${safeDomainName}', event)" style="cursor: pointer; transition: background 0.15s;" title="Klik untuk memfilter Scan History">
-                        <div class="domain-icon"><svg class="icon"><use href="#icon-globe"/></svg></div>
-                        <div class="domain-info">
-                            <p class="domain-name" style="font-weight: 600;">${safeDomainName}</p>
-                            <p class="domain-desc">${escapeHtml(d.ip)}</p>
-                        </div>
-                        <div class="domain-status" style="align-items: flex-end; gap: 2px;">
-                            <span class="status-label ${statusClass}" style="font-weight: 700; font-size: 10px;">${statusLabel}</span>
-                            <span class="domain-score" style="font-size: 11px;">Risk: ${d.risk}</span>
-                        </div>
-                    </li>
-                `;
-            }).join('');
-        }
+                const displayDomains = activeDomains.slice(0, 5);
+
+                domainsList.innerHTML = displayDomains.map(d => {
+                    const safeDomainName = escapeHtml(d.domain_name);
+                    const ipAddr = escapeHtml(d.ip_address || '-');
+
+                    return `
+                        <li class="domain-item" onclick="filterHistoryFromMonitoredDomain('${safeDomainName}', event)" style="cursor: pointer; transition: background 0.15s;" title="Klik untuk melihat detail & riwayat scan ${safeDomainName}">
+                            <div class="domain-icon"><svg class="icon"><use href="#icon-globe"/></svg></div>
+                            <div class="domain-info">
+                                <p class="domain-name" style="font-weight: 600;">${safeDomainName}</p>
+                                <p class="domain-desc">${ipAddr}</p>
+                            </div>
+                        </li>
+                    `;
+                }).join('');
+            })
+            .catch(err => {
+                console.error("Error fetching monitored active domains:", err);
+                domainsList.innerHTML = `<li class="domain-item" style="justify-content: center;"><span class="empty-state">Gagal memuat domain aktif.</span></li>`;
+            });
     }
 }
 
@@ -3353,18 +3310,41 @@ window.quickScanFromMonitoredDomain = function (domainName, event) {
     }
 };
 
-window.filterHistoryFromMonitoredDomain = function (domainName, event) {
+window.navigateToFilteredHistory = function (domainName, event) {
     if (event) event.stopPropagation();
+
+    window.overnightRiskFilter = false;
+
+    const startInput = document.getElementById('vulnStartDate');
+    const endInput = document.getElementById('vulnEndDate');
+    if (startInput) startInput.value = '';
+    if (endInput) endInput.value = '';
+
+    switchView('vulnerabilities');
+
     const domainSearchInput = document.getElementById('vulnDomainSearch');
     if (domainSearchInput) {
         domainSearchInput.value = domainName;
+        domainSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
         applyVulnFilters();
     }
-    const scanHistorySection = document.getElementById('scanHistoryHeaders') || document.getElementById('vulnListContainer');
-    if (scanHistorySection) {
-        scanHistorySection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.filterHistoryFromMonitoredDomain = function (domainName, event) {
+    if (event) event.stopPropagation();
+    
+    switchView('vulnerabilities');
+
+    const domainSearchInput = document.getElementById('vulnDomainSearch');
+    if (domainSearchInput) {
+        domainSearchInput.value = domainName;
+        domainSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        applyVulnFilters();
     }
-    showToast(`Daftar Scan History difilter untuk: ${domainName}`, 'info');
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 // Function helper untuk membuka modal dari index
@@ -3376,12 +3356,35 @@ function openScanModalIndex(index) {
 }
 
 function openScanModalByScanId(scanId) {
-    const scan = allVulns.find(v => v.id === scanId);
+    const scan = allVulns.find(v => String(v.id) === String(scanId));
     if (scan) {
         openScanModal(scan);
     } else {
         showToast('Error', 'Detail laporan scan tidak ditemukan.', '');
     }
+}
+
+function openScanModalByDomainName(domainName) {
+    if (!domainName) return false;
+    const cleanDomain = String(domainName).toLowerCase().trim();
+    if (typeof allVulns !== 'undefined' && Array.isArray(allVulns) && allVulns.length > 0) {
+        const domainScans = allVulns.filter(s => {
+            const dName = String(s.domains?.domain_name || s.domain_name || '').toLowerCase().trim();
+            return dName === cleanDomain;
+        });
+
+        if (domainScans.length > 0) {
+            domainScans.sort((a, b) => {
+                const countA = Array.isArray(a.vulnerabilities) ? a.vulnerabilities.length : 0;
+                const countB = Array.isArray(b.vulnerabilities) ? b.vulnerabilities.length : 0;
+                if (countB !== countA) return countB - countA;
+                return new Date(b.scan_date).getTime() - new Date(a.scan_date).getTime();
+            });
+            openScanModal(domainScans[0]);
+            return true;
+        }
+    }
+    return false;
 }
 
 function openScanModalByGlobalIndex(index) {
@@ -4408,12 +4411,14 @@ function renderScanVulnsTable() {
 
     tbody.innerHTML = filtered.map(v => {
         const sevClass = getSeverityClass(v.severity);
+        const vJsonEscaped = JSON.stringify(v).replace(/'/g, "&#39;");
         return `
-            <tr>
+            <tr onclick='openThreatModal(${vJsonEscaped})' style="cursor: pointer; transition: background 0.15s ease;">
                 <td><span class="badge badge-${sevClass}">${v.severity}</span></td>
                 <td style="font-weight:500">${escapeHtml(v.title)}</td>
                 <td style="font-family:var(--font-mono); font-size:12px;">${escapeHtml(v.check_type || '-')}</td>
-                <td><button class="btn btn-outline btn-sm" onclick='openThreatModal(${JSON.stringify(v).replace(/'/g, "&#39;")})'>Inspect</button></td>
+                <td><button class="btn btn-outline btn-sm" onclick='event.stopPropagation(); openThreatModal(${vJsonEscaped})'>Inspect</button></td>
+            </tr>
             `;
     }).join('');
 
@@ -4774,6 +4779,7 @@ async function handleForgotPasswordSubmit(e) {
 
 function handleSuccessfulLogin(user) {
     currentUser = user;
+    localStorage.setItem('dsti_session_start', Date.now());
     document.getElementById('authOverlay').classList.add('hidden');
 
     // Show Main Header
@@ -4810,6 +4816,12 @@ function handleSuccessfulLogin(user) {
         if (navAdmin) {
             navAdmin.classList.remove('hidden');
             navAdmin.style.display = 'flex';
+        }
+        
+        const navSettings = document.getElementById('nav-system-settings');
+        if (navSettings) {
+            navSettings.classList.remove('hidden');
+            navSettings.style.display = 'flex';
         }
         
         document.getElementById('notifWrapper').style.display = 'block';
@@ -5883,6 +5895,12 @@ function connectLiveWebSocket(sessionId) {
                 setTimeout(() => {
                     handleLogout();
                 }, 1000);
+            } else if (data.event === 'system_settings_updated') {
+                window.systemSettings = data.settings;
+                const viewSettingEl = document.getElementById('view-system-settings');
+                if (viewSettingEl && !viewSettingEl.classList.contains('hidden')) {
+                    loadSystemSettings();
+                }
             }
         } catch (e) {
             console.error("Gagal mem-parsing pesan websocket:", e);
@@ -5911,27 +5929,7 @@ function connectLiveWebSocket(sessionId) {
     };
 }
 
-function showToast(title, message, icon = "") {
-    const container = document.getElementById('toast-container');
-    if (!container) return;
 
-    const toast = document.createElement('div');
-    toast.className = 'toast-notification';
-
-    toast.innerHTML = `
-        <div class="toast-icon">${icon}</div>
-        <div class="toast-body">
-            <div class="toast-title">${title}</div>
-            <div class="toast-message">${message}</div>
-        </div>
-    `;
-
-    container.appendChild(toast);
-
-    setTimeout(() => {
-        toast.remove();
-    }, 3500);
-}
 
 window.copyToClipboard = function(text, event, label = 'IP Address') {
     if (event) event.stopPropagation();
@@ -6008,6 +6006,11 @@ let lastOvernightCheckTime = 0;
 async function checkOvernightNotifications() {
     if (!currentUser) return; 
 
+    const nowObj = new Date();
+    const utcTime = nowObj.getTime() + (nowObj.getTimezoneOffset() * 60000);
+    const wibTime = new Date(utcTime + (3600000 * 7));
+    if (wibTime.getHours() < 7) return;
+
     const now = Date.now();
     if (now - lastOvernightCheckTime < 10000) return;
     lastOvernightCheckTime = now;
@@ -6045,16 +6048,21 @@ function showOvernightToastNotification(scanData) {
 
     const primaryScan = unreadScans[0];
     const scanIdStr = String(primaryScan.id);
+    const domainName = primaryScan.domain_name || primaryScan.domains?.domain_name || '';
 
-    // Hapus toast sebelumnya jika masih ada di DOM
-    const existingToast = document.getElementById(`overnight-toast-${scanIdStr}`);
-    if (existingToast) existingToast.remove();
+    // Hapus toast sebelumnya jika masih ada di DOM atau cegah duplikasi jika toast domain ini sudah aktif
+    const existingById = document.getElementById(`overnight-toast-${scanIdStr}`);
+    if (existingById) existingById.remove();
+
+    const existingByDomain = domainName ? document.querySelector(`.toast-notification[data-domain="${domainName}"]`) : null;
+    if (existingByDomain) return;
 
     const container = document.getElementById('toast-container');
     if (!container) return;
 
     const toast = document.createElement('div');
     toast.id = `overnight-toast-${scanIdStr}`;
+    if (domainName) toast.setAttribute('data-domain', domainName);
     toast.className = 'toast-notification overnight-toast';
 
     let toastMessage = '';
@@ -6185,9 +6193,167 @@ function initOvernightNotificationScheduler() {
     }, 2000);
 }
 
+window.systemSettings = null;
+
+function selectSettingChip(settingId, val) {
+    const hiddenInput = document.getElementById(settingId);
+    if (!hiddenInput || hiddenInput.disabled) return;
+
+    hiddenInput.value = val;
+
+    const grid = document.querySelector(`.setting-chip-grid[data-setting="${settingId}"]`);
+    if (grid) {
+        grid.querySelectorAll('.setting-chip-card').forEach(chip => {
+            if (chip.getAttribute('data-value') === String(val)) {
+                chip.classList.add('active');
+            } else {
+                chip.classList.remove('active');
+            }
+        });
+    }
+}
+
+async function loadSystemSettings() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/system-settings`);
+        if (resp.status === 200) {
+            const data = await resp.json();
+            window.systemSettings = data;
+
+            if (document.getElementById('settingForceLogoutSuperadmin')) {
+                const val = data.force_logout_superadmin || "19:00";
+                selectSettingChip('settingForceLogoutSuperadmin', val);
+            }
+            if (document.getElementById('settingForceLogoutAdmin')) {
+                const val = data.force_logout_admin || "16:00";
+                selectSettingChip('settingForceLogoutAdmin', val);
+            }
+            if (document.getElementById('settingForceLogoutUserMinutes')) {
+                const val = String(data.force_logout_user_minutes || "60");
+                selectSettingChip('settingForceLogoutUserMinutes', val);
+            }
+            if (document.getElementById('settingScheduledScanHour')) {
+                const val = data.scheduled_scan_hour || "00:00";
+                selectSettingChip('settingScheduledScanHour', val);
+            }
+
+            const isSuperAdmin = currentUser && currentUser.role === 'superadmin';
+            const saveBtn = document.getElementById('saveSystemSettingsBtn');
+            const hiddenInputs = ['settingForceLogoutSuperadmin', 'settingForceLogoutAdmin', 'settingForceLogoutUserMinutes', 'settingScheduledScanHour'];
+
+            if (isSuperAdmin) {
+                if (saveBtn) saveBtn.style.display = 'flex';
+                hiddenInputs.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.disabled = false;
+                    const grid = document.querySelector(`.setting-chip-grid[data-setting="${id}"]`);
+                    if (grid) {
+                        grid.style.opacity = '1';
+                        grid.style.pointerEvents = 'auto';
+                    }
+                });
+            } else {
+                if (saveBtn) saveBtn.style.display = 'none';
+                hiddenInputs.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.disabled = true;
+                    const grid = document.querySelector(`.setting-chip-grid[data-setting="${id}"]`);
+                    if (grid) {
+                        grid.style.opacity = '0.6';
+                        grid.style.pointerEvents = 'none';
+                    }
+                });
+            }
+        }
+    } catch (err) {
+        console.error("Gagal memuat system settings:", err);
+    }
+}
+
+async function saveSystemSettings() {
+    if (!currentUser || currentUser.role !== 'superadmin') {
+        showToast("Akses Ditolak", "Hanya Super Admin yang berhak mengubah konfigurasi sistem.", "");
+        return;
+    }
+
+    const saveBtn = document.getElementById('saveSystemSettingsBtn');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.style.opacity = '0.7';
+    }
+
+    const payload = {
+        force_logout_superadmin: document.getElementById('settingForceLogoutSuperadmin').value,
+        force_logout_admin: document.getElementById('settingForceLogoutAdmin').value,
+        force_logout_user_minutes: document.getElementById('settingForceLogoutUserMinutes').value,
+        scheduled_scan_hour: document.getElementById('settingScheduledScanHour').value
+    };
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/system-settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const resData = await resp.json();
+
+        if (resp.status === 200) {
+            window.systemSettings = payload;
+            showToast("Sukses", resData.message || "Pengaturan sistem berhasil diperbarui.", "");
+        } else {
+            showToast("Gagal", resData.detail || "Gagal menyimpan pengaturan sistem.", "");
+        }
+    } catch (err) {
+        showToast("Error", "Gagal menghubungi server.", "");
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.style.opacity = '1';
+        }
+    }
+}
+
+function initRoleSessionTimer() {
+    setInterval(() => {
+        if (!currentUser) return;
+
+        const role = currentUser.role || 'user';
+        if (role !== 'user') return;
+
+        const settings = window.systemSettings || {};
+        const usrMinutes = parseInt(settings.force_logout_user_minutes || '60', 10) || 60;
+        const sessionStart = parseInt(localStorage.getItem('dsti_session_start') || '0', 10);
+
+        if (sessionStart && (Date.now() - sessionStart) > (usrMinutes * 60 * 1000)) {
+            window.kickedReason = 'force_logout';
+            showToast("Sesi Diakhiri", `Batas durasi sesi untuk User adalah ${usrMinutes} menit. Sesi Anda telah berakhir.`, "");
+            setTimeout(() => { handleLogout(); }, 1500);
+        }
+    }, 30000);
+}
+
 // ==============================================================================
 // HELPER PENGUJIAN INSTAN (UNTUK TESTING DI CONSOLE BROWSER KAPAN SAJA)
 // ==============================================================================
+window.testForceLogout = function(roleTarget) {
+    const role = roleTarget || (currentUser ? currentUser.role : 'user');
+    console.log(`[TEST] Pengujian instan Force Logout untuk role: ${role}`);
+    
+    if (role === 'superadmin') {
+        window.kickedReason = 'force_logout';
+        showToast("Sesi Diakhiri", "[TEST] Batas waktu operasional Super Admin adalah jam 19:00 WIB (7 malam). Sesi Anda telah diakhiri.", "⚠️");
+        setTimeout(() => { handleLogout(); }, 1500);
+    } else if (role === 'admin') {
+        window.kickedReason = 'force_logout';
+        showToast("Sesi Diakhiri", "[TEST] Batas waktu operasional Admin adalah jam 16:00 WIB (4 sore). Sesi Anda telah diakhiri.", "⚠️");
+        setTimeout(() => { handleLogout(); }, 1500);
+    } else if (role === 'user') {
+        localStorage.setItem('dsti_session_start', Date.now() - (61 * 60 * 1000));
+        window.kickedReason = 'force_logout';
+        showToast("Sesi Diakhiri", "[TEST] Batas durasi sesi untuk User adalah 1 jam (60 menit). Sesi Anda telah berakhir.", "⚠️");
+        setTimeout(() => { handleLogout(); }, 1500);
+    }
+};
 window.testOvernightToast = function() {
     fetch(`${API_BASE}/api/notifications/overnight-scans`)
         .then(res => res.json())
@@ -6523,20 +6689,18 @@ function applyWebFilters(preservePage = false) {
     });
 
     let liveFiltered = liveWebScans.filter(scan => {
+        const isSubRun = scan.is_scheduled === true || scan.raw_json?.is_scheduled === true || scan.schedule_id || scan.raw_json?.schedule_id;
+        if (isSubRun) return false;
         const domainName = (scan.domain || '').toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, '').trim();
-        if (scheduledTargets.has(domainName) || Array.from(scheduledTargets).some(st => domainName.includes(st) || st.includes(domainName))) {
-            return false;
-        }
         if (searchInput && !domainName.includes(searchInput)) return false;
         return true;
     });
 
     let dbFiltered = webScans.filter(scan => {
+        const isSubRun = scan.is_scheduled === true || scan.raw_json?.is_scheduled === true || scan.schedule_id || scan.raw_json?.schedule_id;
+        if (isSubRun) return false;
         const domainName = (scan.domains?.domain_name || '').toLowerCase().replace('http://', '').replace('https://', '').replace(/\/$/, '').trim();
         const ip = (scan.domains?.ip_address || '').toLowerCase();
-        if (scheduledTargets.has(domainName) || Array.from(scheduledTargets).some(st => domainName.includes(st) || st.includes(domainName))) {
-            return false;
-        }
         if (searchInput && !domainName.includes(searchInput) && !ip.includes(searchInput)) return false;
         return true;
     });
@@ -7721,6 +7885,22 @@ function toggleScanScheduleFields(category) {
             if (btnSubmitText) btnSubmitText.textContent = 'Launch Scan';
         }
     }
+
+    const scheduleRadios = document.querySelectorAll(`input[name="${category}ScanScheduleOption"]`);
+    scheduleRadios.forEach(r => {
+        const card = r.closest('label');
+        if (card) {
+            if (r.checked) {
+                card.style.borderColor = 'var(--color-accent)';
+                card.style.borderWidth = '2px';
+                card.style.background = 'rgba(0, 88, 189, 0.04)';
+            } else {
+                card.style.borderColor = 'var(--color-border)';
+                card.style.borderWidth = '2px';
+                card.style.background = 'var(--color-surface)';
+            }
+        }
+    });
 }
 
 function openWebScanModal() {
@@ -8682,11 +8862,11 @@ window.renderEnlargedSevChart = function (ctx) {
     }
 
     const sevColors = {
-        'Critical': '#8A2E2E',
-        'High': '#FF4A4A',
-        'Medium': '#FF9F2A',
-        'Low': '#4287F5',
-        'Info': '#00D182'
+        'Critical': '#991b1b',
+        'High': '#ef4444',
+        'Medium': '#f97316',
+        'Low': '#3b82f6',
+        'Info': '#10b981'
     };
 
     let baseDatasets = rawSevTrendData.datasets || [];
@@ -8961,7 +9141,7 @@ function showScanFinishedToast(notif) {
     container.appendChild(toast);
 
     // --- AKSI: TOMBOL CEK DETAIL ---
-    const btnCekDetail = document.getElementById(`btnCekDetailScan-${notif.id}`);
+    const btnCekDetail = document.getElementById(`btnCekDetailScan-${notifId || notif.id}`);
     if (btnCekDetail) {
         btnCekDetail.onclick = (e) => {
             e.stopPropagation();
@@ -8969,24 +9149,27 @@ function showScanFinishedToast(notif) {
             
             // 1. Catat ke Local Storage agar tidak muncul lagi selamanya
             const currentRead = JSON.parse(localStorage.getItem('dsti_read_notifs') || '[]');
-            if (!currentRead.includes(notif.id)) {
-                currentRead.push(notif.id);
+            const idToSave = notifId || String(notif.id || '');
+            if (idToSave && !currentRead.includes(idToSave)) {
+                currentRead.push(idToSave);
                 localStorage.setItem('dsti_read_notifs', JSON.stringify(currentRead));
             }
 
             // 2. Perbarui angka bel notifikasi di sudut kanan atas
             if (typeof fetchNotifications === 'function') fetchNotifications();
 
-            // 3. Arahkan pengguna ke Domain Inventory
-            if (typeof switchView === 'function') {
-                switchView('inventory');
+            // 3. Buka Modal Laporan Scan Langsung (Bukan ke Domain Inventory Search)
+            if (domainName && openScanModalByDomainName(domainName)) {
+                return;
+            }
+            if (notifId && typeof openScanModalByScanId === 'function') {
+                openScanModalByScanId(notifId);
+                return;
             }
 
-            // 4. (Opsional) Otomatis mencari domain tersebut di tabel
-            const searchInput = document.getElementById('domainSearchInput');
-            if (searchInput && notif.domain) {
-                searchInput.value = notif.domain;
-                if (typeof renderInventoryList === 'function') renderInventoryList();
+            // Fallback: Arahkan ke Scan History jika scan belum dimuat di memory
+            if (typeof switchView === 'function') {
+                switchView('scan-history');
             }
         };
     }

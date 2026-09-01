@@ -15,19 +15,19 @@
     --color-accent: #0058BD;
     --color-accent-soft: #B4C5FF;
 
-    /* Severity Colors (Sesuai Logic Lama) */
-    --sev-critical: #8A2E2E;
-    --sev-critical-bg: rgba(138, 46, 46, 0.1);
-    --sev-high: #FF4A4A;
-    --sev-high-bg: rgba(255, 74, 74, 0.1);
-    --sev-medium: #FF9F2A;
-    --sev-medium-bg: rgba(255, 159, 42, 0.1);
-    --sev-low: #4287F5;
-    --sev-low-bg: rgba(66, 135, 245, 0.1);
-    --sev-info: #00D182;
-    --sev-info-bg: rgba(0, 209, 130, 0.1);
-    --sev-safe: #9CA3AF;
-    --sev-safe-bg: #F3F4F6;
+    /* Severity Colors (Critical = Merah Gelap, High = Merah, Medium = Oranye, Low = Biru, Safe = Hijau) */
+    --sev-critical: #991b1b;
+    --sev-critical-bg: rgba(153, 27, 27, 0.12);
+    --sev-high: #ef4444;
+    --sev-high-bg: rgba(239, 68, 68, 0.1);
+    --sev-medium: #f97316;
+    --sev-medium-bg: rgba(249, 115, 22, 0.1);
+    --sev-low: #3b82f6;
+    --sev-low-bg: rgba(59, 130, 246, 0.1);
+    --sev-info: #10b981;
+    --sev-info-bg: rgba(16, 185, 129, 0.1);
+    --sev-safe: #10b981;
+    --sev-safe-bg: rgba(16, 185, 129, 0.1);
 
     /* Typography (Single Unified Font System: Inter) */
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -3804,4 +3804,68 @@ input[type=number] {
     background: #059669 !important;
     color: #ffffff !important;
     border: 1px solid #10b981 !important;
+}
+
+/* Modal Vulnerabilities Table Row Hover Effect */
+#scanModalVulnBody tr {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+#scanModalVulnBody tr:hover {
+    background-color: #f1f5f9 !important;
+}
+
+:root[data-theme="dark"] #scanModalVulnBody tr:hover {
+    background-color: #1e293b !important;
+}
+
+/* ==========================================================================
+   SYSTEM SETTINGS INTERACTIVE CHIPS
+   ========================================================================== */
+.setting-chip-card {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    user-select: none;
+    text-align: center;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--color-ink);
+    line-height: 1.2;
+}
+
+.setting-chip-card:hover {
+    border-color: #93c5fd;
+    background: rgba(37, 99, 235, 0.04);
+    transform: translateY(-1px);
+}
+
+.setting-chip-card.active {
+    background: #2563eb !important;
+    color: #ffffff !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 3px 8px rgba(37, 99, 235, 0.25);
+}
+
+[data-theme="dark"] .setting-chip-card {
+    background: var(--bg-input);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .setting-chip-card:hover {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.12);
+}
+
+[data-theme="dark"] .setting-chip-card.active {
+    background: #2563eb !important;
+    color: #ffffff !important;
+    border-color: #2563eb !important;
 }

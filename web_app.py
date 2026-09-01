@@ -73,9 +73,9 @@ async def run_window_scheduled_scan(schedule_id: int, category: str, scan_type: 
         })
 
         if category == 'network':
-            await run_network_scan_background(targets, scan_type)
+            await run_network_scan_background(targets, scan_type, schedule_id=schedule_id, is_scheduled=True)
         else:
-            await run_web_scan_background(targets, scan_type)
+            await run_web_scan_background(targets, scan_type, schedule_id=schedule_id, is_scheduled=True)
 
         # Periksa kembali jika jadwal dibatalkan saat proses scan berjalan
         sc_check_after = db_manager.get_scheduled_scan_by_id(schedule_id)
@@ -132,9 +132,9 @@ async def scheduled_scan_worker():
                     db_manager.mark_scheduled_scan_running(s_id)
 
                     if category == 'network':
-                        asyncio.create_task(run_network_scan_background(targets, scan_type))
+                        asyncio.create_task(run_network_scan_background(targets, scan_type, schedule_id=s_id, is_scheduled=True))
                     else:
-                        asyncio.create_task(run_web_scan_background(targets, scan_type))
+                        asyncio.create_task(run_web_scan_background(targets, scan_type, schedule_id=s_id, is_scheduled=True))
 
                     db_manager.update_scheduled_scan_after_run(s_id, freq)
 
@@ -154,10 +154,231 @@ async def scheduled_scan_worker():
             
         await asyncio.sleep(10)
 
+async def role_session_monitoring_worker():
+    """
+    Background worker loop untuk memonitoring aturan force logout berbasis role setiap 30 detik:
+    - Super Admin & Admin: Otomatis di-logout tepat saat jam cutoff tercapai (misal 19:00 / 16:00 WIB).
+    - User (Biasa): Otomatis di-logout jika durasi sesi melebihi batas (default 60 menit).
+    * Catatan: Aktivitas login TIDAK dibatasi; Super Admin dan Admin bebas login kapan saja.
+    """
+    last_sa_kick_key = None
+    last_admin_kick_key = None
+
+    while True:
+        try:
+            await asyncio.sleep(30)
+            now_wib = datetime.now(config.WIB)
+            today_str = now_wib.strftime("%Y-%m-%d")
+            current_hour = now_wib.hour
+
+            settings = db_manager.get_all_system_settings()
+
+            try:
+                sa_str = settings.get("force_logout_superadmin", "19:00")
+                sa_hour = int(sa_str.split(":")[0])
+            except Exception:
+                sa_str = "19:00"
+                sa_hour = 19
+
+            try:
+                adm_str = settings.get("force_logout_admin", "16:00")
+                adm_hour = int(adm_str.split(":")[0])
+            except Exception:
+                adm_str = "16:00"
+                adm_hour = 16
+
+            try:
+                usr_minutes = int(settings.get("force_logout_user_minutes", "60"))
+            except Exception:
+                usr_minutes = 60
+
+            conn = db_manager.get_db_connection()
+            if conn:
+                try:
+                    with conn.cursor(cursor_factory=db_manager.RealDictCursor) as cur:
+                        cur.execute("SELECT * FROM users WHERE is_online = True")
+                        online_users = cur.fetchall()
+                finally:
+                    conn.close()
+
+                sa_kick_now = (current_hour == sa_hour) and (last_sa_kick_key != f"{today_str}_{sa_hour}")
+                adm_kick_now = (current_hour == adm_hour) and (last_admin_kick_key != f"{today_str}_{adm_hour}")
+
+                for u in (online_users or []):
+                    username = u.get("username")
+                    role = u.get("role", "user")
+
+                    # 1. Super Admin cutoff trigger
+                    if role == "superadmin" and sa_kick_now:
+                        detail_msg = f"Jam cutoff operasional Super Admin ({sa_str} WIB) telah tercapai. Sesi Anda diakhiri otomatis."
+                        print(f"[!] [FORCE LOGOUT WORKER] Super Admin '{username}' di-kick: {detail_msg}")
+                        db_manager.update_user_session(username, None, False)
+                        await manager.kick_user_with_msg(username, "force_logout", detail_msg)
+
+                    # 2. Admin cutoff trigger
+                    elif role == "admin" and adm_kick_now:
+                        detail_msg = f"Jam cutoff operasional Admin ({adm_str} WIB) telah tercapai. Sesi Anda diakhiri otomatis."
+                        print(f"[!] [FORCE LOGOUT WORKER] Admin '{username}' di-kick: {detail_msg}")
+                        db_manager.update_user_session(username, None, False)
+                        await manager.kick_user_with_msg(username, "force_logout", detail_msg)
+
+                    # 3. User biasa session duration limit
+                    elif role == "user":
+                        session_created_val = u.get("session_created_at") or u.get("last_online")
+                        if session_created_val:
+                            try:
+                                if isinstance(session_created_val, datetime):
+                                    sess_dt = session_created_val
+                                    if sess_dt.tzinfo is None:
+                                        sess_dt = sess_dt.replace(tzinfo=timezone.utc)
+                                else:
+                                    sess_dt = datetime.fromisoformat(str(session_created_val).replace('Z', '+00:00'))
+
+                                now_utc = datetime.now(timezone.utc)
+                                elapsed_seconds = (now_utc - sess_dt).total_seconds()
+
+                                if elapsed_seconds > (usr_minutes * 60):
+                                    detail_msg = f"Batas durasi sesi untuk User ({usr_minutes} menit) telah berakhir."
+                                    print(f"[!] [FORCE LOGOUT WORKER] User '{username}' di-kick: {detail_msg}")
+                                    db_manager.update_user_session(username, None, False)
+                                    await manager.kick_user_with_msg(username, "force_logout", detail_msg)
+                            except Exception as e:
+                                print(f"[-] Parse session error for user '{username}': {e}")
+
+                if sa_kick_now:
+                    last_sa_kick_key = f"{today_str}_{sa_hour}"
+                if adm_kick_now:
+                    last_admin_kick_key = f"{today_str}_{adm_hour}"
+
+        except Exception as e:
+            print(f"[-] Error in role_session_monitoring_worker: {e}")
+
+def _load_tracker():
+    if os.path.exists(config.TRACKER_FILE):
+        try:
+            with open(config.TRACKER_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"last_index": -1, "last_domain": None, "last_scan_time": None}
+
+def _save_tracker(index, domain_name):
+    data = {
+        "last_index": index,
+        "last_domain": domain_name,
+        "last_scan_time": datetime.now(config.WIB).strftime("%Y-%m-%d %H:%M:%S WIB")
+    }
+    try:
+        with open(config.TRACKER_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"[-] Error saving tracker: {e}")
+
+async def run_automated_overnight_scan():
+    """
+    Tugas Asyncio Native: Scan batch 5 domain aktif secara bergiliran.
+    Dipanggil otomatis di background oleh web_app.py (tanpa Celery).
+    """
+    print("=" * 65)
+    print("[🚀 AUTOMATED BATCH SCAN] Memulai Pemindaian Otomatis Malam Hari...")
+    print("=" * 65)
+
+    if not db_manager.check_db_connection():
+        print("[-] Database PostgreSQL tidak tersedia.")
+        return
+
+    try:
+        domains_data = db_manager.get_active_domains()
+        domains = [item["domain_name"] for item in domains_data]
+    except Exception as e:
+        print(f"[-] Gagal mengambil data dari PostgreSQL: {e}")
+        return
+
+    if not domains:
+        print("[!] Tidak ada domain aktif di database untuk di-scan.")
+        return
+
+    total = len(domains)
+    tracker = _load_tracker()
+    start_index = (tracker["last_index"] + 1) % total
+
+    batch_size = 5
+    domains_to_scan = []
+    
+    for i in range(batch_size):
+        idx = (start_index + i) % total
+        domains_to_scan.append(domains[idx])
+        if len(domains_to_scan) == total:
+            break
+
+    print(f"[*] Akan melakukan scan pada {len(domains_to_scan)} domain: {', '.join(domains_to_scan)}")
+
+    from scanner.pentest_tools_scheduler import process_domain_scan
+    import aiohttp
+    
+    try:
+        semaphore = asyncio.Semaphore(len(domains_to_scan))
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for dom in domains_to_scan:
+                tasks.append(process_domain_scan(session, dom, semaphore))
+            await asyncio.gather(*tasks)
+
+        print(f"[+] Batch scan selesai untuk {len(domains_to_scan)} domain.")
+
+        for dom in domains_to_scan:
+            try:
+                recent_scans = db_manager.get_scan_history_list(limit=20)
+                risk_level = "SAFE"
+                for scan in recent_scans:
+                    if scan.get("domains", {}).get("domain_name") == dom:
+                        risk_level = scan.get("risk_level", "SAFE")
+                        break
+                        
+                if risk_level in ["HIGH", "CRITICAL"]:
+                    await telegram_notifier.notify_high_risk_scan(dom, risk_level)
+                    print(f"[+] Notifikasi Telegram terkirim untuk {dom} ({risk_level})")
+            except Exception as e:
+                print(f"[-] Gagal mengirim notifikasi Telegram untuk {dom}: {e}")
+
+    except Exception as e:
+        print(f"[-] Error saat memproses batch scan: {e}")
+
+    last_scanned_index = (start_index + len(domains_to_scan) - 1) % total
+    last_scanned_domain = domains_to_scan[-1]
+    _save_tracker(last_scanned_index, last_scanned_domain)
+
+async def automated_midnight_scan_worker():
+    """Background worker loop asyncio native untuk memicu scan otomatis malam hari tanpa Celery."""
+    print("[*] Asyncio Automated Midnight Scan Worker started.")
+    last_triggered_date = None
+    while True:
+        try:
+            now_wib = datetime.now(config.WIB)
+            today_str = now_wib.strftime("%Y-%m-%d")
+            
+            target_hour_str = db_manager.get_system_setting("scheduled_scan_hour", "00:00")
+            try:
+                target_hour = int(target_hour_str.split(":")[0])
+            except Exception:
+                target_hour = 0
+
+            if now_wib.hour == target_hour and last_triggered_date != today_str:
+                last_triggered_date = today_str
+                print(f"[🚀 ASYNC AUTOMATED SCAN] Memicu scan otomatis malam hari jam {target_hour_str} WIB...")
+                asyncio.create_task(run_automated_overnight_scan())
+
+        except Exception as e:
+            print(f"[-] Error in automated_midnight_scan_worker: {e}")
+            
+        await asyncio.sleep(60)
+
 @app.on_event("startup")
 async def startup_event():
-    db_manager.ensure_scheduled_scans_table()
+    db_manager.ensure_database_schema()
     asyncio.create_task(scheduled_scan_worker())
+    asyncio.create_task(role_session_monitoring_worker())
+    asyncio.create_task(automated_midnight_scan_worker())
 
 class LoginRequest(BaseModel):
     username: str
@@ -320,6 +541,17 @@ class ConnectionManager:
                 except Exception:
                     pass
 
+    async def kick_user_with_msg(self, username: str, reason: str = "force_logout", detail_msg: str = ""):
+        for conn in list(self.active_connections):
+            info = self.user_info.get(conn)
+            if info and info.get("username") == username:
+                try:
+                    await conn.send_json({"event": reason, "message": detail_msg})
+                    await asyncio.sleep(0.2)
+                    await conn.close(code=4000)
+                except Exception:
+                    pass
+
 manager = ConnectionManager()
 
 # ===================================================================
@@ -345,6 +577,12 @@ class TimeoutRequest(BaseModel):
     minutes: int
     remember_me: Optional[bool] = False
 
+class SystemSettingsPayload(BaseModel):
+    force_logout_superadmin: str
+    force_logout_admin: str
+    force_logout_user_minutes: str
+    scheduled_scan_hour: str
+
 # ===================================================================
 # Pydantic Schemas untuk Domain Bulk
 # ===================================================================
@@ -356,6 +594,47 @@ class DomainItem(BaseModel):
 # ===================================================================
 # Auth Dependencies
 # ===================================================================
+def check_role_force_logout(user: dict):
+    """
+    Memeriksa durasi sesi untuk role 'user' biasa.
+    Aktivitas login dan operasional Super Admin / Admin tidak diblokir.
+    """
+    if not user:
+        return
+
+    role = user.get("role", "user")
+
+    if role == "user":
+        settings = db_manager.get_all_system_settings()
+        try:
+            usr_minutes = int(settings.get("force_logout_user_minutes", "60"))
+        except Exception:
+            usr_minutes = 60
+
+        session_created_val = user.get("session_created_at") or user.get("last_online")
+        if session_created_val:
+            try:
+                if isinstance(session_created_val, datetime):
+                    sess_dt = session_created_val
+                    if sess_dt.tzinfo is None:
+                        sess_dt = sess_dt.replace(tzinfo=timezone.utc)
+                else:
+                    sess_dt = datetime.fromisoformat(str(session_created_val).replace('Z', '+00:00'))
+
+                now_utc = datetime.now(timezone.utc)
+                elapsed_seconds = (now_utc - sess_dt).total_seconds()
+
+                if elapsed_seconds > (usr_minutes * 60):
+                    db_manager.update_user_session(user["username"], None, False)
+                    raise HTTPException(
+                        status_code=401,
+                        detail=f"Batas durasi sesi untuk User adalah {usr_minutes} menit. Sesi Anda telah berakhir."
+                    )
+            except HTTPException:
+                raise
+            except Exception as e:
+                print(f"[-] Parse session_created_at error: {e}")
+
 def get_current_user(request: Request):
     session_id = request.cookies.get("session_id")
     if not session_id:
@@ -371,8 +650,6 @@ def get_current_user(request: Request):
     timeout_until_val = user.get("timeout_until")
     if timeout_until_val:
         try:
-            # Menggunakan timezone-aware datetime parsing
-            # Python 3.11+ mendukung format ISO dengan offset Z/+07:00 via fromisoformat
             if isinstance(timeout_until_val, datetime):
                 timeout_until = timeout_until_val
                 if timeout_until.tzinfo is None:
@@ -381,10 +658,7 @@ def get_current_user(request: Request):
                 timeout_until = datetime.fromisoformat(str(timeout_until_val).replace('Z', '+00:00'))
             now = datetime.now(timezone.utc)
             if timeout_until > now:
-                # Force logout
                 db_manager.update_user_session(user["username"], None, False)
-                
-                # Format waktu sisa penangguhan untuk respon yang ramah
                 sisa_detik = int((timeout_until - now).total_seconds())
                 menit = sisa_detik // 60
                 detik = sisa_detik % 60
@@ -395,6 +669,9 @@ def get_current_user(request: Request):
         except Exception as e:
             print(f"[-] Parse timeout_until error: {e}")
             
+    # Cek aturan force logout berdasarkan role (Superadmin 19:00, Admin 16:00, User 1 Jam)
+    check_role_force_logout(user)
+
     # Perbarui last_online ke waktu sekarang
     db_manager.update_user_session(user["username"], session_id, True)
     return user
@@ -508,8 +785,9 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
             raise he
         except Exception:
             pass
-    # 4. Cek Role. OTP hanya untuk admin dan superadmin
+    # 4. Role User Check
     user_role = user.get("role", "user")
+
     if user_role in ["admin", "superadmin"]:
         # 5a. Generate OTP untuk Admin
         otp_code = str(random.randint(100000, 999999))
@@ -532,7 +810,7 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
     else:
         # 5b. Bypass OTP untuk User Biasa
         session_id = str(uuid.uuid4())
-        db_manager.update_user_session(credentials.username, session_id, True)
+        db_manager.update_user_session(credentials.username, session_id, True, reset_session_time=True)
         
         cookie_max_age = 2592000 if credentials.remember_me else 86400
         response.set_cookie(
@@ -575,9 +853,9 @@ async def verify_otp(req: VerifyOTPRequest, request: Request, response: Response
     # OTP Valid! Hapus dari store
     del OTP_STORE[req.username]
     
-    # Buat session baru
+    # Buat session baru (Reset timer jam sesi)
     session_id = str(uuid.uuid4())
-    db_manager.update_user_session(req.username, session_id, True)
+    db_manager.update_user_session(req.username, session_id, True, reset_session_time=True)
     
     # Simpan di cookie
     cookie_max_age = 2592000 if req.remember_me else 86400
@@ -1604,7 +1882,7 @@ class NetworkScanRequest(BaseModel):
     targets: List[str]
     scan_type: Optional[str] = "deep"
 
-async def run_network_scan_background(targets: List[str], scan_type: str = "deep"):
+async def run_network_scan_background(targets: List[str], scan_type: str = "deep", schedule_id: Optional[int] = None, is_scheduled: bool = False):
     """Fungsi latar belakang untuk menjalankan Network Scan pada beberapa target."""
     semaphore = asyncio.Semaphore(5)
     async with aiohttp.ClientSession() as session:
@@ -1619,6 +1897,8 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
                 await manager.broadcast_to_admins({
                     "event": "scan_finished",
                     "domain": target,
+                    "schedule_id": schedule_id,
+                    "is_scheduled": is_scheduled or (schedule_id is not None),
                     "time": datetime.now(config.WIB).isoformat()
                 })
 
@@ -1658,7 +1938,7 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
                         "notification": notif
                     })
 
-async def run_web_scan_background(targets: List[str], scan_type: str = "deep"):
+async def run_web_scan_background(targets: List[str], scan_type: str = "deep", schedule_id: Optional[int] = None, is_scheduled: bool = False):
     """Fungsi latar belakang untuk menjalankan Web Scan pada beberapa target."""
     semaphore = asyncio.Semaphore(5)
     async with aiohttp.ClientSession() as session:
@@ -2326,6 +2606,36 @@ async def webhook_notify(req: InternalNotifyRequest, request: Request):
         
         return {"status": "success"}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==============================================================================
+# ENDPOINT PENGATURAN SISTEM (FORCE LOGOUT & SCAN MALAM)
+# ==============================================================================
+@app.get("/api/system-settings")
+def get_system_settings(current_user = Depends(get_current_user)):
+    return db_manager.get_all_system_settings()
+
+@app.put("/api/system-settings")
+async def update_system_settings(payload: SystemSettingsPayload, current_user = Depends(get_current_admin)):
+    """
+    Endpoint untuk memperbarui konfigurasi sistem (Jam Force Logout & Jam Scan Malam).
+    """
+    try:
+        success = db_manager.update_system_settings(payload.dict(), current_user.get("username", "Admin"))
+        if not success:
+            raise HTTPException(status_code=500, detail="Gagal menyimpan pengaturan sistem ke database.")
+        
+        # Broadcast event perubahan pengaturan ke WebSocket client
+        await manager.broadcast_to_all({
+            "event": "system_settings_updated",
+            "settings": payload.dict()
+        })
+        
+        return {"status": "success", "message": "Pengaturan sistem berhasil diperbarui."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[-] Error in update_system_settings: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

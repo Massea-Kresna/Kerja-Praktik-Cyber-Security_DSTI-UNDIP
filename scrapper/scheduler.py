@@ -1,35 +1,24 @@
 import asyncio
-from celery import Celery
-from celery.schedules import crontab
 from scrapper.scrapper3_subfinder import jalankan_sistem
 
-# Inisialisasi Celery App (Menghubungkan ke Redis lokal)
-app = Celery('asm_discovery', broker='redis://127.0.0.1:6379/0')
-
-#definisi tugas (worker)
-@app.task(name='eksekusi_osint_undip')
-def run_automated_discovery():
-    print("\n[!] CELERY WORKER: Memulai Discovery Engine...")
-    
-    # Menjalankan fungsi asinkron (jalankan_sistem) di dalam fungsi sinkron Celery
+async def run_automated_discovery():
+    """Tugas ASYNCIO Native: Memulai OSINT Discovery Engine."""
+    print("\n[!] ASYNCIO WORKER: Memulai Discovery Engine...")
     try:
-        asyncio.run(jalankan_sistem())
-        print("[!] CELERY WORKER: Tugas OSINT Selesai dieksekusi.\n")
+        await jalankan_sistem()
+        print("[!] ASYNCIO WORKER: Tugas OSINT Selesai dieksekusi.\n")
     except Exception as e:
-        print(f"[!] CELERY WORKER ERROR: {str(e)}\n")
+        print(f"[!] ASYNCIO WORKER ERROR: {str(e)}\n")
 
-#definisi jadwal (beat)
-app.conf.beat_schedule = {
-    'jadwal-mingguan-osint-undip': {
-        'task': 'eksekusi_osint_undip',
-        # Jadwal: Setiap Hari Minggu (sun) jam 00:00 Tengah Malam
-        # 'schedule': crontab(minute=0, hour=0, day_of_week='sun'),
-        
-        #jika ingin menguji coba sekarang agar jalan setiap 1 menit, 
-        #command baris di atas, dan aktifkan baris di bawah ini:
-        'schedule': crontab(minute='*/5'), #(*) 
-    },
-}
+async def osint_scheduler_loop(interval_hours=24):
+    """Loop penjadwalan asyncio native tanpa Celery."""
+    print("[*] ASYNCIO OSINT Scheduler Started.")
+    while True:
+        try:
+            await run_automated_discovery()
+        except Exception as e:
+            print(f"[-] Error in osint_scheduler_loop: {e}")
+        await asyncio.sleep(interval_hours * 3600)
 
-# Sesuaikan zona waktu dengan Indonesia
-app.conf.timezone = 'Asia/Jakarta'
+if __name__ == "__main__":
+    asyncio.run(osint_scheduler_loop())
