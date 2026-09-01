@@ -1309,7 +1309,7 @@
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                         Generate Report
                     </button>
-                    <button onclick="closeScanModal()" title="Tutup" style="height: 36px; width: 36px; border-radius: 50%; border: 1px solid transparent; background: transparent; color: var(--color-muted); cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; padding: 0;" onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1'; this.style.color='#0f172a';" onmouseout="this.style.background='transparent'; this.style.borderColor='transparent'; this.style.color='var(--color-muted)';">
+                    <button class="icon-btn" onclick="closeScanModal()" title="Tutup">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -1373,7 +1373,12 @@
                     <span id="modalThreatCategory" class="badge badge-orange-outline">Anomaly Detection</span>
                 </div>
                 <div class="modal-actions">
-                    <button class="icon-btn" onclick="closeThreatModal()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                    <button class="icon-btn" onclick="closeThreatModal()" title="Tutup">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
                 </div>
             </div>
             <div class="modal-body">
@@ -1833,7 +1838,12 @@
                     <h2 id="generateReportModalTitle" style="font-size: 1.25rem;">Generate Report</h2>
                 </div>
                 <div class="modal-actions">
-                    <button class="icon-btn" id="closeGenerateReportModalBtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                    <button class="icon-btn" id="closeGenerateReportModalBtn" title="Tutup">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
                 </div>
             </div>
             <div class="modal-body" style="padding-top: 16px;">
@@ -1961,50 +1971,56 @@
         </div>
     </div>
 
-    <!-- Report Action Modal (Download or Share) -->
+<!-- Report Action Modal (Download or Share) -->
     <div class="modal-overlay" id="reportActionModalOverlay">
-        <div class="modal-dialog" style="max-width: 500px; border-radius: 12px; overflow: hidden;">
+        <div class="modal-dialog" style="max-width: 500px;">
             <div class="modal-header">
                 <div class="modal-title-group">
-                    <h2 style="font-size: 1.25rem;">Report Action</h2>
+                    <h2 style="font-size: 1.25rem; color: var(--color-ink);">Report Action</h2>
                 </div>
                 <div class="modal-actions">
-                    <button class="icon-btn" id="closeReportActionModalBtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                    <button class="icon-btn" id="closeReportActionModalBtn" title="Tutup">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
                 </div>
             </div>
             <div class="modal-body" style="padding: 24px;">
-                <p style="color: var(--color-muted-light); margin-bottom: 24px;">Pilih bagaimana Anda ingin memproses laporan yang dihasilkan.</p>
+                <p style="color: var(--color-muted); margin-bottom: 24px;">Pilih bagaimana Anda ingin memproses laporan yang dihasilkan.</p>
                 
                 <!-- Action Cards -->
                 <div style="display: flex; gap: 16px; margin-bottom: 24px;">
-                    <div id="cardDownloadOption" class="report-option-card" style="flex: 1; padding: 16px; border: 2px solid var(--primary); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; background: #f8fafc; transition: all 0.2s;">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 12px; color: var(--primary);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    <div id="cardDownloadOption" class="report-option-card" style="flex: 1; padding: 16px; border: 2px solid var(--color-accent); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; background: rgba(0, 88, 189, 0.04); transition: all 0.2s;">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 12px; color: var(--color-accent);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                         <span style="font-weight: 600; color: var(--color-ink);">Download</span>
-                        <span style="font-size: 12px; color: var(--color-muted-light); margin-top: 4px;">Unduh langsung ke perangkat</span>
+                        <span style="font-size: 12px; color: var(--color-muted); margin-top: 4px;">Unduh langsung ke perangkat</span>
                     </div>
-                    <div id="cardShareOption" class="report-option-card" style="flex: 1; padding: 16px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; background: #ffffff; transition: all 0.2s;">
+                    
+                    <div id="cardShareOption" class="report-option-card" style="flex: 1; padding: 16px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; background: var(--color-surface); transition: all 0.2s;">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 12px; color: var(--color-muted);"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
                         <span style="font-weight: 600; color: var(--color-ink);">Share via Email</span>
-                        <span style="font-size: 12px; color: var(--color-muted-light); margin-top: 4px;">Kirim laporan ke rekan tim</span>
+                        <span style="font-size: 12px; color: var(--color-muted); margin-top: 4px;">Kirim laporan ke rekan tim</span>
                     </div>
                 </div>
                 
                 <!-- Email Inputs Section -->
-                <div id="emailInputsContainer" style="display: none; margin-bottom: 24px; padding: 16px; background: #f1f5f9; border-radius: 8px;">
+                <div id="emailInputsContainer" style="display: none; margin-bottom: 24px; padding: 16px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px;">
                     <label style="display: block; font-weight: 500; font-size: 14px; color: var(--color-ink); margin-bottom: 12px;">Daftar Penerima Email:</label>
                     <div id="emailListWrapper" style="display: flex; flex-direction: column; gap: 12px;">
                         <div class="email-input-row" style="display: flex; gap: 8px;">
-                            <input type="email" class="auth-input email-recipient-input" placeholder="contoh@undip.ac.id" style="flex: 1; padding: 8px 12px; margin-bottom: 0;" required>
+                            <input type="email" class="auth-input email-recipient-input" placeholder="contoh@undip.ac.id" style="flex: 1; padding: 8px 12px; margin-bottom: 0; background: var(--color-bg); color: var(--color-ink); border: 1px solid var(--color-border);" required>
                         </div>
                     </div>
-                    <button type="button" class="btn btn-outline" onclick="addEmailInputRow()" style="margin-top: 12px; padding: 6px 12px; border-color: var(--color-border); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500;" title="Tambah penerima">
+                    <button type="button" class="btn btn-outline" onclick="addEmailInputRow()" style="margin-top: 12px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px;" title="Tambah penerima">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                         Tambah Email Lain
                     </button>
                 </div>
                 
                 <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--color-border);">
-                    <button type="button" class="auth-btn" id="btnProcessReportAction" style="background: var(--primary); color: #ffffff; width: auto; box-shadow: none;">Download</button>
+                    <button type="button" class="btn btn-primary" id="btnProcessReportAction" style="width: auto;">Download</button>
                 </div>
             </div>
         </div>
