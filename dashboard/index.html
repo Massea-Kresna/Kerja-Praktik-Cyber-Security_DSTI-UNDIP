@@ -1817,43 +1817,56 @@
         </div>
     </div>
 
-    <!-- Report Action Modal (Download or Share) -->
+<!-- Report Action Modal (Download or Share) -->
     <div class="modal-overlay" id="reportActionModalOverlay">
-        <div class="modal-dialog" style="max-width: 500px; border-radius: 12px; overflow: hidden;">
+        <div class="modal-dialog" style="max-width: 500px; border-radius: 12px; overflow: hidden; background: var(--bg-surface);">
             <div class="modal-header">
                 <div class="modal-title-group">
-                    <h2 style="font-size: 1.25rem;">Report Action</h2>
+                    <!-- PERBAIKAN: Menggunakan var(--text-primary) agar teks jadi putih di dark mode -->
+                    <h2 style="font-size: 1.25rem; color: var(--text-primary);">Report Action</h2>
                 </div>
                 <div class="modal-actions">
-                    <button class="icon-btn" id="closeReportActionModalBtn"></button>
+                    <!-- PERBAIKAN: Menambahkan ikon SVG silang (X) ke dalam button -->
+                    <button class="icon-btn" id="closeReportActionModalBtn" style="background: transparent; border: none; color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
                 </div>
             </div>
             <div class="modal-body" style="padding: 24px;">
-                <p style="color: var(--color-muted-light); margin-bottom: 24px;">Pilih bagaimana Anda ingin memproses laporan yang dihasilkan.</p>
+                <!-- PERBAIKAN: Menggunakan var(--text-secondary) -->
+                <p style="color: var(--text-secondary); margin-bottom: 24px;">Pilih bagaimana Anda ingin memproses laporan yang dihasilkan.</p>
                 
                 <!-- Action Cards -->
                 <div style="display: flex; gap: 16px; margin-bottom: 24px;">
-                    <div id="cardDownloadOption" class="report-option-card" style="flex: 1; padding: 16px; border: 2px solid var(--primary); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; background: #f8fafc; transition: all 0.2s;">
+                    <!-- PERBAIKAN: Mengubah background #f8fafc menjadi var(--bg-panel) -->
+                    <div id="cardDownloadOption" class="report-option-card" style="flex: 1; padding: 16px; border: 2px solid var(--primary); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; background: var(--bg-panel); transition: all 0.2s;">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 12px; color: var(--primary);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                        <span style="font-weight: 600; color: var(--color-ink);">Download</span>
-                        <span style="font-size: 12px; color: var(--color-muted-light); margin-top: 4px;">Unduh langsung ke perangkat</span>
+                        <span style="font-weight: 600; color: var(--text-primary);">Download</span>
+                        <span style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Unduh langsung ke perangkat</span>
                     </div>
-                    <div id="cardShareOption" class="report-option-card" style="flex: 1; padding: 16px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; background: #ffffff; transition: all 0.2s;">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 12px; color: var(--color-muted);"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-                        <span style="font-weight: 600; color: var(--color-ink);">Share via Email</span>
-                        <span style="font-size: 12px; color: var(--color-muted-light); margin-top: 4px;">Kirim laporan ke rekan tim</span>
+                    <!-- PERBAIKAN: Mengubah background #ffffff menjadi transparent -->
+                    <div id="cardShareOption" class="report-option-card" style="flex: 1; padding: 16px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; background: transparent; transition: all 0.2s;">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 12px; color: var(--text-secondary);"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                        <span style="font-weight: 600; color: var(--text-primary);">Share via Email</span>
+                        <span style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Kirim laporan ke rekan tim</span>
                     </div>
                 </div>
                 
                 <!-- Email Inputs Section -->
-                <div id="emailInputsContainer" style="display: none; margin-bottom: 24px; padding: 16px; background: #f1f5f9; border-radius: 8px;">
-                    <label style="display: block; font-weight: 500; font-size: 14px; color: var(--color-ink); margin-bottom: 12px;">Daftar Penerima Email:</label>
+                <!-- PERBAIKAN: Mengubah background #f1f5f9 menjadi var(--bg-panel) -->
+                <div id="emailInputsContainer" style="display: none; margin-bottom: 24px; padding: 16px; background: var(--bg-panel); border-radius: 8px;">
+                    <label style="display: block; font-weight: 500; font-size: 14px; color: var(--text-primary); margin-bottom: 12px;">Daftar Penerima Email:</label>
                     <div id="emailListWrapper" style="display: flex; flex-direction: column; gap: 12px;">
                         <div class="email-input-row" style="display: flex; gap: 8px;">
-                            <input type="email" class="auth-input email-recipient-input" placeholder="contoh@undip.ac.id" style="flex: 1; padding: 8px 12px; margin-bottom: 0;" required>
+                            <!-- PERBAIKAN: Menambahkan styling background dinamis pada input agar tidak putih pekat -->
+                            <input type="email" class="auth-input email-recipient-input" placeholder="contoh@undip.ac.id" style="flex: 1; padding: 8px 12px; margin-bottom: 0; background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--color-border);" required>
                         </div>
                     </div>
-                    <button type="button" class="btn btn-outline" onclick="addEmailInputRow()" style="margin-top: 12px; padding: 6px 12px; border-color: var(--color-border); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500;" title="Tambah penerima">
+                    <!-- PERBAIKAN: Menambahkan color: var(--text-primary) agar teks "Tambah Email Lain" terbaca di mode gelap -->
+                    <button type="button" class="btn btn-outline" onclick="addEmailInputRow()" style="margin-top: 12px; padding: 6px 12px; border: 1px solid var(--color-border); background: transparent; color: var(--text-primary); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500;" title="Tambah penerima">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                         Tambah Email Lain
                     </button>
