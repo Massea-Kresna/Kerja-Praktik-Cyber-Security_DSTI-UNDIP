@@ -4508,6 +4508,44 @@ input[type=number] {
     border-color: rgba(59, 130, 246, 0.4);
 }
 
+.page-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--color-muted);
+    margin-bottom: 14px;
+}
+
+.page-breadcrumb a {
+    color: var(--color-muted);
+    text-decoration: none;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.page-breadcrumb a:hover {
+    color: #2563eb;
+    text-decoration: underline;
+}
+
+.page-breadcrumb-sep {
+    opacity: 0.6;
+}
+
+.page-breadcrumb-current {
+    color: var(--color-ink);
+    font-weight: 700;
+}
+
+.settings-page .settings-single-card {
+    max-width: 1000px;
+}
+
+[data-theme="dark"] .page-breadcrumb a:hover {
+    color: #93c5fd;
+}
+
 @media (max-width: 560px) {
     .settings-single-card {
         max-width: 100%;

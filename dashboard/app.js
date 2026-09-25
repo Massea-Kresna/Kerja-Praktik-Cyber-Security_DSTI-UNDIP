@@ -497,10 +497,11 @@ document.addEventListener('click', function (e) {
     }
 });
 
-function switchView(viewId, event) {
+function switchView(viewId, event, opts) {
     if (event) {
         event.stopPropagation();
     }
+    const updateHash = !(opts && opts.updateHash === false);
 
     // Role guard: System Settings hanya boleh diakses oleh superadmin
     if (viewId === 'system-settings') {
@@ -648,6 +649,79 @@ function switchView(viewId, event) {
             activeScansInterval = null;
         }
     }
+
+    if (typeof updatePageMeta === 'function') updatePageMeta(viewId);
+    if (updateHash && typeof syncHashForView === 'function') syncHashForView(viewId);
+}
+
+// Judul halaman + deep-link hash per view (Opsi 1: rasa page tanpa file terpisah)
+const VIEW_TITLES = {
+    'overview': 'Dashboard',
+    'inventory': 'Inventory',
+    'vulnerabilities': 'Vulnerabilities',
+    'web-scanner': 'Website Scans',
+    'web-scanner-single': 'Website Scans — Manual Scan',
+    'web-scanner-scheduled': 'Website Scans — Automated Scan',
+    'network-scanner': 'Network Scans',
+    'network-scanner-single': 'Network Scans — Manual Scan',
+    'network-scanner-scheduled': 'Network Scans — Automated Scan',
+    'admin': 'User Management',
+    'system-settings': 'System Settings'
+};
+window.VIEW_TITLES = VIEW_TITLES;
+
+function updatePageMeta(viewId) {
+    const label = VIEW_TITLES[viewId] || viewId;
+    try {
+        document.title = label + ' — Pentest-UNDIP';
+    } catch (e) { /* abaikan */ }
+}
+window.updatePageMeta = updatePageMeta;
+
+function syncHashForView(viewId) {
+    try {
+        let hash = '#/overview';
+        if (viewId === 'system-settings') {
+            const activeTab = document.querySelector('.settings-tab-btn.active');
+            const tab = activeTab ? activeTab.getAttribute('data-stab') : 'force-logout';
+            hash = (tab === 'auto-scan') ? '#/system-settings/auto-scan' : '#/system-settings';
+        } else if (VIEW_TITLES[viewId]) {
+            hash = '#/' + viewId;
+        } else {
+            return;
+        }
+        if (window.location.hash !== hash) {
+            window.location.hash = hash;
+        }
+    } catch (e) { /* abaikan */ }
+}
+window.syncHashForView = syncHashForView;
+
+function routeFromHash() {
+    try {
+        const raw = (window.location.hash || '').replace(/^#\/?/, '');
+        if (!raw) return false;
+        const parts = raw.split('/');
+        const viewId = parts[0];
+        if (!VIEW_TITLES[viewId]) return false;
+        if (viewId === 'system-settings' && currentUser && currentUser.role !== 'superadmin') return false;
+        switchView(viewId, null, { updateHash: false });
+        if (viewId === 'system-settings' && parts[1] === 'auto-scan' && typeof switchSettingsTab === 'function') {
+            switchSettingsTab('auto-scan', { updateHash: false });
+        }
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+window.routeFromHash = routeFromHash;
+
+if (typeof window !== 'undefined' && !window._settingsHashListenerAttached) {
+    window._settingsHashListenerAttached = true;
+    window.addEventListener('hashchange', () => {
+        if (!currentUser) return;
+        routeFromHash();
+    });
 }
 
 // Data Fetching
@@ -4956,6 +5030,10 @@ function handleSuccessfulLogin(user) {
     refreshData();
     loadOverview(); 
 
+    if (typeof routeFromHash === 'function') {
+        try { routeFromHash(); } catch (e) { /* abaikan */ }
+    }
+
     if (autoRefreshInterval) clearInterval(autoRefreshInterval);
     autoRefreshInterval = setInterval(() => refreshData(true), 5000);
 }
@@ -6340,7 +6418,7 @@ function updateSettingBadge(settingId, val) {
 }
 window.updateSettingBadge = updateSettingBadge;
 
-function switchSettingsTab(tab) {
+function switchSettingsTab(tab, opts) {
     document.querySelectorAll('.settings-tab-btn').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-stab') === tab);
     });
@@ -6354,6 +6432,16 @@ function switchSettingsTab(tab) {
     });
     const target = document.getElementById(paneMap[tab]);
     if (target) target.classList.add('active');
+    const updateHash = !(opts && opts.updateHash === false);
+    if (updateHash) {
+        try {
+            const settingsView = document.getElementById('view-system-settings');
+            const isActive = settingsView && !settingsView.classList.contains('hidden');
+            if (isActive && typeof syncHashForView === 'function') {
+                syncHashForView('system-settings');
+            }
+        } catch (e) { /* abaikan */ }
+    }
 }
 window.switchSettingsTab = switchSettingsTab;
 
