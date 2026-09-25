@@ -4183,8 +4183,126 @@ input[type=number] {
 }
 
 /* ==========================================================================
-   SYSTEM SETTINGS INTERACTIVE CHIPS
+   SYSTEM SETTINGS — SINGLE CARD + TABS (RINGKAS)
    ========================================================================== */
+.settings-single-card {
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-surface);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+    max-width: 860px;
+}
+
+.settings-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+}
+
+.settings-tab-btn {
+    border: 1px solid transparent;
+    background: transparent;
+    padding: 9px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-muted);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s ease;
+}
+
+.settings-tab-btn:hover {
+    color: var(--color-ink);
+    background: rgba(37, 99, 235, 0.06);
+}
+
+.settings-tab-btn.active {
+    color: #fff;
+    background: #2563eb;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+
+.settings-tab-btn:focus-visible,
+.setting-chip-card:focus-visible,
+.custom-setting-inline input:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+
+.settings-pane {
+    display: none;
+    padding: 20px 24px 24px;
+}
+
+.settings-pane.active {
+    display: block;
+}
+
+.settings-pane-desc {
+    font-size: 12px;
+    color: var(--color-muted);
+    margin: 0 0 20px;
+    line-height: 1.5;
+}
+
+.settings-block {
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px dashed var(--color-border);
+}
+
+.settings-block-last {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.settings-block-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.settings-block-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-ink);
+    margin: 0;
+}
+
+.saved-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: #2563eb;
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.25);
+    border-radius: 999px;
+    padding: 3px 10px;
+    white-space: nowrap;
+}
+
+.settings-hint {
+    font-size: 11px;
+    color: var(--color-muted);
+    margin-top: 8px;
+    display: block;
+    line-height: 1.5;
+}
+
+.setting-chip-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+}
+
 .setting-chip-card {
     display: inline-flex;
     align-items: center;
@@ -4201,6 +4319,8 @@ input[type=number] {
     font-weight: 600;
     color: var(--color-ink);
     line-height: 1.2;
+    font-family: inherit;
+    width: 100%;
 }
 
 .setting-chip-card:hover {
@@ -4216,22 +4336,46 @@ input[type=number] {
     box-shadow: 0 3px 8px rgba(37, 99, 235, 0.25);
 }
 
-[data-theme="dark"] .setting-chip-card {
-    background: var(--bg-input);
-    border-color: var(--border-color);
+/* Baris kustom full-width pengganti box kecil */
+.custom-setting-inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    min-height: 48px;
+    transition: all 0.2s ease;
 }
 
-[data-theme="dark"] .setting-chip-card:hover {
-    border-color: #3b82f6;
-    background: rgba(59, 130, 246, 0.12);
+.custom-setting-inline:focus-within {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
-[data-theme="dark"] .setting-chip-card.active {
-    background: #2563eb !important;
-    color: #ffffff !important;
+.custom-setting-inline.custom-active {
     border-color: #2563eb !important;
+    background: rgba(37, 99, 235, 0.06);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 
+.custom-inline-label {
+    font-size: 12px;
+    color: var(--color-muted);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.custom-inline-suffix {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-muted);
+    white-space: nowrap;
+}
+
+/* Kompatibilitas: box lama bila masih dipakai */
 .custom-setting-input-box {
     display: inline-flex;
     align-items: center;
@@ -4255,25 +4399,30 @@ input[type=number] {
 }
 
 .custom-setting-time-field {
-    border: none;
-    background: transparent;
-    font-size: 13px;
-    font-weight: 600;
+    border: 1px solid transparent;
+    background: rgba(37, 99, 235, 0.04);
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 700;
     color: var(--color-ink);
     outline: none;
     cursor: pointer;
     font-family: inherit;
-    width: 68px;
+    width: 110px;
+    padding: 4px 8px;
+    color-scheme: light;
 }
 
 .custom-setting-num-field {
-    border: none;
-    background: transparent;
-    font-size: 13px;
-    font-weight: 600;
+    border: 1px solid transparent;
+    background: rgba(37, 99, 235, 0.04);
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 700;
     color: var(--color-ink);
     outline: none;
-    width: 50px;
+    width: 90px;
+    padding: 4px 8px;
     font-family: inherit;
     text-align: center;
 }
@@ -4286,20 +4435,93 @@ input[type=number] {
 
 .custom-setting-num-field {
     -moz-appearance: textfield;
+    appearance: textfield;
 }
 
+/* ---- Dark mode ---- */
+[data-theme="dark"] .settings-single-card,
+[data-theme="dark"] .settings-tabs {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+}
+
+[data-theme="dark"] .settings-tab-btn {
+    color: var(--color-muted);
+}
+
+[data-theme="dark"] .settings-tab-btn:hover {
+    color: var(--text-primary);
+    background: rgba(59, 130, 246, 0.12);
+}
+
+[data-theme="dark"] .settings-tab-btn.active {
+    background: #2563eb;
+    color: #fff;
+}
+
+[data-theme="dark"] .setting-chip-card {
+    background: var(--bg-input);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .setting-chip-card:hover {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.12);
+}
+
+[data-theme="dark"] .setting-chip-card.active {
+    background: #2563eb !important;
+    color: #ffffff !important;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 3px 10px rgba(37, 99, 235, 0.45);
+}
+
+[data-theme="dark"] .custom-setting-inline,
 [data-theme="dark"] .custom-setting-input-box {
     background: var(--bg-input);
     border-color: var(--border-color);
 }
 
+[data-theme="dark"] .custom-setting-inline.custom-active,
 [data-theme="dark"] .custom-setting-input-box.custom-active {
     border-color: #3b82f6 !important;
-    background: rgba(59, 130, 246, 0.15);
+    background: rgba(59, 130, 246, 0.22);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
 }
 
 [data-theme="dark"] .custom-setting-time-field,
 [data-theme="dark"] .custom-setting-num-field {
     color: var(--text-primary);
     color-scheme: dark;
+    background: rgba(59, 130, 246, 0.12);
+}
+
+[data-theme="dark"] .custom-setting-time-field::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+}
+
+[data-theme="dark"] .saved-badge {
+    color: #93c5fd;
+    background: rgba(59, 130, 246, 0.18);
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
+@media (max-width: 560px) {
+    .settings-single-card {
+        max-width: 100%;
+    }
+
+    .settings-pane {
+        padding: 16px;
+    }
+
+    .setting-chip-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .custom-setting-inline {
+        flex-wrap: wrap;
+    }
 }

@@ -6322,8 +6322,40 @@ function selectSettingChip(settingId, val) {
             customBox.classList.remove('custom-active');
         }
     }
+
+    if (typeof updateSettingBadge === 'function') {
+        updateSettingBadge(settingId, val);
+    }
 }
 window.selectSettingChip = selectSettingChip;
+
+function updateSettingBadge(settingId, val) {
+    const badge = document.getElementById('saved_' + settingId);
+    if (!badge) return;
+    if (settingId === 'settingForceLogoutUserMinutes') {
+        badge.textContent = 'Tersimpan: ' + String(val) + ' mnt';
+    } else {
+        badge.textContent = 'Tersimpan: ' + String(val);
+    }
+}
+window.updateSettingBadge = updateSettingBadge;
+
+function switchSettingsTab(tab) {
+    document.querySelectorAll('.settings-tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-stab') === tab);
+    });
+    const paneMap = {
+        'force-logout': 'pane-settings-force-logout',
+        'auto-scan': 'pane-settings-auto-scan'
+    };
+    Object.values(paneMap).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('active');
+    });
+    const target = document.getElementById(paneMap[tab]);
+    if (target) target.classList.add('active');
+}
+window.switchSettingsTab = switchSettingsTab;
 
 window.onCustomTimeChange = function(settingId, val) {
     if (!val) return;
@@ -6473,6 +6505,10 @@ async function saveSystemSettings() {
 
         if (resp.status === 200) {
             window.systemSettings = payload;
+            updateSettingBadge('settingForceLogoutSuperadmin', saVal);
+            updateSettingBadge('settingForceLogoutAdmin', admVal);
+            updateSettingBadge('settingForceLogoutUserMinutes', String(usrNum));
+            updateSettingBadge('settingScheduledScanHour', scanVal);
             showToast("Sukses", resData.message || "Pengaturan sistem berhasil diperbarui.", "");
         } else {
             showToast("Gagal", resData.detail || "Gagal menyimpan pengaturan sistem.", "");
