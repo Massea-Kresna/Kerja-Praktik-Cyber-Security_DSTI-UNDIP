@@ -499,6 +499,7 @@ document.addEventListener('click', function (e) {
 
 function switchView(viewId, event, opts) {
     if (event) {
+        if (typeof event.preventDefault === 'function') event.preventDefault();
         event.stopPropagation();
     }
     const updateHash = !(opts && opts.updateHash === false);
@@ -651,6 +652,15 @@ function switchView(viewId, event, opts) {
     }
 
     if (typeof updatePageMeta === 'function') updatePageMeta(viewId);
+    try {
+        const persistTab = (viewId === 'system-settings' && typeof document !== 'undefined')
+            ? ((document.querySelector('.settings-tab-btn.active') || {}).getAttribute
+                ? document.querySelector('.settings-tab-btn.active').getAttribute('data-stab')
+                : 'force-logout')
+            : '';
+        localStorage.setItem('dsti_last_view', viewId);
+        localStorage.setItem('dsti_last_settings_tab', persistTab || '');
+    } catch (e) { /* abaikan */ }
     if (updateHash && typeof syncHashForView === 'function') syncHashForView(viewId);
 }
 
@@ -700,16 +710,35 @@ window.syncHashForView = syncHashForView;
 function routeFromHash() {
     try {
         const raw = (window.location.hash || '').replace(/^#\/?/, '');
-        if (!raw) return false;
-        const parts = raw.split('/');
-        const viewId = parts[0];
-        if (!VIEW_TITLES[viewId]) return false;
-        if (viewId === 'system-settings' && currentUser && currentUser.role !== 'superadmin') return false;
-        switchView(viewId, null, { updateHash: false });
-        if (viewId === 'system-settings' && parts[1] === 'auto-scan' && typeof switchSettingsTab === 'function') {
-            switchSettingsTab('auto-scan', { updateHash: false });
+        if (raw) {
+            const parts = raw.split('/');
+            const viewId = parts[0];
+            if (VIEW_TITLES[viewId]) {
+                if (viewId === 'system-settings' && currentUser && currentUser.role !== 'superadmin') return false;
+                switchView(viewId, null, { updateHash: false });
+                if (viewId === 'system-settings' && parts[1] === 'auto-scan' && typeof switchSettingsTab === 'function') {
+                    switchSettingsTab('auto-scan', { updateHash: false });
+                }
+                return true;
+            }
         }
-        return true;
+        // Fallback: halaman terakhir dari localStorage agar refresh tidak mental ke overview
+        let saved = null;
+        let savedTab = '';
+        try {
+            saved = localStorage.getItem('dsti_last_view');
+            savedTab = localStorage.getItem('dsti_last_settings_tab') || '';
+        } catch (e) { /* abaikan */ }
+        if (saved && VIEW_TITLES[saved]) {
+            if (saved === 'system-settings' && currentUser && currentUser.role !== 'superadmin') return false;
+            switchView(saved, null, { updateHash: false });
+            if (saved === 'system-settings' && savedTab === 'auto-scan' && typeof switchSettingsTab === 'function') {
+                switchSettingsTab('auto-scan', { updateHash: false });
+            }
+            if (typeof syncHashForView === 'function') syncHashForView(saved);
+            return true;
+        }
+        return false;
     } catch (e) {
         return false;
     }
@@ -6433,6 +6462,7 @@ function switchSettingsTab(tab, opts) {
     const target = document.getElementById(paneMap[tab]);
     if (target) target.classList.add('active');
     const updateHash = !(opts && opts.updateHash === false);
+    try { localStorage.setItem('dsti_last_settings_tab', tab); } catch (e) { /* abaikan */ }
     if (updateHash) {
         try {
             const settingsView = document.getElementById('view-system-settings');
