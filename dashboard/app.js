@@ -487,9 +487,33 @@ window.toggleNavDropdown = function(dropdownId, event) {
     dropdown.classList.toggle('expanded', !isExpanded);
 };
 
+// Close collapsed flyout dropdowns when clicking outside
+document.addEventListener('click', function (e) {
+    if (!e.target.closest('.nav-dropdown')) {
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar && sidebar.classList.contains('collapsed')) {
+            document.querySelectorAll('.nav-dropdown.expanded').forEach(d => d.classList.remove('expanded'));
+        }
+    }
+});
+
 function switchView(viewId, event) {
     if (event) {
         event.stopPropagation();
+    }
+
+    // Role guard: System Settings hanya boleh diakses oleh superadmin
+    if (viewId === 'system-settings') {
+        const role = currentUser ? currentUser.role : null;
+        if (role !== 'superadmin') {
+            if (typeof showToast === 'function') {
+                showToast("Akses Ditolak", "Hanya Super Admin yang dapat mengakses System Settings.", "error");
+            }
+            if (viewId !== 'overview') {
+                switchView('overview');
+            }
+            return;
+        }
     }
 
     // Deactivate all nav items & sub-items
@@ -570,13 +594,19 @@ function switchView(viewId, event) {
         viewEl.style.display = 'block';
     }
 
-    // Expand dropdown if a child item is active
-    if (viewId.startsWith('web-scanner')) {
-        const webDropdown = document.getElementById('navDropdownWeb');
-        if (webDropdown) webDropdown.classList.add('expanded');
-    } else if (viewId.startsWith('network-scanner')) {
-        const netDropdown = document.getElementById('navDropdownNetwork');
-        if (netDropdown) netDropdown.classList.add('expanded');
+    // Expand dropdown if a child item is active (only in expanded sidebar mode)
+    const isSidebarCollapsed = document.querySelector('.sidebar')?.classList.contains('collapsed');
+    if (!isSidebarCollapsed) {
+        if (viewId.startsWith('web-scanner')) {
+            const webDropdown = document.getElementById('navDropdownWeb');
+            if (webDropdown) webDropdown.classList.add('expanded');
+        } else if (viewId.startsWith('network-scanner')) {
+            const netDropdown = document.getElementById('navDropdownNetwork');
+            if (netDropdown) netDropdown.classList.add('expanded');
+        }
+    } else {
+        // In collapsed mode, close the flyout menu after choosing an item
+        document.querySelectorAll('.nav-dropdown.expanded').forEach(d => d.classList.remove('expanded'));
     }
 
     // Activate nav element dynamically
@@ -586,6 +616,13 @@ function switchView(viewId, event) {
             n.classList.add('active');
         }
     });
+
+    // Also highlight the parent dropdown toggle if one of its sub-items is active
+    if (viewId.startsWith('web-scanner')) {
+        document.querySelector('#navDropdownWeb .nav-dropdown-toggle')?.classList.add('active');
+    } else if (viewId.startsWith('network-scanner')) {
+        document.querySelector('#navDropdownNetwork .nav-dropdown-toggle')?.classList.add('active');
+    }
 
     // Load admin data if switching to admin page
     if (viewId === 'admin') {
@@ -603,7 +640,7 @@ function switchView(viewId, event) {
             activeScansInterval = setInterval(() => {
                 fetchActiveScans();
                 fetchScheduledScans();
-            }, 5000);
+            }, 15000);
         }
     } else {
         if (activeScansInterval) {
@@ -3356,12 +3393,27 @@ function openScanModalIndex(index) {
 }
 
 function openScanModalByScanId(scanId) {
-    const scan = allVulns.find(v => String(v.id) === String(scanId));
+    if (!scanId) return false;
+    const scan = (typeof allVulns !== 'undefined' && Array.isArray(allVulns))
+        ? allVulns.find(v => String(v.id) === String(scanId))
+        : null;
     if (scan) {
         openScanModal(scan);
-    } else {
-        showToast('Error', 'Detail laporan scan tidak ditemukan.', '');
+        return true;
     }
+    fetch(`${API_BASE}/api/scan-history/${scanId}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success' && data.data) {
+                openScanModal(data.data);
+            } else {
+                showToast('Error', 'Detail laporan scan tidak ditemukan.', '');
+            }
+        })
+        .catch(() => {
+            showToast('Error', 'Detail laporan scan tidak ditemukan.', '');
+        });
+    return true;
 }
 
 function openScanModalByDomainName(domainName) {
@@ -4695,6 +4747,11 @@ function showLoginOverlay() {
     document.getElementById('authOverlay').classList.remove('hidden');
     document.getElementById('sidebar-user-container').style.display = 'none';
     document.getElementById('nav-admin').style.display = 'none';
+    const navSettings = document.getElementById('nav-system-settings');
+    if (navSettings) {
+        navSettings.style.display = 'none';
+        navSettings.classList.add('hidden');
+    }
     document.getElementById('mainHeader').style.display = 'none';
     document.getElementById('notifWrapper').style.display = 'none';
     document.getElementById('authForm').style.display = 'block';
@@ -4820,8 +4877,13 @@ function handleSuccessfulLogin(user) {
         
         const navSettings = document.getElementById('nav-system-settings');
         if (navSettings) {
-            navSettings.classList.remove('hidden');
-            navSettings.style.display = 'flex';
+            if (user.role === 'superadmin') {
+                navSettings.classList.remove('hidden');
+                navSettings.style.display = 'flex';
+            } else {
+                navSettings.classList.add('hidden');
+                navSettings.style.display = 'none';
+            }
         }
         
         document.getElementById('notifWrapper').style.display = 'block';
@@ -4834,6 +4896,17 @@ function handleSuccessfulLogin(user) {
         if (navWebScanner) navWebScanner.style.display = 'flex';
         if (navNetworkScanner) navNetworkScanner.style.display = 'flex';
 
+        // Jika role admin (bukan superadmin) sedang di halaman system-settings, alihkan ke overview
+        if (user.role !== 'superadmin') {
+            const activeNav = document.querySelector('.sidebar-nav .nav-item.active');
+            if (activeNav) {
+                const attr = activeNav.getAttribute('onclick') || '';
+                if (attr.includes('system-settings')) {
+                    switchView('overview');
+                }
+            }
+        }
+
         fetchNotifications();
         if (typeof checkOvernightNotifications === 'function') checkOvernightNotifications();
         
@@ -4844,6 +4917,12 @@ function handleSuccessfulLogin(user) {
         if (navAdmin) {
             navAdmin.classList.add('hidden');
             navAdmin.style.display = 'none';
+        }
+
+        const navSettings = document.getElementById('nav-system-settings');
+        if (navSettings) {
+            navSettings.classList.add('hidden');
+            navSettings.style.display = 'none';
         }
         
         document.getElementById('notifWrapper').style.display = 'none';
@@ -4860,7 +4939,7 @@ function handleSuccessfulLogin(user) {
         const activeNav = document.querySelector('.sidebar-nav .nav-item.active');
         if (activeNav) {
             const attr = activeNav.getAttribute('onclick') || '';
-            if (attr.includes('admin') || attr.includes('inventory') || attr.includes('web-scanner') || attr.includes('network-scanner')) {
+            if (attr.includes('admin') || attr.includes('inventory') || attr.includes('web-scanner') || attr.includes('network-scanner') || attr.includes('system-settings')) {
                 switchView('overview');
             }
         }
@@ -5817,6 +5896,20 @@ async function markAsRead(notifId) {
         if (notif.type === 'scan_finished') {
             await loadVulnerabilities(true);
             jumpToScanDetail(notif.time, notif.domain, false);
+
+            // 1. Coba buka modal scan berdasarkan ID scan (jika ID numerik)
+            const scanId = notif.id && !isNaN(Number(notif.id)) ? String(notif.id) : null;
+            if (scanId && typeof openScanModalByScanId === 'function') {
+                if (openScanModalByScanId(scanId)) return;
+            }
+
+            // 2. Coba buka modal scan berdasarkan nama domain
+            if (notif.domain && typeof openScanModalByDomainName === 'function') {
+                if (openScanModalByDomainName(notif.domain)) return;
+            }
+
+            // 3. Fallback jumpToScanDetail
+            jumpToScanDetail(notif.time, notif.domain, false, scanId);
         } else if (notif.type === 'domain_found') {
             if (typeof switchView === 'function') switchView('inventory');
             if (notif.new_domains && notif.new_domains.length > 0) {
@@ -6201,19 +6294,52 @@ function selectSettingChip(settingId, val) {
 
     hiddenInput.value = val;
 
+    let matchedPreset = false;
     const grid = document.querySelector(`.setting-chip-grid[data-setting="${settingId}"]`);
     if (grid) {
         grid.querySelectorAll('.setting-chip-card').forEach(chip => {
             if (chip.getAttribute('data-value') === String(val)) {
                 chip.classList.add('active');
+                matchedPreset = true;
             } else {
                 chip.classList.remove('active');
             }
         });
     }
+
+    // Sinkronisasi ke input kustom
+    const customInput = document.getElementById('custom_' + settingId);
+    if (customInput && customInput.value !== String(val)) {
+        customInput.value = val;
+    }
+
+    // Beri indikator aktif pada kotak kustom jika nilainya bukan dari preset chips
+    const customBox = document.getElementById('box_custom_' + settingId);
+    if (customBox) {
+        if (!matchedPreset && val) {
+            customBox.classList.add('custom-active');
+        } else {
+            customBox.classList.remove('custom-active');
+        }
+    }
 }
+window.selectSettingChip = selectSettingChip;
+
+window.onCustomTimeChange = function(settingId, val) {
+    if (!val) return;
+    selectSettingChip(settingId, val);
+};
+
+window.onCustomDurationChange = function(settingId, val) {
+    if (val === "" || val === null || val === undefined) return;
+    const num = parseInt(val, 10);
+    if (!isNaN(num) && num > 0) {
+        selectSettingChip(settingId, String(Math.min(1440, Math.max(1, num))));
+    }
+};
 
 async function loadSystemSettings() {
+    if (!currentUser || currentUser.role !== 'superadmin') return;
     try {
         const resp = await fetch(`${API_BASE}/api/system-settings`);
         if (resp.status === 200) {
@@ -6251,6 +6377,13 @@ async function loadSystemSettings() {
                         grid.style.opacity = '1';
                         grid.style.pointerEvents = 'auto';
                     }
+                    const customEl = document.getElementById('custom_' + id);
+                    if (customEl) customEl.disabled = false;
+                    const customBox = document.getElementById('box_custom_' + id);
+                    if (customBox) {
+                        customBox.style.opacity = '1';
+                        customBox.style.pointerEvents = 'auto';
+                    }
                 });
             } else {
                 if (saveBtn) saveBtn.style.display = 'none';
@@ -6261,6 +6394,13 @@ async function loadSystemSettings() {
                     if (grid) {
                         grid.style.opacity = '0.6';
                         grid.style.pointerEvents = 'none';
+                    }
+                    const customEl = document.getElementById('custom_' + id);
+                    if (customEl) customEl.disabled = true;
+                    const customBox = document.getElementById('box_custom_' + id);
+                    if (customBox) {
+                        customBox.style.opacity = '0.6';
+                        customBox.style.pointerEvents = 'none';
                     }
                 });
             }
@@ -6282,11 +6422,45 @@ async function saveSystemSettings() {
         saveBtn.style.opacity = '0.7';
     }
 
+    let saVal = (document.getElementById('settingForceLogoutSuperadmin')?.value || "19:00").trim();
+    let admVal = (document.getElementById('settingForceLogoutAdmin')?.value || "16:00").trim();
+    let usrVal = (document.getElementById('settingForceLogoutUserMinutes')?.value || "60").trim();
+    let scanVal = (document.getElementById('settingScheduledScanHour')?.value || "00:00").trim();
+
+    // Normalisasi format jam jika user mengetik 1 digit jam (misal 9:00 -> 09:00)
+    const normalizeTime = (t) => {
+        if (/^[0-9]:[0-5][0-9]$/.test(t)) return '0' + t;
+        return t;
+    };
+    saVal = normalizeTime(saVal);
+    admVal = normalizeTime(admVal);
+    scanVal = normalizeTime(scanVal);
+
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(saVal) || !timeRegex.test(admVal) || !timeRegex.test(scanVal)) {
+        showToast("Format Tidak Valid", "Format waktu harus berupa jam:menit yang valid (00:00 - 23:59).", "warning");
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.style.opacity = '1';
+        }
+        return;
+    }
+
+    const usrNum = parseInt(usrVal, 10);
+    if (isNaN(usrNum) || usrNum < 1 || usrNum > 1440) {
+        showToast("Format Tidak Valid", "Durasi sesi pengguna harus berupa angka 1 - 1440 menit.", "warning");
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.style.opacity = '1';
+        }
+        return;
+    }
+
     const payload = {
-        force_logout_superadmin: document.getElementById('settingForceLogoutSuperadmin').value,
-        force_logout_admin: document.getElementById('settingForceLogoutAdmin').value,
-        force_logout_user_minutes: document.getElementById('settingForceLogoutUserMinutes').value,
-        scheduled_scan_hour: document.getElementById('settingScheduledScanHour').value
+        force_logout_superadmin: saVal,
+        force_logout_admin: admVal,
+        force_logout_user_minutes: String(usrNum),
+        scheduled_scan_hour: scanVal
     };
 
     try {
@@ -8664,12 +8838,12 @@ function jumpToScanDetail(isoDateString, targetName, isSeverity = false, scanId 
 }
 
 function jumpToScanDetailByDate(isoDateString, targetName, isSeverity = false) {
-    if (!isoDateString || typeof allVulns === 'undefined' || !allVulns) {
+    if ((!isoDateString && !targetName) || typeof allVulns === 'undefined' || !allVulns) {
         showToast("Info", "Data riwayat scan belum termuat.", "ℹ️");
         return;
     }
 
-    const targetTime = new Date(isoDateString).getTime();
+    const targetTime = isoDateString ? new Date(isoDateString).getTime() : 0;
     let closestScan = null;
     let minDiff = Infinity;
 
@@ -8680,21 +8854,29 @@ function jumpToScanDetailByDate(isoDateString, targetName, isSeverity = false) {
         if (isSeverity) {
             let hasSeverity = false;
             if (scan.vulnerabilities && scan.vulnerabilities.length > 0) {
-                hasSeverity = scan.vulnerabilities.some(v => (v.severity || '').toUpperCase() === targetName.toUpperCase());
+                hasSeverity = scan.vulnerabilities.some(v => (v.severity || '').toUpperCase() === (targetName || '').toUpperCase());
             }
             if (!hasSeverity) return;
-        } else {
-            const domain = scan.domains?.domain_name || 'Unknown';
-            if (domain !== targetName && targetName !== 'Others' && targetName !== 'Semua Domain') return;
+        } else if (targetName && targetName !== 'Others' && targetName !== 'Semua Domain') {
+            const rawDomain = scan.domains?.domain_name || scan.domain_name || scan.target || '';
+            const cleanDomain = String(rawDomain).toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '').trim();
+            const cleanTarget = String(targetName).toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '').trim();
+            if (cleanDomain !== cleanTarget) return;
         }
 
         const scanTime = new Date(scan.scan_date).getTime();
-        const diff = Math.abs(scanTime - targetTime);
+        const diff = targetTime ? Math.abs(scanTime - targetTime) : 0;
         if (diff < minDiff) {
             minDiff = diff;
             closestScan = scan;
         }
     });
+
+    if (!closestScan && targetName && typeof openScanModalByDomainName === 'function') {
+        if (openScanModalByDomainName(targetName)) {
+            return;
+        }
+    }
 
     if (closestScan) {
         openScanModal(closestScan);
@@ -9085,6 +9267,7 @@ window.toggleSidebar = function () {
     const sidebar = document.querySelector('.sidebar');
     if (sidebar) {
         const isCollapsed = sidebar.classList.toggle('collapsed');
+        document.querySelectorAll('.nav-dropdown.expanded').forEach(d => d.classList.remove('expanded'));
         const tooltip = document.getElementById('sidebarTooltip');
         const arrow = document.getElementById('sidebarToggleArrow');
 

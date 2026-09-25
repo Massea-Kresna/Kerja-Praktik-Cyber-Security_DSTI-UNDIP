@@ -34,6 +34,7 @@
     --font-mono: var(--font-sans);
     --primary: var(--color-accent);
     --primary-light: var(--color-accent-soft);
+    --primary-dark: #004ba2;
 
     /* Radius & Shadows */
     --radius-sm: 6px;
@@ -61,7 +62,10 @@ body {
     font-size: 14px;
 }
 
-button, input, select, textarea {
+button,
+input,
+select,
+textarea {
     font-family: var(--font-sans);
 }
 
@@ -93,6 +97,9 @@ button, input, select, textarea {
 
 .sidebar.collapsed {
     width: 80px;
+    overflow: visible;
+    position: relative;
+    z-index: 100;
 }
 
 .sidebar.collapsed .brand-text,
@@ -227,7 +234,7 @@ button, input, select, textarea {
     pointer-events: none;
     z-index: 100;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255,255,255,0.12);
+    border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 /* Collapsed State Layout */
@@ -261,6 +268,7 @@ button, input, select, textarea {
 .topbar-sidebar-toggle-btn {
     transition: all 0.2s ease;
 }
+
 .topbar-sidebar-toggle-btn:hover {
     background: var(--color-surface-hover) !important;
     border-color: var(--color-accent) !important;
@@ -372,12 +380,137 @@ button, input, select, textarea {
     background: rgba(37, 99, 235, 0.06) !important;
 }
 
-.sidebar.collapsed .nav-dropdown-menu {
+.sidebar.collapsed .dropdown-chevron {
     display: none !important;
 }
 
-.sidebar.collapsed .dropdown-chevron {
+/* ==========================================================================
+   COLLAPSED SIDEBAR FLYOUT DROPDOWN (Website Scanner & Network Scanner)
+   ========================================================================== */
+.sidebar.collapsed .nav-dropdown {
+    position: relative;
+}
+
+.sidebar.collapsed .nav-dropdown .nav-dropdown-toggle {
+    position: relative;
+    z-index: 2;
+}
+
+/* Sembunyikan default accordion saat collapsed, ubah jadi Flyout Popover */
+.sidebar.collapsed .nav-dropdown .nav-dropdown-menu {
     display: none !important;
+    position: absolute;
+    left: calc(100% + 8px);
+    top: 0;
+    min-width: 200px;
+    background: #0F1C2C;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.5), 0 6px 12px -4px rgba(0, 0, 0, 0.3);
+    padding: 8px 6px;
+    z-index: 1050;
+    flex-direction: column;
+    gap: 3px;
+    animation: flyoutSlideIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Area penghubung transparan agar kursor mouse tidak kehilangan hover */
+.sidebar.collapsed .nav-dropdown .nav-dropdown-menu::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -20px;
+    width: 20px;
+    height: 100%;
+}
+
+/* Tampilkan flyout saat diklik (.expanded) maupun saat kursor di-hover */
+.sidebar.collapsed .nav-dropdown.expanded .nav-dropdown-menu,
+.sidebar.collapsed .nav-dropdown:hover .nav-dropdown-menu {
+    display: flex !important;
+}
+
+/* Judul Kategori pada flyout menu */
+.sidebar.collapsed #navDropdownWeb .nav-dropdown-menu::before {
+    content: "Website Scanner";
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 6px 12px 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 4px;
+    display: block;
+}
+
+.sidebar.collapsed #navDropdownNetwork .nav-dropdown-menu::before {
+    content: "Network Scanner";
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 6px 12px 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 4px;
+    display: block;
+}
+
+/* Tampilan sub-item (Manual Scan & Automated Scan) di dalam flyout */
+.sidebar.collapsed .nav-dropdown-menu .nav-sub-item {
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 9px 12px !important;
+    justify-content: flex-start !important;
+    border-radius: 6px !important;
+    color: #cbd5e1 !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    gap: 10px !important;
+    white-space: nowrap !important;
+    border-left: none !important;
+    background: transparent !important;
+    transition: background 0.15s ease, color 0.15s ease;
+    cursor: pointer;
+}
+
+.sidebar.collapsed .nav-dropdown-menu .nav-sub-item:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+}
+
+.sidebar.collapsed .nav-dropdown-menu .nav-sub-item.active {
+    background: rgba(0, 88, 189, 0.3) !important;
+    color: #60a5fa !important;
+    font-weight: 600 !important;
+}
+
+.sidebar.collapsed .nav-dropdown-menu .nav-sub-item span {
+    display: inline !important;
+    color: inherit !important;
+    font-size: 13px !important;
+}
+
+.sidebar.collapsed .nav-dropdown-menu .nav-sub-item svg {
+    display: inline-block !important;
+    width: 14px !important;
+    height: 14px !important;
+    flex-shrink: 0 !important;
+    color: inherit !important;
+}
+
+@keyframes flyoutSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 }
 
 .nav-item {
@@ -843,6 +976,7 @@ button, input, select, textarea {
     border-color: var(--color-accent) !important;
     background: rgba(0, 88, 189, 0.03) !important;
 }
+
 .icon-btn.action-edit:hover {
     background: var(--color-accent) !important;
     color: #ffffff !important;
@@ -859,6 +993,7 @@ button, input, select, textarea {
     border-color: #ef4444 !important;
     background: rgba(239, 68, 68, 0.03) !important;
 }
+
 .icon-btn.action-delete:hover {
     background: #ef4444 !important;
     color: #ffffff !important;
@@ -1008,89 +1143,111 @@ button, input, select, textarea {
 /* =========================================================
    LOWER GRID & LINK ACTIONS
    ========================================================= */
-.lower-grid { 
-    grid-template-columns: 1.6fr 1fr; /* Membagi kolom kiri lebih besar (60:40) */
+.lower-grid {
+    grid-template-columns: 1.6fr 1fr;
+    /* Membagi kolom kiri lebih besar (60:40) */
 }
-.link-action { 
-    font-size: 13px; 
-    font-weight: 600; 
-    color: var(--color-accent); 
-    text-decoration: none; 
+
+.link-action {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-accent);
+    text-decoration: none;
 }
-.link-action:hover { 
-    text-decoration: underline; 
+
+.link-action:hover {
+    text-decoration: underline;
 }
-.font-mono { 
-    font-family: var(--font-mono); 
+
+.font-mono {
+    font-family: var(--font-mono);
 }
 
 /* =========================================================
    MONITORED DOMAIN LIST
    ========================================================= */
-.domain-list { 
-    list-style: none; 
-    display: flex; 
-    flex-direction: column; 
+.domain-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
 }
+
 .domain-item {
-    display: flex; 
-    align-items: center; 
-    gap: 12px; 
+    display: flex;
+    align-items: center;
+    gap: 12px;
     padding: 16px 24px;
-    border-bottom: 1px solid var(--color-border); 
+    border-bottom: 1px solid var(--color-border);
     cursor: pointer;
     transition: background-color 0.2s;
 }
-.domain-item:last-child { 
-    border-bottom: none; 
+
+.domain-item:last-child {
+    border-bottom: none;
 }
-.domain-item:hover { 
-    background-color: var(--color-bg); 
+
+.domain-item:hover {
+    background-color: var(--color-bg);
 }
+
 .domain-icon {
-    width: 36px; 
-    height: 36px; 
-    border-radius: 8px; 
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
     background: var(--color-bg);
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
-    color: var(--color-muted); 
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-muted);
     flex-shrink: 0;
 }
-.domain-info { 
-    flex: 1; 
-    min-width: 0; 
-}
-.domain-name { 
-    font-size: 14px; 
-    font-weight: 600; 
-    color: var(--color-ink); 
-}
-.domain-desc { 
-    font-size: 12px; 
-    color: var(--color-muted-light); 
-    margin-top: 2px; 
-}
-.domain-status { 
-    display: flex; 
-    flex-direction: column; 
-    align-items: flex-end; 
-    gap: 4px; 
-}
-.status-label { 
-    font-size: 10px; 
-    font-weight: 700; 
-    letter-spacing: 0.3px; 
-}
-.status-label.secure { color: var(--sev-info); }
-.status-label.review { color: var(--sev-medium); }
-.status-label.at-risk { color: var(--sev-high); }
 
-.domain-score { 
-    font-family: var(--font-mono); 
-    font-size: 12px; 
-    color: var(--color-muted); 
+.domain-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.domain-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-ink);
+}
+
+.domain-desc {
+    font-size: 12px;
+    color: var(--color-muted-light);
+    margin-top: 2px;
+}
+
+.domain-status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.status-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+.status-label.secure {
+    color: var(--sev-info);
+}
+
+.status-label.review {
+    color: var(--sev-medium);
+}
+
+.status-label.at-risk {
+    color: var(--sev-high);
+}
+
+.domain-score {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-muted);
 }
 
 .domain-action-btn {
@@ -1107,16 +1264,19 @@ button, input, select, textarea {
     align-items: center;
     gap: 4px;
 }
+
 .domain-action-btn:hover {
     background: var(--primary);
     color: #ffffff;
     border-color: var(--primary);
 }
+
 [data-theme="dark"] .domain-action-btn {
     background: #0f172a;
     border-color: #334155;
     color: #f8fafc;
 }
+
 [data-theme="dark"] .domain-action-btn:hover {
     background: var(--primary);
     border-color: var(--primary);
@@ -1174,6 +1334,7 @@ button, input, select, textarea {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
 /* ==========================================================================
    Multi-Select Dropdown (Chart Filters)
    ========================================================================== */
@@ -1582,18 +1743,22 @@ input[type="datetime-local"] {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     transition: all 0.2s ease;
 }
+
 .btn-generate-report svg {
     color: #94a3b8;
     transition: color 0.2s ease;
 }
+
 .btn-generate-report:hover {
     background-color: #0f172a;
     border-color: #475569;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
+
 .btn-generate-report:hover svg {
     color: #eab308;
 }
+
 .btn-generate-report:active {
     transform: translateY(1px);
     box-shadow: none;
@@ -1624,9 +1789,19 @@ input[type="datetime-local"] {
 }
 
 @keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-5px); }
-    75% { transform: translateX(5px); }
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-5px);
+    }
+
+    75% {
+        transform: translateX(5px);
+    }
 }
 
 /* ==========================================================================
@@ -1671,7 +1846,7 @@ input[type="datetime-local"] {
 
 /* ===== BADGE ROLE: DEFAULT UNTUK TABEL (BACKGROUND PUTIH) ===== */
 .badge-superadmin-role {
-    background-color: rgba(147, 51, 234, 0.12); 
+    background-color: rgba(147, 51, 234, 0.12);
     color: #7e22ce;
     border: 1px solid rgba(147, 51, 234, 0.35);
     padding: 4px 8px;
@@ -1685,8 +1860,9 @@ input[type="datetime-local"] {
 }
 
 .badge-admin-role {
-    background-color: rgba(37, 99, 235, 0.1); 
-    color: #1d4ed8; /* Biru tua yang sangat kontras di atas putih */
+    background-color: rgba(37, 99, 235, 0.1);
+    color: #1d4ed8;
+    /* Biru tua yang sangat kontras di atas putih */
     border: 1px solid rgba(37, 99, 235, 0.3);
     padding: 4px 8px;
     border-radius: 6px;
@@ -1699,8 +1875,9 @@ input[type="datetime-local"] {
 }
 
 .badge-user-role {
-    background-color: rgba(100, 116, 139, 0.1); 
-    color: #475569; /* Abu-abu Slate yang elegan dan netral */
+    background-color: rgba(100, 116, 139, 0.1);
+    color: #475569;
+    /* Abu-abu Slate yang elegan dan netral */
     border: 1px solid rgba(100, 116, 139, 0.3);
     padding: 4px 8px;
     border-radius: 6px;
@@ -1722,13 +1899,15 @@ input[type="datetime-local"] {
 
 #sidebar-user-role .badge-admin-role {
     background-color: rgba(37, 99, 235, 0.25);
-    color: #93c5fd; /* Biru muda terang agar menyala di area gelap */
+    color: #93c5fd;
+    /* Biru muda terang agar menyala di area gelap */
     border-color: rgba(37, 99, 235, 0.4);
 }
 
 #sidebar-user-role .badge-user-role {
     background-color: rgba(148, 163, 184, 0.15);
-    color: #cbd5e1; /* Abu-abu terang untuk area gelap */
+    color: #cbd5e1;
+    /* Abu-abu terang untuk area gelap */
     border-color: rgba(148, 163, 184, 0.3);
 }
 
@@ -1947,6 +2126,7 @@ input[type="datetime-local"] {
         transform: translateX(120%);
         opacity: 0;
     }
+
     to {
         transform: translateX(0);
         opacity: 1;
@@ -1961,13 +2141,23 @@ input[type="datetime-local"] {
 }
 
 @keyframes toast-progress {
-    from { width: 100%; }
-    to { width: 0; }
+    from {
+        width: 100%;
+    }
+
+    to {
+        width: 0;
+    }
 }
 
 @keyframes toast-progress-60s {
-    from { width: 100%; }
-    to { width: 0; }
+    from {
+        width: 100%;
+    }
+
+    to {
+        width: 0;
+    }
 }
 
 .toast-notification.overnight-toast {
@@ -2136,6 +2326,7 @@ input[type="datetime-local"] {
         opacity: 0;
         transform: scale(0.95) translateY(-10px);
     }
+
     to {
         opacity: 1;
         transform: scale(1) translateY(0);
@@ -2309,6 +2500,7 @@ input[type="datetime-local"] {
         opacity: 0;
         transform: translateY(12px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -2360,7 +2552,8 @@ input[type="datetime-local"] {
 }
 
 .btn-danger:hover {
-    background: #b91c1c !important; /* Slightly darker red */
+    background: #b91c1c !important;
+    /* Slightly darker red */
     border-color: #b91c1c !important;
     transform: translateY(-1px);
     box-shadow: 0 4px 12px -2px rgba(220, 38, 38, 0.3);
@@ -2372,7 +2565,8 @@ input[type="datetime-local"] {
 
 .btn-warning-outline {
     background: transparent !important;
-    color: #ea580c !important; /* Orange-yellow / amber */
+    color: #ea580c !important;
+    /* Orange-yellow / amber */
     border-color: #ea580c !important;
 }
 
@@ -2453,7 +2647,7 @@ input[type="datetime-local"] {
     letter-spacing: 0.3px;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .filter-btn:hover {
@@ -2503,6 +2697,7 @@ input[type="datetime-local"] {
     font-family: inherit;
     font-weight: 500;
 }
+
 .quick-date-btn:hover {
     background: #f1f5f9;
     color: var(--color-ink);
@@ -2512,17 +2707,23 @@ input[type="datetime-local"] {
 /* Hide number spinners */
 input[type=number]::-webkit-outer-spin-button,
 input[type=number]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+    -webkit-appearance: none;
+    margin: 0;
 }
+
 input[type=number] {
-  -moz-appearance: textfield;
-  appearance: textfield;
+    -moz-appearance: textfield;
+    appearance: textfield;
 }
 
 @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* Evidence Component Styles */
@@ -2533,6 +2734,7 @@ input[type=number] {
     margin-bottom: 20px;
     background: var(--color-bg);
 }
+
 .evidence-url-box {
     background: #f8f9fa;
     border-radius: 6px;
@@ -2544,6 +2746,7 @@ input[type=number] {
     position: relative;
     padding-left: 20px;
 }
+
 .evidence-url-box::before {
     content: '';
     position: absolute;
@@ -2554,26 +2757,31 @@ input[type=number] {
     height: 40px;
     background: #d1d5db;
 }
+
 .evidence-url-label {
     font-size: 0.8rem;
     color: #6b7280;
     margin-bottom: 4px;
 }
+
 .evidence-url-link {
     color: #0d6efd;
     text-decoration: underline;
     font-size: 0.9rem;
     word-break: break-all;
 }
+
 .evidence-param-box {
     text-align: right;
 }
+
 .evidence-desc {
     font-size: 0.9rem;
     color: var(--color-text);
     margin-bottom: 15px;
     line-height: 1.5;
 }
+
 .evidence-terminal {
     background: #1e1e1e;
     border-radius: 8px;
@@ -2582,6 +2790,7 @@ input[type=number] {
     font-family: var(--font-sans);
     font-size: 0.85rem;
 }
+
 .evidence-terminal-header {
     background: #252526;
     padding: 8px 15px;
@@ -2592,11 +2801,13 @@ input[type=number] {
     justify-content: space-between;
     align-items: center;
 }
+
 .evidence-terminal-body {
     display: flex;
     max-height: 250px;
     overflow-y: auto;
 }
+
 .evidence-terminal-lines {
     padding: 10px 5px;
     background: #1e1e1e;
@@ -2606,15 +2817,18 @@ input[type=number] {
     border-right: 1px solid #3c3c3c;
     min-width: 40px;
 }
+
 .evidence-terminal-content {
     padding: 10px;
     white-space: pre-wrap;
     word-break: break-all;
     flex-grow: 1;
 }
+
 .evidence-terminal-content .highlight {
     background: rgba(255, 255, 255, 0.1);
 }
+
 .evidence-terminal-footer {
     background: #252526;
     text-align: center;
@@ -2624,6 +2838,7 @@ input[type=number] {
     border-top: 1px solid #3c3c3c;
     transition: background 0.2s;
 }
+
 .evidence-terminal-footer:hover {
     background: #3c3c3c;
 }
@@ -2733,23 +2948,28 @@ input[type=number] {
 }
 
 :root[data-theme="dark"] #authOverlay .auth-btn:hover {
-    background-color: #3b82f6 !important; /* Biru yang lebih menyala saat dihover */
+    background-color: #3b82f6 !important;
+    /* Biru yang lebih menyala saat dihover */
 }
 
 /* 4. PERBAIKAN MONITORED DOMAINS LIST */
 [data-theme="dark"] .domain-item {
     border-bottom: 1px solid var(--border-color) !important;
 }
+
 [data-theme="dark"] .domain-item:hover {
     background-color: var(--bg-surface-hover) !important;
 }
+
 [data-theme="dark"] .domain-name {
     color: var(--text-main) !important;
 }
+
 [data-theme="dark"] .domain-desc,
 [data-theme="dark"] .domain-score {
     color: var(--text-muted) !important;
 }
+
 [data-theme="dark"] .domain-icon {
     background-color: var(--bg-input) !important;
     border-color: var(--border-color) !important;
@@ -2790,13 +3010,17 @@ input[type=number] {
 }
 
 /* 6. Teks Heading & Link */
-[data-theme="dark"] h1, [data-theme="dark"] h2,
-[data-theme="dark"] h3, [data-theme="dark"] h4 {
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4 {
     color: #ffffff !important;
 }
+
 [data-theme="dark"] p {
     color: var(--text-muted) !important;
 }
+
 [data-theme="dark"] .link-action {
     color: #60a5fa !important;
 }
@@ -2815,6 +3039,7 @@ input[type=number] {
 [data-theme="dark"] [style*="color:#374151"] {
     color: var(--text-main) !important;
 }
+
 [data-theme="dark"] [style*="color: #475569"],
 [data-theme="dark"] [style*="color:#475569"],
 [data-theme="dark"] [style*="color: #64748b"],
@@ -2840,6 +3065,7 @@ input[type=number] {
     border-color: var(--border-color) !important;
     color: var(--text-main) !important;
 }
+
 [data-theme="dark"] input::placeholder {
     color: var(--text-muted) !important;
 }
@@ -2851,6 +3077,7 @@ input[type=number] {
     border-color: var(--border-color) !important;
     color: var(--text-main) !important;
 }
+
 [data-theme="dark"] .btn-outline:hover,
 [data-theme="dark"] .quick-date-btn:hover,
 [data-theme="dark"] .multi-select-btn:hover {
@@ -2861,9 +3088,11 @@ input[type=number] {
 [data-theme="dark"] .multi-select-item {
     color: var(--text-main) !important;
 }
+
 [data-theme="dark"] .multi-select-item:hover {
     background-color: var(--bg-surface-hover) !important;
 }
+
 [data-theme="dark"] .multi-select-search {
     border-bottom-color: var(--border-color) !important;
 }
@@ -2874,6 +3103,7 @@ input[type=number] {
     color: var(--color-muted) !important;
     border-color: var(--border-color) !important;
 }
+
 [data-theme="dark"] .filter-btn:hover {
     background: var(--bg-surface-hover) !important;
     color: var(--text-main) !important;
@@ -2898,11 +3128,13 @@ input[type=number] {
     color: #c084fc !important;
     border-color: rgba(168, 85, 247, 0.45) !important;
 }
+
 [data-theme="dark"] .badge-admin-role {
     background-color: rgba(59, 130, 246, 0.18) !important;
     color: #93c5fd !important;
     border-color: rgba(59, 130, 246, 0.4) !important;
 }
+
 [data-theme="dark"] .badge-user-role {
     background-color: rgba(148, 163, 184, 0.18) !important;
     color: #cbd5e1 !important;
@@ -2916,11 +3148,13 @@ input[type=number] {
     color: #4ade80 !important;
     border-color: rgba(34, 197, 94, 0.35) !important;
 }
+
 [data-theme="dark"] .status-offline {
     background: rgba(148, 163, 184, 0.14) !important;
     color: #94a3b8 !important;
     border-color: rgba(148, 163, 184, 0.3) !important;
 }
+
 [data-theme="dark"] .status-timeout {
     background: rgba(239, 68, 68, 0.14) !important;
     color: #f87171 !important;
@@ -2938,9 +3172,11 @@ input[type=number] {
 /* =========================================================
    LIGHT MODE — jaminan kontras (tetap default terang seperti semula)
    ========================================================= */
-:root, :root[data-theme="light"] {
+:root,
+:root[data-theme="light"] {
     color-scheme: light;
 }
+
 :root[data-theme="dark"] {
     color-scheme: dark;
 }
@@ -2954,8 +3190,10 @@ input[type=number] {
 :root[data-theme="dark"] .modern-table td div[style*="border-radius: 50%"],
 :root[data-theme="dark"] .modern-table td div[style*="border-radius:50%"] {
     background-color: rgba(16, 185, 129, 0.15) !important;
-    color: #10b981 !important; /* Kembalikan warna hijau */
+    color: #10b981 !important;
+    /* Kembalikan warna hijau */
 }
+
 :root[data-theme="dark"] .modern-table td div[style*="border-radius: 50%"] svg,
 :root[data-theme="dark"] .modern-table td div[style*="border-radius:50%"] svg {
     stroke: #10b981 !important;
@@ -2966,7 +3204,8 @@ input[type=number] {
 :root[data-theme="dark"] .modern-table td div[style*="#2563eb"],
 :root[data-theme="dark"] .modern-table td div[style*="rgb(37, 99, 235)"],
 :root[data-theme="dark"] .modern-table td div[style*="rgb(37,99,235)"] {
-    color: #60a5fa !important; /* Biru terang */
+    color: #60a5fa !important;
+    /* Biru terang */
 }
 
 /* 3. Teks & Ikon Centang (Riwayat Scan) */
@@ -2979,34 +3218,43 @@ input[type=number] {
 /* 4. TOMBOL "Stop Scan" (Merah) */
 /* Sangat presisi: menembak langsung nama fungsi onclick-nya! */
 :root[data-theme="dark"] .modern-table td button[onclick*="stopActiveScan"] {
-    color: #f87171 !important; 
+    color: #f87171 !important;
     border-color: #f87171 !important;
     background-color: rgba(239, 68, 68, 0.05) !important;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     font-weight: 500 !important;
 }
+
 :root[data-theme="dark"] .modern-table td button[onclick*="stopActiveScan"]:hover {
     background-color: #ef4444 !important;
     color: #ffffff !important;
     border-color: #ef4444 !important;
-    transform: translateY(-1px) !important; /* Efek gerak melayang */
+    transform: translateY(-1px) !important;
+    /* Efek gerak melayang */
     box-shadow: 0 4px 10px rgba(239, 68, 68, 0.25) !important;
 }
 
 /* 5. TOMBOL "View Report" (Netral Slate/Silver) */
 /* Sangat presisi: menembak langsung nama fungsi onclick-nya! */
 :root[data-theme="dark"] .modern-table td button[onclick*="openScanModalIndex"] {
-    color: var(--text-muted) !important; /* Warna teks abu-abu elegan */
-    border-color: var(--border-color) !important; /* Garis batas netral */
+    color: var(--text-muted) !important;
+    /* Warna teks abu-abu elegan */
+    border-color: var(--border-color) !important;
+    /* Garis batas netral */
     background-color: transparent !important;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     font-weight: 500 !important;
 }
+
 :root[data-theme="dark"] .modern-table td button[onclick*="openScanModalIndex"]:hover {
-    background-color: rgba(255, 255, 255, 0.05) !important; /* Latar belakang cerah tipis saat dihover */
-    color: var(--text-main) !important; /* Teks berubah jadi putih terang */
-    border-color: var(--text-muted) !important; /* Garis batas sedikit lebih tegas */
-    transform: translateY(-1px) !important; /* Efek gerak melayang */
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    /* Latar belakang cerah tipis saat dihover */
+    color: var(--text-main) !important;
+    /* Teks berubah jadi putih terang */
+    border-color: var(--text-muted) !important;
+    /* Garis batas sedikit lebih tegas */
+    transform: translateY(-1px) !important;
+    /* Efek gerak melayang */
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15) !important;
 }
 
@@ -3039,7 +3287,8 @@ input[type=number] {
     background-color: var(--color-accent) !important;
     color: #ffffff !important;
     border-color: var(--color-accent) !important;
-    transform: translateY(-1px) !important; /* Efek gerak naik */
+    transform: translateY(-1px) !important;
+    /* Efek gerak naik */
     box-shadow: 0 4px 10px rgba(91, 156, 255, 0.25) !important;
 }
 
@@ -3060,8 +3309,10 @@ input[type=number] {
 [data-theme="dark"] #vulnTrendResetIconBtn:hover,
 [data-theme="dark"] #sevTrendResetIconBtn:hover,
 [data-theme="dark"] #vulnResetFilterBtn:hover {
-    background-color: rgba(255, 255, 255, 0.05) !important; /* Nyala tipis */
-    color: var(--text-main) !important; /* Teks putih terang */
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    /* Nyala tipis */
+    color: var(--text-main) !important;
+    /* Teks putih terang */
     border-color: var(--text-muted) !important;
 }
 
@@ -3072,7 +3323,8 @@ input[type=number] {
 [data-theme="dark"] #sevTrendEnlargeBtn,
 [data-theme="dark"] .pagination-right .btn-outline {
     background-color: transparent !important;
-    color: var(--text-muted) !important; /* Warna abu-abu elegan saat diam */
+    color: var(--text-muted) !important;
+    /* Warna abu-abu elegan saat diam */
     border-color: var(--border-color) !important;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
@@ -3082,9 +3334,12 @@ input[type=number] {
 [data-theme="dark"] #vulnTrendEnlargeBtn:hover,
 [data-theme="dark"] #sevTrendEnlargeBtn:hover,
 [data-theme="dark"] .pagination-right .btn-outline:hover:not(:disabled) {
-    background-color: rgba(255, 255, 255, 0.05) !important; /* Efek nyala tipis */
-    color: var(--text-main) !important; /* Teks menyala putih saat disorot */
-    border-color: var(--text-muted) !important; /* Garis batas lebih tegas */
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    /* Efek nyala tipis */
+    color: var(--text-main) !important;
+    /* Teks menyala putih saat disorot */
+    border-color: var(--text-muted) !important;
+    /* Garis batas lebih tegas */
 }
 
 /* 10. FIX: Tombol Aksi Inventory (Simpan Target, Add Domain, Import, Export) -> Hover Silver */
@@ -3103,11 +3358,16 @@ input[type=number] {
 [data-theme="dark"] #addDomainBtn:hover,
 [data-theme="dark"] #importDomainsBtn:hover,
 [data-theme="dark"] #exportDropdown .btn-outline:hover {
-    background-color: rgba(255, 255, 255, 0.05) !important; /* Nyala silver tipis */
-    color: var(--text-main) !important; /* Teks menyala putih */
-    border-color: var(--text-muted) !important; /* Garis batas lebih tegas */
-    transform: translateY(-1px) !important; /* Efek gerak melayang */
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15) !important; /* Bayangan halus */
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    /* Nyala silver tipis */
+    color: var(--text-main) !important;
+    /* Teks menyala putih */
+    border-color: var(--text-muted) !important;
+    /* Garis batas lebih tegas */
+    transform: translateY(-1px) !important;
+    /* Efek gerak melayang */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15) !important;
+    /* Bayangan halus */
 }
 
 /* =========================================================
@@ -3141,7 +3401,8 @@ input[type=number] {
 }
 
 :root[data-theme="dark"] #authOverlay .auth-btn:hover {
-    background-color: #3b82f6 !important; /* Biru yang lebih menyala saat dihover */
+    background-color: #3b82f6 !important;
+    /* Biru yang lebih menyala saat dihover */
 }
 
 /* Perbaikan latar belakang pembungkus ReCAPTCHA agar ikut gelap */
@@ -3159,17 +3420,15 @@ input[type=number] {
     /* Invert membalik putih jadi hitam, Hue-rotate mengembalikan warna biru/hijau logo reCAPTCHA */
     filter: invert(1) hue-rotate(180deg) brightness(0.95);
     border-radius: 4px;
-    mix-blend-mode: screen; /* Menghaluskan tepi putih jika ada sisa */
+    mix-blend-mode: screen;
+    /* Menghaluskan tepi putih jika ada sisa */
 }
 
 /* 2. Memberikan Outline (Garis Tepi) Putih Halus pada Logo PNG */
 :root[data-theme="dark"] #authOverlay .auth-header img {
     /* Membuat efek teks hitam di-highlight dengan warna putih di sekelilingnya */
-    filter: drop-shadow(1px 0px 0px rgba(255, 255, 255, 0.9)) 
-            drop-shadow(-1px 0px 0px rgba(255, 255, 255, 0.9)) 
-            drop-shadow(0px 1px 0px rgba(255, 255, 255, 0.9)) 
-            drop-shadow(0px -1px 0px rgba(255, 255, 255, 0.9))
-            drop-shadow(0px 4px 10px rgba(255, 255, 255, 0.15)); /* Bonus: cahaya memendar tipis di bawah logo */
+    filter: drop-shadow(1px 0px 0px rgba(255, 255, 255, 0.9)) drop-shadow(-1px 0px 0px rgba(255, 255, 255, 0.9)) drop-shadow(0px 1px 0px rgba(255, 255, 255, 0.9)) drop-shadow(0px -1px 0px rgba(255, 255, 255, 0.9)) drop-shadow(0px 4px 10px rgba(255, 255, 255, 0.15));
+    /* Bonus: cahaya memendar tipis di bawah logo */
 }
 
 /* =========================================================
@@ -3179,11 +3438,7 @@ input[type=number] {
 /* Memberikan Outline (Garis Tepi) Putih Halus & Glow pada Logo Sidebar (Besar & Kecil) */
 .sidebar-brand .logo-full,
 .sidebar-brand .logo-small {
-    filter: drop-shadow(1px 0px 0px rgba(255, 255, 255, 0.9)) 
-            drop-shadow(-1px 0px 0px rgba(255, 255, 255, 0.9)) 
-            drop-shadow(0px 1px 0px rgba(255, 255, 255, 0.9)) 
-            drop-shadow(0px -1px 0px rgba(255, 255, 255, 0.9))
-            drop-shadow(0px 4px 10px rgba(255, 255, 255, 0.15)) !important;
+    filter: drop-shadow(1px 0px 0px rgba(255, 255, 255, 0.9)) drop-shadow(-1px 0px 0px rgba(255, 255, 255, 0.9)) drop-shadow(0px 1px 0px rgba(255, 255, 255, 0.9)) drop-shadow(0px -1px 0px rgba(255, 255, 255, 0.9)) drop-shadow(0px 4px 10px rgba(255, 255, 255, 0.15)) !important;
 }
 
 /* Clickable Role Badge Styling */
@@ -3297,6 +3552,7 @@ input[type=number] {
         opacity: 0;
         transform: translateX(100%) scale(0.95);
     }
+
     to {
         opacity: 1;
         transform: translateX(0) scale(1);
@@ -3308,6 +3564,7 @@ input[type=number] {
         opacity: 1;
         transform: translateX(0) scale(1);
     }
+
     to {
         opacity: 0;
         transform: translateX(100%) scale(0.9);
@@ -3318,12 +3575,15 @@ input[type=number] {
 .toast-item.toast-success {
     border-left-color: #10b981;
 }
+
 .toast-item.toast-error {
     border-left-color: #ef4444;
 }
+
 .toast-item.toast-warning {
     border-left-color: #f59e0b;
 }
+
 .toast-item.toast-info {
     border-left-color: #3b82f6;
 }
@@ -3341,10 +3601,25 @@ input[type=number] {
     margin-top: 1px;
 }
 
-.toast-success .toast-icon { background: #dcfce7; color: #15803d; }
-.toast-error .toast-icon { background: #fee2e2; color: #b91c1c; }
-.toast-warning .toast-icon { background: #fef3c7; color: #b45309; }
-.toast-info .toast-icon { background: #dbeafe; color: #1d4ed8; }
+.toast-success .toast-icon {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.toast-error .toast-icon {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.toast-warning .toast-icon {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.toast-info .toast-icon {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
 
 .toast-content {
     flex: 1;
@@ -3359,6 +3634,7 @@ input[type=number] {
     color: #1e293b;
     line-height: 1.4;
 }
+
 [data-theme="dark"] .toast-message {
     color: #f1f5f9;
 }
@@ -3373,6 +3649,7 @@ input[type=number] {
     line-height: 1;
     transition: color 0.15s;
 }
+
 .toast-close-btn:hover {
     color: #475569;
 }
@@ -3388,10 +3665,21 @@ input[type=number] {
     transform-origin: left;
 }
 
-.toast-success .toast-progress { background: #10b981; }
-.toast-error .toast-progress { background: #ef4444; }
-.toast-warning .toast-progress { background: #f59e0b; }
-.toast-info .toast-progress { background: #3b82f6; }
+.toast-success .toast-progress {
+    background: #10b981;
+}
+
+.toast-error .toast-progress {
+    background: #ef4444;
+}
+
+.toast-warning .toast-progress {
+    background: #f59e0b;
+}
+
+.toast-info .toast-progress {
+    background: #3b82f6;
+}
 
 
 /* Custom Confirm Dialog Modal */
@@ -3458,10 +3746,29 @@ input[type=number] {
     flex-shrink: 0;
 }
 
-.custom-modal-icon-badge.danger { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
-.custom-modal-icon-badge.warning { background: #fef3c7; color: #d97706; border: 1px solid #fde68a; }
-.custom-modal-icon-badge.info { background: #dbeafe; color: #2563eb; border: 1px solid #bfdbfe; }
-.custom-modal-icon-badge.success { background: #dcfce7; color: #16a34a; border: 1px solid #bbf7d0; }
+.custom-modal-icon-badge.danger {
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+.custom-modal-icon-badge.warning {
+    background: #fef3c7;
+    color: #d97706;
+    border: 1px solid #fde68a;
+}
+
+.custom-modal-icon-badge.info {
+    background: #dbeafe;
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+}
+
+.custom-modal-icon-badge.success {
+    background: #dcfce7;
+    color: #16a34a;
+    border: 1px solid #bbf7d0;
+}
 
 .custom-modal-title {
     font-size: 16px;
@@ -3470,6 +3777,7 @@ input[type=number] {
     margin: 0 0 6px 0;
     line-height: 1.3;
 }
+
 [data-theme="dark"] .custom-modal-title {
     color: #f8fafc;
 }
@@ -3480,6 +3788,7 @@ input[type=number] {
     margin: 0;
     line-height: 1.5;
 }
+
 [data-theme="dark"] .custom-modal-message {
     color: #94a3b8;
 }
@@ -3493,6 +3802,7 @@ input[type=number] {
     padding-top: 16px;
     border-top: 1px solid #f1f5f9;
 }
+
 [data-theme="dark"] .custom-modal-footer {
     border-top-color: #334155;
 }
@@ -3575,12 +3885,51 @@ input[type=number] {
 }
 
 /* Align sub-item columns to 100% match table header widths */
-.schedule-col-scans { width: 14%; flex-shrink: 0; display: flex; align-items: center; }
-.schedule-col-status { width: 12%; flex-shrink: 0; display: flex; align-items: center; }
-.schedule-col-target { width: 27%; flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; }
-.schedule-col-summary { width: 23%; flex-shrink: 0; display: flex; align-items: center; }
-.schedule-col-date { width: 14%; flex-shrink: 0; display: flex; align-items: center; font-size: 11px; color: var(--color-muted); }
-.schedule-col-action { width: 10%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.schedule-col-scans {
+    width: 14%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+.schedule-col-status {
+    width: 12%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+.schedule-col-target {
+    width: 27%;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.schedule-col-summary {
+    width: 23%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+.schedule-col-date {
+    width: 14%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    font-size: 11px;
+    color: var(--color-muted);
+}
+
+.schedule-col-action {
+    width: 10%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 
 /* Uniform button tokens for schedule components */
 .btn-schedule-action {
@@ -3625,20 +3974,33 @@ input[type=number] {
 
 .custom-modal-btn.btn-danger-solid {
     background: #ef4444;
-    color: #ffffff;
-    border: none;
+    color: #ffffff !important;
+    border: 1px solid #ef4444;
 }
+
 .custom-modal-btn.btn-danger-solid:hover {
-    background: #dc2626;
+    background: #dc2626 !important;
+    border-color: #dc2626 !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3);
 }
 
 .custom-modal-btn.btn-primary-solid {
-    background: var(--primary);
-    color: #ffffff;
-    border: none;
+    background: var(--color-accent, #0058BD);
+    color: #ffffff !important;
+    border: 1px solid var(--color-accent, #0058BD);
 }
+
 .custom-modal-btn.btn-primary-solid:hover {
-    background: var(--primary-dark);
+    background: #004ba2 !important;
+    border-color: #004ba2 !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 10px rgba(0, 88, 189, 0.3);
+}
+
+.custom-modal-btn.btn-primary-solid:active {
+    background: #003675 !important;
+    border-color: #003675 !important;
 }
 
 /* --- GLOBAL DARK MODE CONTRAST REMEDIATION OVERRIDES --- */
@@ -3651,7 +4013,7 @@ input[type=number] {
 
 [data-theme="dark"] #networkScanTargetContainer label,
 [data-theme="dark"] #webScanTargetContainer label,
-[data-theme="dark"] #batchStatusTargetContainer > div {
+[data-theme="dark"] #batchStatusTargetContainer>div {
     background-color: #0f172a !important;
     border-color: #334155 !important;
     color: #f8fafc !important;
@@ -3659,7 +4021,7 @@ input[type=number] {
 
 [data-theme="dark"] #networkScanTargetContainer label:hover,
 [data-theme="dark"] #webScanTargetContainer label:hover,
-[data-theme="dark"] #batchStatusTargetContainer > div:hover {
+[data-theme="dark"] #batchStatusTargetContainer>div:hover {
     background-color: #1e293b !important;
     border-color: var(--primary) !important;
 }
@@ -3868,4 +4230,76 @@ input[type=number] {
     background: #2563eb !important;
     color: #ffffff !important;
     border-color: #2563eb !important;
+}
+
+.custom-setting-input-box {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 4px 10px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.custom-setting-input-box:focus-within {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.custom-setting-input-box.custom-active {
+    border-color: #2563eb !important;
+    background: rgba(37, 99, 235, 0.06);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.custom-setting-time-field {
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-ink);
+    outline: none;
+    cursor: pointer;
+    font-family: inherit;
+    width: 68px;
+}
+
+.custom-setting-num-field {
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-ink);
+    outline: none;
+    width: 50px;
+    font-family: inherit;
+    text-align: center;
+}
+
+.custom-setting-num-field::-webkit-inner-spin-button,
+.custom-setting-num-field::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.custom-setting-num-field {
+    -moz-appearance: textfield;
+}
+
+[data-theme="dark"] .custom-setting-input-box {
+    background: var(--bg-input);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .custom-setting-input-box.custom-active {
+    border-color: #3b82f6 !important;
+    background: rgba(59, 130, 246, 0.15);
+}
+
+[data-theme="dark"] .custom-setting-time-field,
+[data-theme="dark"] .custom-setting-num-field {
+    color: var(--text-primary);
+    color-scheme: dark;
 }
