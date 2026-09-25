@@ -1433,6 +1433,7 @@ def get_system_notifications(limit=20):
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("SELECT id, title, message, notif_type as type, created_at, is_read FROM system_notifications ORDER BY created_at DESC LIMIT %s", (limit,))
+                cur.execute("SELECT id, title, message, notif_type as type, created_at, is_read FROM system_notifications WHERE notif_type != 'scan_finished' ORDER BY created_at DESC LIMIT %s", (limit,))
                 res = cur.fetchall()
                 if res:
                     out = []
@@ -1449,6 +1450,7 @@ def get_system_notifications(limit=20):
             conn.close()
 
     return _read_local_notifs()
+    return [n for n in _read_local_notifs() if n.get('type') != 'scan_finished'][:limit]
 
 def get_scan_history_list(limit=20):
     conn = get_db_connection()

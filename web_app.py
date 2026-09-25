@@ -14,9 +14,11 @@ from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
 import db_manager
 import config
 import telegram_notifier
+import uvicorn
 import asyncio
 import aiohttp
 import httpx
@@ -32,7 +34,6 @@ from scanner.pentest_tools_scheduler import process_domain_scan
 from scanner.pentest_tools_scheduler import process_network_scan
 from typing import List
 
-app = FastAPI(title="DSTI UNDIP Pentest Dashboard API")
 
 # Seeding admin secara otomatis saat file dimuat
 db_manager.seed_default_admin()
@@ -170,22 +171,27 @@ async def role_session_monitoring_worker():
             now_wib = datetime.now(config.WIB)
             today_str = now_wib.strftime("%Y-%m-%d")
             current_hour = now_wib.hour
+            current_min = now_wib.minute
 
             settings = db_manager.get_all_system_settings()
 
             try:
                 sa_str = settings.get("force_logout_superadmin", "19:00")
-                sa_hour = int(sa_str.split(":")[0])
+                sa_parts = sa_str.split(":")
+                sa_hour = int(sa_parts[0])
+                sa_min = int(sa_parts[1]) if len(sa_parts) > 1 else 0
             except Exception:
                 sa_str = "19:00"
-                sa_hour = 19
+                sa_hour, sa_min = 19, 0
 
             try:
                 adm_str = settings.get("force_logout_admin", "16:00")
-                adm_hour = int(adm_str.split(":")[0])
+                adm_parts = adm_str.split(":")
+                adm_hour = int(adm_parts[0])
+                adm_min = int(adm_parts[1]) if len(adm_parts) > 1 else 0
             except Exception:
                 adm_str = "16:00"
-                adm_hour = 16
+                adm_hour, adm_min = 16, 0
 
             try:
                 usr_minutes = int(settings.get("force_logout_user_minutes", "60"))
@@ -201,8 +207,11 @@ async def role_session_monitoring_worker():
                 finally:
                     conn.close()
 
-                sa_kick_now = (current_hour == sa_hour) and (last_sa_kick_key != f"{today_str}_{sa_hour}")
-                adm_kick_now = (current_hour == adm_hour) and (last_admin_kick_key != f"{today_str}_{adm_hour}")
+                sa_trigger_key = f"{today_str}_{sa_hour:02d}:{sa_min:02d}"
+                adm_trigger_key = f"{today_str}_{adm_hour:02d}:{adm_min:02d}"
+
+                sa_kick_now = (current_hour == sa_hour and current_min == sa_min) and (last_sa_kick_key != sa_trigger_key)
+                adm_kick_now = (current_hour == adm_hour and current_min == adm_min) and (last_admin_kick_key != adm_trigger_key)
 
                 for u in (online_users or []):
                     username = u.get("username")
@@ -210,14 +219,14 @@ async def role_session_monitoring_worker():
 
                     # 1. Super Admin cutoff trigger
                     if role == "superadmin" and sa_kick_now:
-                        detail_msg = f"Jam cutoff operasional Super Admin ({sa_str} WIB) telah tercapai. Sesi Anda diakhiri otomatis."
+                        detail_msg = f"Jam cutoff operasional Super Admin ({sa_hour:02d}:{sa_min:02d} WIB) telah tercapai. Sesi Anda diakhiri otomatis."
                         print(f"[!] [FORCE LOGOUT WORKER] Super Admin '{username}' di-kick: {detail_msg}")
                         db_manager.update_user_session(username, None, False)
                         await manager.kick_user_with_msg(username, "force_logout", detail_msg)
 
                     # 2. Admin cutoff trigger
                     elif role == "admin" and adm_kick_now:
-                        detail_msg = f"Jam cutoff operasional Admin ({adm_str} WIB) telah tercapai. Sesi Anda diakhiri otomatis."
+                        detail_msg = f"Jam cutoff operasional Admin ({adm_hour:02d}:{adm_min:02d} WIB) telah tercapai. Sesi Anda diakhiri otomatis."
                         print(f"[!] [FORCE LOGOUT WORKER] Admin '{username}' di-kick: {detail_msg}")
                         db_manager.update_user_session(username, None, False)
                         await manager.kick_user_with_msg(username, "force_logout", detail_msg)
@@ -246,9 +255,9 @@ async def role_session_monitoring_worker():
                                 print(f"[-] Parse session error for user '{username}': {e}")
 
                 if sa_kick_now:
-                    last_sa_kick_key = f"{today_str}_{sa_hour}"
+                    last_sa_kick_key = sa_trigger_key
                 if adm_kick_now:
-                    last_admin_kick_key = f"{today_str}_{adm_hour}"
+                    last_admin_kick_key = adm_trigger_key
 
         except Exception as e:
             print(f"[-] Error in role_session_monitoring_worker: {e}")
@@ -359,26 +368,35 @@ async def automated_midnight_scan_worker():
             
             target_hour_str = db_manager.get_system_setting("scheduled_scan_hour", "00:00")
             try:
-                target_hour = int(target_hour_str.split(":")[0])
+                parts = target_hour_str.split(":")
+                target_hour = int(parts[0])
+                target_min = int(parts[1]) if len(parts) > 1 else 0
             except Exception:
-                target_hour = 0
+                target_hour, target_min = 0, 0
 
-            if now_wib.hour == target_hour and last_triggered_date != today_str:
-                last_triggered_date = today_str
-                print(f"[🚀 ASYNC AUTOMATED SCAN] Memicu scan otomatis malam hari jam {target_hour_str} WIB...")
+            trigger_key = f"{today_str}_{target_hour:02d}:{target_min:02d}"
+            if now_wib.hour == target_hour and now_wib.minute == target_min and last_triggered_date != trigger_key:
+                last_triggered_date = trigger_key
+                print(f"[🚀 ASYNC AUTOMATED SCAN] Memicu scan otomatis malam hari jam {target_hour:02d}:{target_min:02d} WIB...")
                 asyncio.create_task(run_automated_overnight_scan())
 
         except Exception as e:
             print(f"[-] Error in automated_midnight_scan_worker: {e}")
             
-        await asyncio.sleep(60)
+        await asyncio.sleep(20)
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     db_manager.ensure_database_schema()
-    asyncio.create_task(scheduled_scan_worker())
-    asyncio.create_task(role_session_monitoring_worker())
-    asyncio.create_task(automated_midnight_scan_worker())
+    task1 = asyncio.create_task(scheduled_scan_worker())
+    task2 = asyncio.create_task(role_session_monitoring_worker())
+    task3 = asyncio.create_task(automated_midnight_scan_worker())
+    yield
+    task1.cancel()
+    task2.cancel()
+    task3.cancel()
+
+app = FastAPI(title="DSTI UNDIP Pentest Dashboard API", lifespan=lifespan)
 
 class LoginRequest(BaseModel):
     username: str
@@ -1712,6 +1730,23 @@ async def run_pentest_tools_background(domain_name: str):
                 "time": datetime.now(config.WIB).isoformat(),
                 "created_at": datetime.now(config.WIB).isoformat()
             }
+        scan_id = None
+        scan_time = datetime.now(config.WIB).isoformat()
+        for s in recent_scans:
+            if s.get("domains", {}).get("domain_name") == domain_name:
+                scan_id = str(s.get("id"))
+                scan_time = s.get("scan_date", scan_time)
+                break
+
+        notif = {
+            "id": scan_id or uuid.uuid4().hex,
+            "title": f"Scan Selesai: {domain_name}",
+            "message": f"Risk Level : {risk_level}",
+            "type": "scan_finished",
+            "domain": domain_name,
+            "time": scan_time,
+            "created_at": scan_time
+        }
         await manager.broadcast_to_admins({
             "event": "new_notification",
             "notification": notif
@@ -1933,6 +1968,23 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
                             "time": datetime.now(config.WIB).isoformat(),
                             "created_at": datetime.now(config.WIB).isoformat()
                         }
+                    scan_id = None
+                    scan_time = datetime.now(config.WIB).isoformat()
+                    for s in recent_scans:
+                        if s.get("domains", {}).get("domain_name") == target:
+                            scan_id = str(s.get("id"))
+                            scan_time = s.get("scan_date", scan_time)
+                            break
+
+                    notif = {
+                        "id": scan_id or uuid.uuid4().hex,
+                        "title": f"Scan Selesai: {target}",
+                        "message": f"Risk Level : {risk_level}",
+                        "type": "scan_finished",
+                        "domain": target,
+                        "time": scan_time,
+                        "created_at": scan_time
+                    }
                     await manager.broadcast_to_admins({
                         "event": "new_notification",
                         "notification": notif
@@ -1987,6 +2039,23 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep", s
                             "time": datetime.now(config.WIB).isoformat(),
                             "created_at": datetime.now(config.WIB).isoformat()
                         }
+                    scan_id = None
+                    scan_time = datetime.now(config.WIB).isoformat()
+                    for s in recent_scans:
+                        if s.get("domains", {}).get("domain_name") == target:
+                            scan_id = str(s.get("id"))
+                            scan_time = s.get("scan_date", scan_time)
+                            break
+
+                    notif = {
+                        "id": scan_id or uuid.uuid4().hex,
+                        "title": f"Scan Selesai: {target}",
+                        "message": f"Risk Level : {risk_level}",
+                        "type": "scan_finished",
+                        "domain": target,
+                        "time": scan_time,
+                        "created_at": scan_time
+                    }
                     await manager.broadcast_to_admins({
                         "event": "new_notification",
                         "notification": notif
@@ -1997,9 +2066,21 @@ class WebScanRequest(BaseModel):
     targets: List[str]
     scan_type: Optional[str] = "deep"
 
+class LaunchScanRequest(BaseModel):
+    targets: List[str]
+    scan_type: Optional[str] = "deep"
+    scan_category: Optional[str] = "web"
+
 @app.post("/api/network-scan")
-async def trigger_network_scan(payload: NetworkScanRequest, background_tasks: BackgroundTasks):
+async def trigger_network_scan(
+    payload: NetworkScanRequest, 
+    background_tasks: BackgroundTasks,
+    current_user = Depends(get_current_user)
+):
     """Memicu proses Network Scan."""
+    if current_user.get("role") not in ["admin", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk melakukan aksi ini.")
+
     if not payload.targets:
         raise HTTPException(status_code=400, detail="Tidak ada target yang diberikan.")
         
@@ -2007,7 +2088,6 @@ async def trigger_network_scan(payload: NetworkScanRequest, background_tasks: Ba
     
     return {"status": "success", "message": f"Network Scan via Pentest-Tools diluncurkan untuk {len(payload.targets)} aset."}
 
-@app.post("/api/web-scan")
 @app.post("/api/web-scan")
 async def trigger_web_scan(
     payload: WebScanRequest, 
@@ -2024,67 +2104,134 @@ async def trigger_web_scan(
     
     return {"status": "success", "message": f"Web Scan via Pentest-Tools diluncurkan untuk {len(payload.targets)} aset."}
 
+@app.post("/api/scans/launch-now")
+async def launch_scan_now(
+    payload: LaunchScanRequest,
+    background_tasks: BackgroundTasks,
+    current_user = Depends(get_current_user)
+):
+    """Endpoint terpadu untuk meluncurkan Web atau Network Scan via Pentest-Tools secara instan."""
+    if current_user.get("role") not in ["admin", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk melakukan aksi ini.")
+
+    if not payload.targets:
+        raise HTTPException(status_code=400, detail="Tidak ada target yang diberikan.")
+
+    valid_targets = [str(t).strip() for t in payload.targets if str(t).strip()]
+    if not valid_targets:
+        raise HTTPException(status_code=400, detail="Target tidak valid.")
+
+    category = (payload.scan_category or "web").lower()
+    scan_type = payload.scan_type if payload.scan_type in ["deep", "light"] else "deep"
+
+    if category == "network":
+        background_tasks.add_task(run_network_scan_background, valid_targets, scan_type)
+        return {"status": "success", "message": f"Network Scan via Pentest-Tools diluncurkan untuk {len(valid_targets)} aset."}
+    else:
+        background_tasks.add_task(run_web_scan_background, valid_targets, scan_type)
+        return {"status": "success", "message": f"Web Scan via Pentest-Tools diluncurkan untuk {len(valid_targets)} aset."}
+
+_active_scans_cache = {"timestamp": 0.0, "data": []}
+
 @app.get("/api/scans/active")
 async def get_active_scans(current_user = Depends(get_current_user)):
     """Mendapatkan daftar scan yang sedang berjalan langsung dari API Pentest-Tools."""
+    global _active_scans_cache
+    import time
+    
+    # Gunakan cache singkat (8 detik) untuk menghindari rate limit dan request bertumpuk
+    now = time.time()
+    if now - _active_scans_cache["timestamp"] < 8 and _active_scans_cache["data"]:
+        return {"status": "success", "data": _active_scans_cache["data"]}
+
+    api_key = config.PENTEST_TOOLS_API_KEY
+    if not api_key or api_key == "YOUR_API_KEY_HERE":
+        return {"status": "success", "data": []}
+
     headers = {
-        "Authorization": f"Bearer {config.PENTEST_TOOLS_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
     
     result = []
     try:
-        async with aiohttp.ClientSession() as session:
-            # Fetch all scans
+        timeout_settings = aiohttp.ClientTimeout(total=25, connect=10)
+        async with aiohttp.ClientSession(timeout=timeout_settings) as session:
+            # 1. Fetch all scans
             scans_url = f"{config.PENTEST_TOOLS_BASE_URL}/scans"
-            async with session.get(scans_url, headers=headers, timeout=10) as resp:
+            async with session.get(scans_url, headers=headers) as resp:
+                if resp.status in (401, 403):
+                    print("[-] Pentest-Tools API Key tidak valid atau akses ditolak (401/403).")
+                    return {"status": "error", "data": _active_scans_cache["data"], "message": "API Key Pentest-Tools tidak valid atau tidak memiliki akses."}
+                if resp.status == 429:
+                    print("[!] Pentest-Tools rate limited (429).")
+                    return {"status": "error", "data": _active_scans_cache["data"], "message": "API Pentest-Tools mencapai batas rate limit."}
                 if resp.status != 200:
-                    return {"status": "error", "data": [], "message": f"Gagal mengambil scan: {resp.status}"}
+                    err_preview = await resp.text()
+                    print(f"[-] Gagal mengambil scans dari Pentest-Tools: HTTP {resp.status} - {err_preview[:150]}")
+                    return {"status": "error", "data": _active_scans_cache["data"], "message": f"Gagal mengambil scan: HTTP {resp.status}"}
+                
                 scans_data = await resp.json()
-                all_scans = scans_data.get("data", [])
+                all_scans = scans_data.get("data", []) if isinstance(scans_data, dict) else []
+                if not isinstance(all_scans, list):
+                    all_scans = []
             
-            # Fetch all targets to map target_id to domain name
-            targets_url = f"{config.PENTEST_TOOLS_BASE_URL}/targets"
+            # 2. Fetch all targets to map target_id to domain name (diisolasi agar tidak mengagalkan scans)
             targets_map = {}
-            async with session.get(targets_url, headers=headers, timeout=10) as resp:
-                if resp.status == 200:
-                    targets_data = await resp.json()
-                    for t in targets_data.get("data", []):
-                        targets_map[t["id"]] = t.get("name", "Unknown")
+            try:
+                targets_url = f"{config.PENTEST_TOOLS_BASE_URL}/targets"
+                target_timeout = aiohttp.ClientTimeout(total=8, connect=5)
+                async with session.get(targets_url, headers=headers, timeout=target_timeout) as t_resp:
+                    if t_resp.status == 200:
+                        targets_data = await t_resp.json()
+                        t_list = targets_data.get("data", []) if isinstance(targets_data, dict) else []
+                        if isinstance(t_list, list):
+                            for t in t_list:
+                                if isinstance(t, dict) and "id" in t:
+                                    targets_map[t["id"]] = t.get("name", "Unknown")
+            except Exception as t_err:
+                pass
 
-            # Filter only active scans
+            # 3. Filter only active scans
             active_statuses = ["waiting", "running", "queued"]
             for scan in all_scans:
+                if not isinstance(scan, dict):
+                    continue
                 if scan.get("status_name") in active_statuses:
-                    # Mapping data to frontend expected format
                     target_id = scan.get("target_id")
                     domain = targets_map.get(target_id, f"Target ID: {target_id}")
                     
-                    # --- BACA TIPE SCAN (KARENA API TIDAK MENGEMBALIKAN tool_params) ---
+                    # --- BACA TIPE SCAN ---
                     tool_id = str(scan.get("tool_id", ""))
-                    
                     if tool_id == "350":
                         scan_label = "Network Scan"
                     elif tool_id == "385":
-                        scan_label = "Network Scan (Light)" # Khusus jika API memakai tool_id 385
+                        scan_label = "Network Scan (Light)"
                     elif tool_id == "170":
                         scan_label = "Website Scan"
                     else:
                         scan_label = f"Scanner Tool {tool_id}"
 
-                    # Convert HTTP URL to domain if needed, but it's fine to display raw target
                     result.append({
                         "scan_id": scan.get("id"),
-                        "type": scan_label,  # <-- Gunakan label baru di sini
+                        "type": scan_label,
                         "domain": domain,
                         "start_time": scan.get("start_time", "N/A"),
                         "live_status": scan.get("status_name"),
                         "progress": scan.get("progress", 0)
                     })
 
+        # Simpan ke cache jika sukses
+        _active_scans_cache["timestamp"] = time.time()
+        _active_scans_cache["data"] = result
+
+    except asyncio.TimeoutError:
+        print("[-] Error fetching live scans: Request timeout ke Pentest-Tools API (> 25 detik)")
+        return {"status": "success" if _active_scans_cache["data"] else "error", "data": _active_scans_cache["data"], "message": "Timeout saat menghubungi Pentest-Tools API"}
     except Exception as e:
-        print(f"Error fetching live scans: {e}")
-        return {"status": "error", "data": [], "message": str(e)}
+        err_msg = str(e) or type(e).__name__
+        print(f"[-] Error fetching live scans: {err_msg} ({type(e).__name__})")
+        return {"status": "error", "data": _active_scans_cache["data"], "message": err_msg}
 
     return {"status": "success", "data": result}
 
@@ -2493,6 +2640,9 @@ async def api_get_notifications():
 
         # Tambahkan notifikasi sistem (seperti hasil approval/rejection)
         for sn in system_notifs:
+            # Lewati notifikasi scan_finished dari system_notifications agar tidak ada duplikasi
+            if sn.get("type") == "scan_finished":
+                continue
             notifs.append({
                 "id": str(sn["id"]),
                 "title": sn["title"],
@@ -2500,7 +2650,8 @@ async def api_get_notifications():
                 "type": sn.get("type", "domain_approval_result"),
                 "created_at": sn.get("created_at"),
                 "is_read": sn.get("is_read", False),
-                "time": sn.get("created_at")
+                "time": sn.get("created_at"),
+                "domain": sn.get("domain") or ""
             })
 
         # Tambahkan permintaan approval domain yang pending
@@ -2526,7 +2677,7 @@ async def api_get_notifications():
             notifs.append({
                 "id": str(scan.get("id")),
                 "title": f"Scan Selesai: {domain}",
-                "message": f"Risk Level: {risk}",
+                "message": f"Risk Level : {risk}",
                 "type": "scan_finished",
                 "created_at": scan.get("scan_date"),
                 "is_read": False,
@@ -2616,22 +2767,50 @@ def get_system_settings(current_user = Depends(get_current_user)):
     return db_manager.get_all_system_settings()
 
 @app.put("/api/system-settings")
-async def update_system_settings(payload: SystemSettingsPayload, current_user = Depends(get_current_admin)):
+async def update_system_settings(payload: SystemSettingsPayload, current_user = Depends(get_current_superadmin)):
     """
     Endpoint untuk memperbarui konfigurasi sistem (Jam Force Logout & Jam Scan Malam).
+    Mendukung format jam:menit kustom (00:00 - 23:59) dan durasi kustom (1 - 1440 menit).
     """
     try:
-        success = db_manager.update_system_settings(payload.dict(), current_user.get("username", "Admin"))
+        def clean_time(val: str, field_name: str) -> str:
+            val = (val or "").strip()
+            parts = val.split(":")
+            if len(parts) != 2:
+                raise HTTPException(status_code=400, detail=f"Format {field_name} harus HH:MM (contoh: 19:00).")
+            try:
+                h, m = int(parts[0]), int(parts[1])
+                if not (0 <= h <= 23 and 0 <= m <= 59):
+                    raise ValueError()
+                return f"{h:02d}:{m:02d}"
+            except Exception:
+                raise HTTPException(status_code=400, detail=f"Format {field_name} tidak valid. Jam 0-23 dan menit 0-59.")
+
+        cleaned_settings = {
+            "force_logout_superadmin": clean_time(payload.force_logout_superadmin, "Super Admin Cutoff Hour"),
+            "force_logout_admin": clean_time(payload.force_logout_admin, "Admin Cutoff Hour"),
+            "scheduled_scan_hour": clean_time(payload.scheduled_scan_hour, "Jam Eksekusi Automated Scan"),
+        }
+
+        try:
+            usr_mins = int(str(payload.force_logout_user_minutes).strip())
+            if usr_mins < 1 or usr_mins > 1440:
+                raise ValueError()
+            cleaned_settings["force_logout_user_minutes"] = str(usr_mins)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Durasi sesi user harus berupa angka antara 1 sampai 1440 menit.")
+
+        success = db_manager.update_system_settings(cleaned_settings, current_user.get("username", "Admin"))
         if not success:
             raise HTTPException(status_code=500, detail="Gagal menyimpan pengaturan sistem ke database.")
         
         # Broadcast event perubahan pengaturan ke WebSocket client
         await manager.broadcast_to_all({
             "event": "system_settings_updated",
-            "settings": payload.dict()
+            "settings": cleaned_settings
         })
         
-        return {"status": "success", "message": "Pengaturan sistem berhasil diperbarui."}
+        return {"status": "success", "message": "Pengaturan sistem berhasil diperbarui.", "settings": cleaned_settings}
     except HTTPException:
         raise
     except Exception as e:
@@ -2639,7 +2818,6 @@ async def update_system_settings(payload: SystemSettingsPayload, current_user = 
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    import uvicorn
     print("=" * 60)
     print("  DSTI UNDIP Pentest Dashboard")
     print("  Buka browser: http://localhost:8000")
