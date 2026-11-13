@@ -1,18 +1,14 @@
-# =======================================================================
-# KONFIGURASI GLOBAL - Pentest Tools Pipeline
-# =======================================================================
+# Konfigurasi global pipeline Pentest Tools.
 
 import os
 from dotenv import load_dotenv
 from datetime import timezone, timedelta
 
-# Load API keys and secrets dari .env
 load_dotenv()
-# Target utama
 TARGET_DOMAIN = "undip.ac.id"
 
 # --- Pengaturan Koneksi ---
-MAX_CONCURRENT_CONNECTIONS = 3     # Batas koneksi serentak (Semaphore) jadi 50 domain masuk buat di scan, trus sisanya (50++) nunggu dari 50 domain selesai dulu baru bisa masuk satu satu
+MAX_CONCURRENT_CONNECTIONS = 3     # Batas semaphore; domain lain antre sampai ada slot kosong
 PORT_SCAN_TIMEOUT = 3               # Timeout per port (detik)
 BANNER_GRAB_TIMEOUT = 2             # Timeout banner grabbing (detik)
 HTTP_TIMEOUT = 10                   # Timeout per HTTP request (detik)
@@ -131,11 +127,8 @@ EXPECTED_SECURITY_HEADERS = [
     "Permissions-Policy",
 ]
 
-# =======================================================================
-# KONFIGURASI PENJADWALAN & PENTEST-TOOLS API
-# =======================================================================
-# Silakan masukkan/ganti API Key Pentest-Tools Anda di bawah ini
-PENTEST_TOOLS_API_KEY = os.environ.get("PENTEST_TOOLS_API_KEY", "uk_wP9sfQiudWph9GX63pTFXAgYgZ27rrm1E6bI0CJU121d7985")
+# Penjadwalan & Pentest-Tools API. Kunci hanya dibaca dari .env, jangan di-hardcode.
+PENTEST_TOOLS_API_KEY = os.environ.get("PENTEST_TOOLS_API_KEY", "")
 PENTEST_TOOLS_BASE_URL = "https://app.pentest-tools.com/api/v2"
 
 # ID Tool Pentest-Tools
@@ -174,16 +167,12 @@ PENTEST_TOOLS_NETWORK_TOOL_ID = Tool.NETWORK_SCANNER
 # Batas Concurrency API agar tidak membebani limit rate akun
 MAX_CONCURRENT_API_SCANS = 3
 
-# Waktu Tunggu Polling Status (dalam detik)
-API_POLLING_INTERVAL = 60  # Cek status scan setiap 1 menit
+API_POLLING_INTERVAL = 60  # Interval polling status scan (detik)
 
-# =======================================================================
-# KONFIGURASI DATABASE PENJADWALAN (SUPABASE FRAMEWORK)
-# =======================================================================
+# Database penjadwalan
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
-# Supabase Direct DB Connection (untuk scheduler_db.py via psycopg2)
 # Format: postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
 SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL", "")
 

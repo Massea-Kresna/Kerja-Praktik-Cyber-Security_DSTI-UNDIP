@@ -55,13 +55,13 @@ def ensure_database_schema():
     if not conn: return
     try:
         with conn.cursor() as cur:
-            # 1. UUID Extension
+            # UUID Extension
             try:
                 cur.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
             except Exception:
                 pass
 
-            # 2. Table: domains
+            # Table: domains
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS public.domains (
                     id SERIAL PRIMARY KEY,
@@ -77,7 +77,7 @@ def ensure_database_schema():
             cur.execute("ALTER TABLE public.domains ADD COLUMN IF NOT EXISTS requested_by TEXT")
             cur.execute("UPDATE public.domains SET approval_status = 'approved' WHERE approval_status IS NULL")
 
-            # 3. Table: scan_history
+            # Table: scan_history
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS public.scan_history (
                     id SERIAL PRIMARY KEY,
@@ -89,7 +89,7 @@ def ensure_database_schema():
                 )
             """)
 
-            # 4. Table: scan_result
+            # Table: scan_result
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS public.scan_result (
                     id SERIAL PRIMARY KEY,
@@ -109,7 +109,7 @@ def ensure_database_schema():
                 )
             """)
 
-            # 5. Table: users
+            # Table: users
             try:
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS public.users (
@@ -135,7 +135,7 @@ def ensure_database_schema():
             cur.execute("ALTER TABLE public.users ADD COLUMN IF NOT EXISTS session_id TEXT")
             cur.execute("ALTER TABLE public.users ADD COLUMN IF NOT EXISTS session_created_at TIMESTAMPTZ")
 
-            # 6. Table: system_notifications
+            # Table: system_notifications
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS public.system_notifications (
                     id SERIAL PRIMARY KEY,
@@ -148,7 +148,7 @@ def ensure_database_schema():
                 )
             """)
 
-            # 7. Table: scheduled_scans
+            # Table: scheduled_scans
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS public.scheduled_scans (
                     id SERIAL PRIMARY KEY,
@@ -166,7 +166,7 @@ def ensure_database_schema():
             """)
             cur.execute("ALTER TABLE public.scheduled_scans ADD COLUMN IF NOT EXISTS window_end_at TIMESTAMPTZ")
 
-            # 8. Table: system_settings
+            # Table: system_settings
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS public.system_settings (
                     key VARCHAR(100) PRIMARY KEY,
@@ -297,9 +297,7 @@ def reset_user_password(username: str, new_hashed_password: str):
             return True
     return saved_to_db
 
-# ==============================================================================
-# AUTH & USER MANAGEMENT (SUDAH DIKUNCI ANTI-GHOST USER)
-# ==============================================================================
+# Auth & user management
 
 def hash_password(password: str, salt: str = None) -> str:
     if not salt: salt = uuid.uuid4().hex
@@ -556,9 +554,7 @@ def seed_default_admin():
     except Exception as e:
         pass
 
-# ==============================================================================
-# SCAN SAVING METHODS
-# ==============================================================================
+# Scan saving methods
 
 def upsert_domain(domain_name, ip_address):
     conn = get_db_connection()
@@ -577,20 +573,18 @@ def upsert_domain(domain_name, ip_address):
             return res['id'] if res else None
     except Exception as e:
 # --- [Bagian penutup try-except yang terpotong dari kode di atasnya] ---
-        # 1. Penutup dari fungsi upsert_domain (dari Patch-17)
+        # Penutup dari fungsi upsert_domain (dari Patch-17)
         print(f'[-] Error upsert_domain: {e}')
         if conn: conn.rollback()
         return None
     finally:
         conn.close()
 
-        # 2. Penutup dari fungsi seeding admin (dari main)
+        # Penutup dari fungsi seeding admin (dari main)
         # Catatan: Pastikan indentasi sebaris ini sejajar dengan blok except-mu di atasnya
         # print(f"[-] Gagal melakukan seeding admin: {e}")
 
-# ==============================================================================
-# FUNGSI DATABASE POSTGRESQL (DARI PATCH-17)
-# ==============================================================================
+# Fungsi database PostgreSQL
 
 def create_scan_history(domain_id, risk_score, risk_level, raw_json=None, scan_date=None):
     if not scan_date:
@@ -887,9 +881,7 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type='Web Scanne
     finally:
         if conn: conn.close()
 
-# ==============================================================================
-# WRAPPERS UNTUK WEB_APP.PY (PENGGANTI SUPABASE REST API)
-# ==============================================================================
+# Wrapper untuk web_app.py (pengganti Supabase REST API)
 
 def get_all_domains():
     conn = get_db_connection()
@@ -1620,9 +1612,7 @@ def get_overnight_high_critical_scans(limit=20):
     finally:
         conn.close()
 
-# ==============================================================================
-# SCHEDULED SCANS MANAGEMENT (FEAT: SCAN SCHEDULING WEB & NETWORK)
-# ==============================================================================
+# Scheduled scans (web & network)
 
 def ensure_scheduled_scans_table():
     conn = get_db_connection()
@@ -1848,9 +1838,7 @@ def update_scheduled_scan_after_run(schedule_id, frequency):
     finally:
         conn.close()
 
-# ==============================================================================
-# SYSTEM SETTINGS MANAGEMENT (JAM FORCE LOGOUT & JAM SCAN MALAM)
-# ==============================================================================
+# System settings management (jam force logout & jam scan malam)
 
 DEFAULT_SYSTEM_SETTINGS = {
     "force_logout_superadmin": "19:00",

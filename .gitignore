@@ -39,3 +39,7 @@ celerybeat-schedule
 
 # Celery
 celerybeat-schedule*
+
+# Runtime data (user accounts, notifications)
+users_db.json
+notifications_db.json

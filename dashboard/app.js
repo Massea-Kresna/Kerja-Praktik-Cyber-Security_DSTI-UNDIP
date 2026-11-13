@@ -2515,9 +2515,7 @@ function renderVulnerabilitiesList() {
     }
 }
 
-// =========================================================
-// LOGIKA NETWORK SCANNER TERBARU
-// =========================================================
+// Network scanner
 
 function processNetworkScans(preservePage = false) {
     networkScans = allVulns.filter(scan => {
@@ -3143,12 +3141,10 @@ window.changeNetRows = function (newRows) {
     renderNetworkScans();
 };
 
-// =========================================================
-// MEMORI KOTAK CENTANG NETWORK SCANS & SELECT ALL
-// =========================================================
+// Checkbox network scans & select all
 window.selectedNetworkScans = new Set();
 
-// 1. Fungsi saat klik checkbox satu per satu di baris
+// Fungsi saat klik checkbox satu per satu di baris
 window.toggleNetworkCheckbox = function (e, scanId) {
     e.stopPropagation(); // Mencegah bentrok klik
     if (e.target.checked) {
@@ -3159,7 +3155,7 @@ window.toggleNetworkCheckbox = function (e, scanId) {
     window.syncNetworkSelectAll(); // Cek apakah butuh centang "Select All"
 };
 
-// 2. Fungsi saat klik "Select All" di kepala tabel
+// Fungsi saat klik "Select All" di kepala tabel
 window.toggleAllNetworkScans = function (headerCb) {
     // Ambil semua kotak centang yang sedang tampil di layar
     const rowCbs = document.querySelectorAll('#networkScansTableBody input[type="checkbox"]');
@@ -3175,7 +3171,7 @@ window.toggleAllNetworkScans = function (headerCb) {
     });
 };
 
-// 3. Fungsi untuk menyinkronkan status visual "Select All"
+// Fungsi untuk menyinkronkan status visual "Select All"
 window.syncNetworkSelectAll = function () {
     const selectAllCb = document.getElementById('selectAllNetworkScans');
     const rowCbs = document.querySelectorAll('#networkScansTableBody input[type="checkbox"]');
@@ -3325,7 +3321,7 @@ function renderLowerGrid() {
         return;
     }
 
-    // 1. Process Target Risk Ranking (Per-Domain Risk & Scan Frequency)
+    // Process Target Risk Ranking (Per-Domain Risk & Scan Frequency)
     const domainRiskMap = {};
 
     allVulns.forEach(scan => {
@@ -3404,7 +3400,7 @@ function renderLowerGrid() {
         }
     }
 
-    // 2. Process Monitored Domains List (Domain Aktif Jadwal Scan Malam)
+    // Process Monitored Domains List (Domain Aktif Jadwal Scan Malam)
     if (domainsList) {
         fetch(`${API_BASE}/api/domains`)
             .then(res => res.json())
@@ -4184,9 +4180,7 @@ function openThreatModal(vuln) {
     // Display the Classification section if there is at least one classification item (CWE, CVE, CVSS, etc.)
     document.getElementById('modalClassificationSection').style.display = hasClassification ? 'block' : 'none';
 
-    // ==========================================
-    // LOGIKA PENGKATEGORIAN OTOMATIS (ULTIMATE VERSION)
-    // ==========================================
+    // Kategorisasi otomatis; urutan pengecekan menentukan prioritas.
     const checkType = (vuln.check_type || '').toLowerCase();
     const titleLower = (vuln.title || '').toLowerCase();
     const threatSignature = checkType + " " + titleLower;
@@ -4261,12 +4255,12 @@ function openThreatModal(vuln) {
         categoryBadge.className = badgeClass;
     }
 
-    // 2. Threat Type (Format snake_case)
+    // Threat Type (Format snake_case)
     let threatTypeStr = checkType.replace(/\s+/g, '_') || 'unknown_threat';
     const typeBadge = document.getElementById('modalThreatType');
     if (typeBadge) typeBadge.textContent = threatTypeStr;
 
-    // 3. Program Pemindai
+    // Program Pemindai
     // Kita gunakan regex agar 'network' deteksinya lebih aman
     const programName = (threatSignature.includes('network ') || /\bport\b/.test(threatSignature)) ? 'network-scanner' : 'web-scanner';
     const progBadge = document.getElementById('modalProgramName');
@@ -4889,9 +4883,7 @@ function showLoginOverlay() {
 }
 
 
-// ==========================================
-// LOGIKA LUPA PASSWORD
-// ==========================================
+// Lupa password
 function showForgotPasswordForm() {
     document.getElementById('authForm').style.display = 'none';
     document.getElementById('otpForm').style.display = 'none';
@@ -5436,7 +5428,7 @@ function renderUserTable() {
         const isProtectedSuperAdmin = u.role === 'superadmin' && currentUser.role !== 'superadmin';
         const isSuperAdminCaller = currentUser && currentUser.role === 'superadmin';
         
-        // 1. Tentukan Bentuk Lencana (Role Badge)
+        // Tentukan Bentuk Lencana (Role Badge)
         let roleBadge = `<span class="badge-user-role">User</span>`;
         if (u.role === 'superadmin') {
             roleBadge = `<span style="background:#8b5cf6; color:white; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; letter-spacing:0.5px; cursor:pointer;" onclick="if(${isSuperAdminCaller}) showRoleInfoModal('${escapeHtml(u.username)}')">SUPER ADMIN</span>`;
@@ -5449,7 +5441,7 @@ function renderUserTable() {
         const isOnline = u.is_online;
         const lastActiveText = u.is_online ? "Baru saja" : formatRelativeTime(u.last_online);
 
-        // 2. Logika check timeout
+        // Logika check timeout
         let isTimedOut = false;
         let timeoutText = '';
         if (u.timeout_until) {
@@ -5473,7 +5465,7 @@ function renderUserTable() {
             statusBadge = `<span class="status-indicator status-offline">Offline</span>`;
         }
 
-        // 3. Tombol Aksi - Siapa Bisa Melakukan Apa
+        // Tombol Aksi - Siapa Bisa Melakukan Apa
         let actionButtons = '';
         if (isSelf) {
             actionButtons = `<span style="color:var(--text-tertiary); font-style:italic;">Akun Anda</span>`;
@@ -5937,7 +5929,7 @@ function renderNotificationList() {
         const unreadClass = n.unread ? 'unread' : '';
         const relativeTime = formatRelativeTime(n.timestamp);
         
-        // 1. Tentukan Icon
+        // Tentukan Icon
         let icon = '';
         if (n.type === 'scan_complete' || n.type === 'success') icon = '';
         else if (n.type === 'scan_failed') icon = '';
@@ -5955,7 +5947,7 @@ function renderNotificationList() {
             }
         }
 
-        // 2. Fallback Judul & Pesan
+        // Fallback Judul & Pesan
         const safeTitle = n.title ? escapeHtml(n.title) : 'Notifikasi Sistem';
         const safeMessage = n.message ? escapeHtml(n.message) : (n.domain ? `Scan untuk ${escapeHtml(n.domain)} telah selesai.` : 'Pesan sistem terbaru.');
 
@@ -6004,18 +5996,18 @@ async function markAsRead(notifId) {
             await loadVulnerabilities(true);
             jumpToScanDetail(notif.time, notif.domain, false);
 
-            // 1. Coba buka modal scan berdasarkan ID scan (jika ID numerik)
+            // Coba buka modal scan berdasarkan ID scan (jika ID numerik)
             const scanId = notif.id && !isNaN(Number(notif.id)) ? String(notif.id) : null;
             if (scanId && typeof openScanModalByScanId === 'function') {
                 if (openScanModalByScanId(scanId)) return;
             }
 
-            // 2. Coba buka modal scan berdasarkan nama domain
+            // Coba buka modal scan berdasarkan nama domain
             if (notif.domain && typeof openScanModalByDomainName === 'function') {
                 if (openScanModalByDomainName(notif.domain)) return;
             }
 
-            // 3. Fallback jumpToScanDetail
+            // Fallback jumpToScanDetail
             jumpToScanDetail(notif.time, notif.domain, false, scanId);
         } else if (notif.type === 'domain_found') {
             if (typeof switchView === 'function') switchView('inventory');
@@ -6167,9 +6159,7 @@ function fallbackCopyText(text, label) {
     }
 }
 
-// ==============================================================================
-// LOGIK NOTIFIKASI TOAST DINI HARI (07:00 WIB) & SYNC READ STATUS
-// ==============================================================================
+// Toast notifikasi pagi (07:00 WIB) & sinkronisasi status dibaca
 let activeOvernightToastTimers = {};
 
 function markNotificationReadByScanId(scanId) {
@@ -6660,9 +6650,7 @@ function initRoleSessionTimer() {
     }, 30000);
 }
 
-// ==============================================================================
-// HELPER PENGUJIAN INSTAN (UNTUK TESTING DI CONSOLE BROWSER KAPAN SAJA)
-// ==============================================================================
+// Helper testing dari console browser
 window.testForceLogout = function(roleTarget) {
     const role = roleTarget || (currentUser ? currentUser.role : 'user');
     console.log(`[TEST] Pengujian instan Force Logout untuk role: ${role}`);
@@ -6985,9 +6973,7 @@ function fetchActiveScans() {
         });
 }
 
-// =========================================================
-// LOGIKA WEB SCANNER TERBARU
-// =========================================================
+// Web scanner
 
 function processWebScans(preservePage = false) {
     webScans = allVulns.filter(scan => {
@@ -8962,7 +8948,7 @@ function jumpToScanDetail(isoDateString, targetName, isSeverity = false, scanId 
         return;
     }
 
-    // 1. Cari berdasarkan scanId persis jika ada
+    // Cari berdasarkan scanId persis jika ada
     if (scanId && typeof allVulns !== 'undefined' && allVulns) {
         const foundById = allVulns.find(s => String(s.id) === String(scanId));
         if (foundById) {
@@ -8971,7 +8957,7 @@ function jumpToScanDetail(isoDateString, targetName, isSeverity = false, scanId 
         }
     }
 
-    // 2. Jika scanId tidak ada / belum di allVulns, fetch spesifik scan oleh API
+    // Jika scanId tidak ada / belum di allVulns, fetch spesifik scan oleh API
     if (scanId) {
         fetch(`${API_BASE}/api/scan-history/${scanId}`)
             .then(res => res.json())
@@ -9443,9 +9429,7 @@ window.toggleSidebar = function () {
     }
 };
 
-// ==============================================================================
-// LOGIKA NOTIFIKASI PERSISTEN: HASIL SCAN SELESAI
-// ==============================================================================
+// Notifikasi persisten: scan selesai
 function showScanFinishedToast(notif) {
     if (!currentUser) return; 
 
@@ -9491,7 +9475,7 @@ function showScanFinishedToast(notif) {
             e.stopPropagation();
             toast.remove();
             
-            // 1. Catat ke Local Storage agar tidak muncul lagi selamanya
+            // Catat ke Local Storage agar tidak muncul lagi selamanya
             const currentRead = JSON.parse(localStorage.getItem('dsti_read_notifs') || '[]');
             const idToSave = notifId || String(notif.id || '');
             if (idToSave && !currentRead.includes(idToSave)) {
@@ -9499,10 +9483,10 @@ function showScanFinishedToast(notif) {
                 localStorage.setItem('dsti_read_notifs', JSON.stringify(currentRead));
             }
 
-            // 2. Perbarui angka bel notifikasi di sudut kanan atas
+            // Perbarui angka bel notifikasi di sudut kanan atas
             if (typeof fetchNotifications === 'function') fetchNotifications();
 
-            // 3. Buka Modal Laporan Scan Langsung (Bukan ke Domain Inventory Search)
+            // Buka Modal Laporan Scan Langsung (Bukan ke Domain Inventory Search)
             if (domainName && openScanModalByDomainName(domainName)) {
                 return;
             }
@@ -9530,9 +9514,7 @@ function showScanFinishedToast(notif) {
     }
 }
 
-// ==============================================================================
-// LOGIKA NOTIFIKASI PERSISTEN: DOMAIN BARU DITEMUKAN (OSINT)
-// ==============================================================================
+// Notifikasi persisten: domain baru dari OSINT
 let activeOsintToastTimers = {};
 
 function showDomainFoundToast(notif) {
@@ -9642,11 +9624,9 @@ function scheduleOsintRetry(notif) {
     }, 300000);
 }
 
-// ==========================================
-// LOGIKA DARK MODE / LIGHT MODE & CHART.JS FIX
-// ==========================================
+// Dark/light mode & warna Chart.js
 
-// 1. Daftarkan Plugin Global Chart.js 
+// Daftarkan Plugin Global Chart.js 
 // (Gunakan beforeUpdate agar warna ditimpa SEBELUM teks dan skala dihitung)
 Chart.register({
     id: 'themeAutoUpdater',
@@ -9758,9 +9738,7 @@ function updateThemeIcon(theme) {
 // Jalankan saat file dimuat
 initTheme();
 
-// =========================================================
-//  FEATURE: DOMAIN ADDITION APPROVAL (SUPERADMIN)
-// =========================================================
+// Persetujuan penambahan domain (superadmin)
 window.openPendingDomainsModal = async function() {
     const modal = document.getElementById('pendingDomainsModalOverlay');
     const container = document.getElementById('pendingDomainsContainer');
@@ -9874,7 +9852,7 @@ window.triggerRejectDomain = async function(domainId, domainName) {
 };
 
 async function submitScanRequest() {
-    // 1. Tarik data dari elemen UI Anda
+    // Tarik data dari elemen UI Anda
     const selectedDomains = getSelectedDomainsList(); // Fungsi untuk mengambil array ["domain1.com", "domain2.com"]
     const scanType = document.querySelector('input[name="scanType"]:checked').value; // 'deep' atau 'light'
     const executionTime = document.querySelector('input[name="executionTime"]:checked').value; // 'now' atau 'schedule'
@@ -9886,7 +9864,7 @@ async function submitScanRequest() {
         scan_category: "web" // atau "network", sesuaikan dengan UI
     };
 
-    // 2. Routing logika berdasarkan pilihan pengguna
+    // Routing logika berdasarkan pilihan pengguna
     if (executionTime === "now") {
         // TIPE 1: EKSEKUSI LANGSUNG
         endpoint = "/api/scans/launch-now";
@@ -9907,7 +9885,7 @@ async function submitScanRequest() {
         }
     }
 
-    // 3. Kirim Payload ke FastAPI
+    // Kirim Payload ke FastAPI
     try {
         const response = await fetch(endpoint, {
             method: "POST",

@@ -134,9 +134,7 @@ textarea {
     display: none;
 }
 
-/* ==========================================================================
-   SIDEBAR BRAND & UN-OVERLAPPED TOGGLE BUTTON (UI/UX USER FRIENDLY)
-   ========================================================================== */
+/* Sidebar brand & tombol toggle */
 .sidebar-brand {
     padding: 16px 20px;
     display: flex;
@@ -384,9 +382,7 @@ textarea {
     display: none !important;
 }
 
-/* ==========================================================================
-   COLLAPSED SIDEBAR FLYOUT DROPDOWN (Website Scanner & Network Scanner)
-   ========================================================================== */
+/* Flyout dropdown sidebar saat collapsed */
 .sidebar.collapsed .nav-dropdown {
     position: relative;
 }
@@ -609,9 +605,7 @@ textarea {
     margin-top: 2px;
 }
 
-/* ==========================================================================
-   ENHANCED VIEW HEADERS (HANDCRAFTED HIGH-END UI/UX)
-   ========================================================================== */
+/* View headers */
 .view-header {
     display: flex;
     justify-content: space-between;
@@ -1140,9 +1134,7 @@ textarea {
     margin-top: 16px;
 }
 
-/* =========================================================
-   LOWER GRID & LINK ACTIONS
-   ========================================================= */
+/* Lower grid & link actions */
 .lower-grid {
     grid-template-columns: 1.6fr 1fr;
     /* Membagi kolom kiri lebih besar (60:40) */
@@ -1163,9 +1155,7 @@ textarea {
     font-family: var(--font-mono);
 }
 
-/* =========================================================
-   MONITORED DOMAIN LIST
-   ========================================================= */
+/* Monitored domain list */
 .domain-list {
     list-style: none;
     display: flex;
@@ -1283,9 +1273,7 @@ textarea {
     color: #ffffff;
 }
 
-/* =========================================================
-   PAGINATION
-   ========================================================= */
+/* Pagination */
 .pagination-container {
     display: flex;
     justify-content: space-between;
@@ -1335,9 +1323,7 @@ textarea {
     cursor: not-allowed;
 }
 
-/* ==========================================================================
-   Multi-Select Dropdown (Chart Filters)
-   ========================================================================== */
+/* Multi-Select Dropdown (Chart Filters) */
 .multi-select-dropdown {
     position: relative;
     z-index: 20;
@@ -1452,9 +1438,7 @@ textarea {
     flex-shrink: 0;
 }
 
-/* ==========================================================================
-   AUTHENTICATION & LOGIN OVERLAY (Glassmorphism & Rich Aesthetics)
-   ========================================================================== */
+/* Login overlay */
 .auth-overlay {
     position: fixed;
     top: 0;
@@ -1804,9 +1788,7 @@ input[type="datetime-local"] {
     }
 }
 
-/* ==========================================================================
-   USER PROFILE IN SIDEBAR
-   ========================================================================== */
+/* User profile in sidebar */
 .sidebar-user {
     padding: 16px 24px;
     border-top: 1px solid var(--border-color);
@@ -1929,9 +1911,7 @@ input[type="datetime-local"] {
     background: #fef2f2;
 }
 
-/* ==========================================================================
-   ADMIN PANEL & USER TABLE
-   ========================================================================== */
+/* Admin panel & user table */
 .status-indicator {
     display: inline-flex;
     align-items: center;
@@ -2052,9 +2032,7 @@ input[type="datetime-local"] {
     font-size: 12px;
 }
 
-/* ==========================================================================
-   REAL-TIME TOAST NOTIFICATIONS (Dynamic & Glowing)
-   ========================================================================== */
+/* Toast notifications */
 #toast-container {
     position: fixed;
     top: 24px;
@@ -2243,9 +2221,7 @@ input[type="datetime-local"] {
 }
 
 
-/* ==========================================================================
-   GLOBAL TOPBAR & NOTIFICATION BELL
-   ========================================================================== */
+/* Global topbar & notification bell */
 .main-header {
     height: var(--header-height);
     background-color: var(--bg-surface);
@@ -2301,9 +2277,7 @@ input[type="datetime-local"] {
     box-shadow: 0 0 4px rgba(220, 38, 38, 0.4);
 }
 
-/* ==========================================================================
-   YOUTUBE-STYLE NOTIFICATION DROPDOWN
-   ========================================================================== */
+/* Notification dropdown */
 .notification-dropdown {
     position: absolute;
     top: 48px;
@@ -2488,9 +2462,7 @@ input[type="datetime-local"] {
     color: #ffffff;
 }
 
-/* ==========================================================================
-   ANIMATIONS & MODAL OVERRIDES
-   ========================================================================== */
+/* Animations & modal overrides */
 .animate-slide-up {
     animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -2507,9 +2479,7 @@ input[type="datetime-local"] {
     }
 }
 
-/* ==========================================================================
-   BUTTONS & ACTIONS (MODERN & PREMIUM DESIGN)
-   ========================================================================== */
+/* Buttons & actions */
 .btn {
     display: inline-flex;
     align-items: center;
@@ -2622,9 +2592,7 @@ input[type="datetime-local"] {
     box-shadow: 0 2px 4px rgba(239, 68, 68, 0.15);
 }
 
-/* ==========================================================================
-   VULNERABILITY FILTERS (MODAL CARD)
-   ========================================================================== */
+/* Vulnerability filters (modal card) */
 .vuln-filters {
     display: flex;
     gap: 8px;
@@ -3169,9 +3137,7 @@ input[type=number] {
     color: var(--text-main) !important;
 }
 
-/* =========================================================
-   LIGHT MODE — jaminan kontras (tetap default terang seperti semula)
-   ========================================================= */
+/* Light mode: penjaga kontras */
 :root,
 :root[data-theme="light"] {
     color-scheme: light;
@@ -3181,9 +3147,7 @@ input[type=number] {
     color-scheme: dark;
 }
 
-/* =========================================================
-   ✨ ULTIMATE FIX: WARNA IKON & TOMBOL TABEL DI DARK MODE ✨
-   ========================================================= */
+/* Dark mode: warna ikon & tombol tabel */
 
 /* 1. Ikon Status Selesai (Lingkaran Hijau & Centang) */
 /* Target menggunakan bentuk bulat sempurna (border-radius: 50%) */
@@ -3370,10 +3334,7 @@ input[type=number] {
     /* Bayangan halus */
 }
 
-/* =========================================================
-   11. FIX: HALAMAN LOGIN DI DARK MODE
-   (Tambahkan ini di baris paling bawah styles.css Anda)
-   ========================================================= */
+/* Dark mode: halaman login */
 
 /* Paksa latar belakang kartu menjadi Navy/Gelap */
 :root[data-theme="dark"] #authOverlay .auth-card {
@@ -3411,9 +3372,7 @@ input[type=number] {
     border-color: var(--border-color) !important;
 }
 
-/* =========================================================
-   ✨ FIX: RECAPTCHA & LOGO DI HALAMAN LOGIN DARK MODE ✨
-   ========================================================= */
+/* Dark mode: reCAPTCHA & logo di halaman login */
 
 /* 1. Trik Ajaib untuk ReCAPTCHA (Membalik warna iframe Google) */
 :root[data-theme="dark"] #authOverlay .g-recaptcha {
@@ -3431,9 +3390,7 @@ input[type=number] {
     /* Bonus: cahaya memendar tipis di bawah logo */
 }
 
-/* =========================================================
-   ✨ FIX: GLOW & DROP-SHADOW LOGO DASHBOARD (SIDEBAR) ✨
-   ========================================================= */
+/* Glow & drop-shadow logo sidebar */
 
 /* Memberikan Outline (Garis Tepi) Putih Halus & Glow pada Logo Sidebar (Besar & Kecil) */
 .sidebar-brand .logo-full,
@@ -3502,9 +3459,7 @@ input[type=number] {
     background: #dc2626;
 }
 
-/* ==========================================================================
-   Toast Notification System & Custom Confirm Dialog
-   ========================================================================== */
+/* Toast Notification System & Custom Confirm Dialog */
 
 /* Toast Container Stack */
 .toast-container {
@@ -4182,9 +4137,7 @@ input[type=number] {
     background-color: #1e293b !important;
 }
 
-/* ==========================================================================
-   SYSTEM SETTINGS — SINGLE CARD + TABS (RINGKAS)
-   ========================================================================== */
+/* System settings: single card + tabs */
 .settings-single-card {
     padding: 0;
     border: 1px solid var(--color-border);

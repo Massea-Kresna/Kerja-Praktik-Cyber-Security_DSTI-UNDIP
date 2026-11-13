@@ -13,9 +13,7 @@ import datetime
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-# =======================================================================
-# TIER 1: OSINT UTAMA (crt.sh dengan Retry Mechanism)
-# =======================================================================
+# Tier 1: OSINT utama (crt.sh, dengan retry)
 async def fetch_from_crtsh(root_domain, max_retries=3):
     print(f"[*] [TIER 1] Menarik data intelijen dari crt.sh untuk: {root_domain}...")
     url = f"https://crt.sh/?q={root_domain}&output=json"
@@ -59,9 +57,7 @@ async def fetch_from_crtsh(root_domain, max_retries=3):
     print("[-] [TIER 1] crt.sh lumpuh total hari ini.")
     return []
 
-# =======================================================================
-# TIER 2: OSINT CADANGAN (HackerTarget API)
-# =======================================================================
+# Tier 2: OSINT cadangan (HackerTarget API)
 # Ganti dengan ini agar lebih tahan banting terhadap error DNS di Windows
 async def fetch_from_hackertarget(root_domain):
     print(f"\n[!] [TIER 2] Mengaktifkan mesin cadangan (HackerTarget) untuk: {root_domain}...")
@@ -92,17 +88,15 @@ async def fetch_from_hackertarget(root_domain):
         
     return []
 
-# =======================================================================
-# TIER 3: OSINT SENJATA BERAT (Subfinder via Subprocess & Threading)
-# =======================================================================
+# Tier 3: Subfinder via subprocess di thread terpisah
 async def fetch_from_subfinder(root_domain):
     print(f"\n[*] [TIER 3] Mengaktifkan mesin Subfinder (ProjectDiscovery) untuk: {root_domain}...")
     
     try:
-        # 1. Dapatkan lokasi absolut file subfinder.exe
+        # Dapatkan lokasi absolut file subfinder.exe
         current_dir = os.path.dirname(os.path.abspath(__file__))
 
-        # 2. Deteksi OS untuk menentukan nama file executable
+        # Deteksi OS untuk menentukan nama file executable
         if sys.platform == 'win32':
             nama_eksekusi = "subfinder.exe"
         else:
@@ -110,7 +104,7 @@ async def fetch_from_subfinder(root_domain):
 
         subfinder_path = os.path.join(current_dir, nama_eksekusi)
         
-        # 2. Fungsi sinkron untuk menjalankan Subfinder
+        # Fungsi sinkron untuk menjalankan Subfinder
         def jalankan_program():
             # subprocess.run jauh lebih stabil di Windows
             return subprocess.run(
@@ -120,10 +114,10 @@ async def fetch_from_subfinder(root_domain):
                 check=True # Memunculkan error jika file .exe gagal dieksekusi
             )
             
-        # 3. Jalankan fungsi di atas pada thread terpisah (Asynchronous)
+        # Jalankan fungsi di atas pada thread terpisah (Asynchronous)
         process = await asyncio.to_thread(jalankan_program)
         
-        # 4. Tangkap dan olah output-nya
+        # Tangkap dan olah output-nya
         if process.stdout:
             subdomains = process.stdout.strip().split('\n')
             hasil_bersih = list(set([sub.strip().lower() for sub in subdomains if sub.strip()]))
@@ -144,9 +138,7 @@ async def fetch_from_subfinder(root_domain):
         print(f"[-] Gagal menjalankan mesin Subfinder: {str(e)}")
         return []
 
-# =======================================================================
-# MODUL 2: VALIDASI & RESOLUSI DNS
-# =======================================================================
+# Modul 2: validasi & resolusi DNS
 async def check_and_resolve_domain(session, raw_domain, semaphore):
     async with semaphore:
         loop = asyncio.get_running_loop()

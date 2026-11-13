@@ -217,21 +217,21 @@ async def role_session_monitoring_worker():
                     username = u.get("username")
                     role = u.get("role", "user")
 
-                    # 1. Super Admin cutoff trigger
+                    # Super Admin cutoff trigger
                     if role == "superadmin" and sa_kick_now:
                         detail_msg = f"Jam cutoff operasional Super Admin ({sa_hour:02d}:{sa_min:02d} WIB) telah tercapai. Sesi Anda diakhiri otomatis."
                         print(f"[!] [FORCE LOGOUT WORKER] Super Admin '{username}' di-kick: {detail_msg}")
                         db_manager.update_user_session(username, None, False)
                         await manager.kick_user_with_msg(username, "force_logout", detail_msg)
 
-                    # 2. Admin cutoff trigger
+                    # Admin cutoff trigger
                     elif role == "admin" and adm_kick_now:
                         detail_msg = f"Jam cutoff operasional Admin ({adm_hour:02d}:{adm_min:02d} WIB) telah tercapai. Sesi Anda diakhiri otomatis."
                         print(f"[!] [FORCE LOGOUT WORKER] Admin '{username}' di-kick: {detail_msg}")
                         db_manager.update_user_session(username, None, False)
                         await manager.kick_user_with_msg(username, "force_logout", detail_msg)
 
-                    # 3. User biasa session duration limit
+                    # User biasa session duration limit
                     elif role == "user":
                         session_created_val = u.get("session_created_at") or u.get("last_online")
                         if session_created_val:
@@ -409,9 +409,7 @@ class VerifyOTPRequest(BaseModel):
     otp: str
     remember_me: Optional[bool] = False
 
-# ===================================================================
-# In-Memory OTP Storage
-# ===================================================================
+# OTP disimpan di memori proses; hilang saat restart.
 OTP_STORE = {}
 
 import smtplib
@@ -500,9 +498,7 @@ def send_reset_email(to_email: str, reset_token: str, base_url: str):
         print(f"[-] Gagal mengirim email reset: {e}")
         return False
 
-# ===================================================================
 # WebSocket Connection Manager untuk Admin & Session Live Updates
-# ===================================================================
 class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
@@ -572,9 +568,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# ===================================================================
 # Pydantic Schemas untuk Auth
-# ===================================================================
 class UserRegister(BaseModel):
     username: str
     password: str
@@ -601,17 +595,13 @@ class SystemSettingsPayload(BaseModel):
     force_logout_user_minutes: str
     scheduled_scan_hour: str
 
-# ===================================================================
 # Pydantic Schemas untuk Domain Bulk
-# ===================================================================
 
 class DomainItem(BaseModel):
     domain_name: str
     ip_address: Optional[str] = ""
 
-# ===================================================================
 # Auth Dependencies
-# ===================================================================
 def check_role_force_logout(user: dict):
     """
     Memeriksa durasi sesi untuk role 'user' biasa.
@@ -705,9 +695,7 @@ def get_current_superadmin(user = Depends(get_current_user)):
     return user
 
 
-# ===================================================================
 # CORS Middleware — agar frontend bisa mengakses API
-# ===================================================================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -716,9 +704,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ===================================================================
 # Static Files — melayani dashboard frontend
-# ===================================================================
 DASHBOARD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard")
 os.makedirs(DASHBOARD_PATH, exist_ok=True)
 
@@ -728,9 +714,7 @@ def _get_supabase_or_none():
     return db_manager.check_db_connection()
 
 
-# ===================================================================
 # API: Authentication & Session Endpoints
-# ===================================================================
 @app.post("/api/auth/register")
 def register_user(user_data: UserRegister, admin_user = Depends(get_current_admin)):
     """Mendaftarkan user baru"""
@@ -758,7 +742,7 @@ def register_user(user_data: UserRegister, admin_user = Depends(get_current_admi
 
 @app.post("/api/auth/login")
 async def login(credentials: LoginRequest, request: Request, response: Response):
-    # 1. Validasi reCAPTCHA ke Google
+    # Validasi reCAPTCHA ke Google
     secret_key = config.RECAPTCHA_SECRET_KEY
     verify_url = "https://www.google.com/recaptcha/api/siteverify"
     payload = {
@@ -776,14 +760,14 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
         error_codes = recaptcha_result.get("error-codes", [])
         raise HTTPException(status_code=400, detail=f"Verifikasi reCAPTCHA gagal. Google Error: {error_codes}")
     
-    # 2. Cek Username dan Password ke Database (Menggunakan fungsi bawaan db_manager)
+    # Cek Username dan Password ke Database (Menggunakan fungsi bawaan db_manager)
     user = db_manager.get_user_by_username(credentials.username)
     
     # Cek apakah user ditemukan dan apakah password hash-nya cocok
     if not user or not db_manager.verify_password(credentials.password, user.get("password")):
         raise HTTPException(status_code=401, detail="Username atau password salah.")
         
-    # 3. Cek timeout
+    # Cek timeout
     timeout_until_val = user.get("timeout_until")
     if timeout_until_val:
         try:
@@ -803,11 +787,11 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
             raise he
         except Exception:
             pass
-    # 4. Role User Check
+    # Role User Check
     user_role = user.get("role", "user")
 
     if user_role in ["admin", "superadmin"]:
-        # 5a. Generate OTP untuk Admin
+        # Generate OTP untuk Admin
         otp_code = str(random.randint(100000, 999999))
         OTP_STORE[credentials.username] = {
             "otp": otp_code,
@@ -826,7 +810,7 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
             
         return {"status": "otp_required", "message": "Kode OTP telah dikirim ke email Anda."}
     else:
-        # 5b. Bypass OTP untuk User Biasa
+        # Bypass OTP untuk User Biasa
         session_id = str(uuid.uuid4())
         db_manager.update_user_session(credentials.username, session_id, True, reset_session_time=True)
         
@@ -947,9 +931,7 @@ def reset_password(req: ResetPasswordRequest):
     else:
         raise HTTPException(status_code=500, detail="Gagal menyimpan perubahan ke database.")
 
-# ===================================================================
 # API: Admin Panel Endpoints
-# ===================================================================
 
 @app.get("/api/admin/users")
 def get_users(current_user = Depends(get_current_user)):
@@ -958,11 +940,11 @@ def get_users(current_user = Depends(get_current_user)):
     caller_role = current_user.get("role")
     caller_username = current_user.get("username")
     
-    # 1. Super Admin bisa melihat semua orang
+    # Super Admin bisa melihat semua orang
     if caller_role == "superadmin":
         return {"status": "ok", "data": users}
         
-    # 2. Admin biasa HANYA bisa melihat akun yang ia buat sendiri
+    # Admin biasa HANYA bisa melihat akun yang ia buat sendiri
     if caller_role == "admin":
         filtered = [
             u for u in users 
@@ -970,7 +952,7 @@ def get_users(current_user = Depends(get_current_user)):
         ]
         return {"status": "ok", "data": filtered}
         
-    # 3. User biasa tidak berhak melihat apa-apa
+    # User biasa tidak berhak melihat apa-apa
     raise HTTPException(status_code=403, detail="Anda tidak memiliki akses ke halaman ini.")
 
 def check_target_user_protection(target_username: str, caller: dict):
@@ -1060,9 +1042,7 @@ async def delete_user_endpoint(target_username: str, current_user = Depends(get_
     await manager.kick_user(target_username, "force_logout")
     return {"status": "ok", "message": f"User '{target_username}' berhasil dihapus."}
 
-# ===================================================================
 # WebSocket: Real-time Live Session Updates (Admin & Users)
-# ===================================================================
 @app.websocket("/ws/live")
 async def websocket_live(websocket: WebSocket, session_id: Optional[str] = Query(None)):
     """Koneksi WebSocket untuk real-time updates (admin notif & user force logout/timeout)"""
@@ -1089,18 +1069,14 @@ async def websocket_live(websocket: WebSocket, session_id: Optional[str] = Query
     except Exception:
         manager.disconnect(websocket)
 
-# ===================================================================
-# ROOT — Redirect ke dashboard
-# ===================================================================
+# Root: redirect ke dashboard
 @app.get("/")
 def root():
     """Redirect ke dashboard"""
     return RedirectResponse(url="/dashboard/index.html")
 
 
-# ===================================================================
 # API: Health Check
-# ===================================================================
 @app.get("/api/health")
 def health_check():
     """Health check endpoint — cek status server dan koneksi database"""
@@ -1116,9 +1092,7 @@ def health_check():
 
 
 
-# ===================================================================
 # API: Dashboard Stats (dari Supabase, fallback ke lokal)
-# ===================================================================
 @app.get("/api/dashboard-stats")
 def get_dashboard_stats(current_user = Depends(get_current_user)):
     """Mengambil statistik dasar dan riwayat scan terbaru"""
@@ -1148,9 +1122,7 @@ def get_dashboard_stats(current_user = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ===================================================================
 # API: Trend Stats (Line Chart) - By Domain
-# ===================================================================
 @app.get("/api/trend-stats")
 def get_trend_stats(start_date: str | None = Query(None), end_date: str | None = Query(None), current_user = Depends(get_current_user)):
     """Mengambil data tren kerentanan per domain (rekap 1-per-1 tiap eksekusi scan)"""
@@ -1234,9 +1206,7 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ===================================================================
 # API: Severity Trend Stats (Line Chart)
-# ===================================================================
 @app.get("/api/severity-trend-stats")
 def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str | None = Query(None), current_user = Depends(get_current_user)):
     """Mengambil data tren kerentanan berdasarkan severity (rekap 1-per-1 tiap eksekusi scan)"""
@@ -1601,9 +1571,7 @@ async def create_domains_bulk(payload: List[DomainItem]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ===================================================================
 # API: Detail Domain (scan history, ports, tech, vulns dari Supabase)
-# ===================================================================
 @app.get("/api/domains/{domain_name}/detail")
 def get_domain_detail(domain_name: str, current_user = Depends(get_current_user)):
     """Mengambil detail lengkap 1 domain: scan history, ports, teknologi, kerentanan"""
@@ -1648,9 +1616,7 @@ def get_domain_detail(domain_name: str, current_user = Depends(get_current_user)
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ===================================================================
 # API: Scan History (dari Supabase)
-# ===================================================================
 @app.get("/api/scan-history")
 def get_scan_history(limit: int = Query(20, ge=1, le=1000)):
     """Mengambil histori scan terbaru dari database"""
@@ -1664,9 +1630,7 @@ def get_scan_history(limit: int = Query(20, ge=1, le=1000)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ===================================================================
 # API: Semua Vulnerabilities (dari Supabase)
-# ===================================================================
 @app.get("/api/vulnerabilities")
 def get_vulnerabilities(
     severity: Optional[str] = Query(None, description="Filter by severity (HIGH, MEDIUM, LOW)"),
@@ -1683,9 +1647,7 @@ def get_vulnerabilities(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ===================================================================
-# API: Trigger Pentest Scan (sudah ada, diperbaiki)
-# ===================================================================
+# API: Trigger Pentest Scan
 async def run_pentest_tools_background(domain_name: str):
     """Menjalankan scan via Pentest-Tools API di background"""
     print(f"[*] [BACKGROUND] Memulai scan Pentest-Tools untuk: {domain_name}")
@@ -1752,9 +1714,7 @@ async def run_pentest_tools_background(domain_name: str):
             "notification": notif
         })
 
-# ===================================================================
 # Simpan Jadwal
-# ===================================================================
 class SchedulePayload(BaseModel):
     targets: List[str]
     inactive_targets: Optional[List[str]] = []
@@ -1928,7 +1888,7 @@ async def run_network_scan_background(targets: List[str], scan_type: str = "deep
             failed_count = len(results) - success_count
             print(f"[+] Network Scan Selesai: {success_count} sukses, {failed_count} gagal.")
             for target in targets:
-                # 3. Beritahu via WebSocket
+                # Beritahu via WebSocket
                 await manager.broadcast_to_admins({
                     "event": "scan_finished",
                     "domain": target,
@@ -2157,7 +2117,7 @@ async def get_active_scans(current_user = Depends(get_current_user)):
     try:
         timeout_settings = aiohttp.ClientTimeout(total=25, connect=10)
         async with aiohttp.ClientSession(timeout=timeout_settings) as session:
-            # 1. Fetch all scans
+            # Fetch all scans
             scans_url = f"{config.PENTEST_TOOLS_BASE_URL}/scans"
             async with session.get(scans_url, headers=headers) as resp:
                 if resp.status in (401, 403):
@@ -2176,7 +2136,7 @@ async def get_active_scans(current_user = Depends(get_current_user)):
                 if not isinstance(all_scans, list):
                     all_scans = []
             
-            # 2. Fetch all targets to map target_id to domain name (diisolasi agar tidak mengagalkan scans)
+            # Fetch all targets to map target_id to domain name (diisolasi agar tidak mengagalkan scans)
             targets_map = {}
             try:
                 targets_url = f"{config.PENTEST_TOOLS_BASE_URL}/targets"
@@ -2192,7 +2152,7 @@ async def get_active_scans(current_user = Depends(get_current_user)):
             except Exception as t_err:
                 pass
 
-            # 3. Filter only active scans
+            # Filter only active scans
             active_statuses = ["waiting", "running", "queued"]
             for scan in all_scans:
                 if not isinstance(scan, dict):
@@ -2305,7 +2265,7 @@ async def get_pdf_report(filename: str, current_user = Depends(get_current_user)
             try:
                 headers = {"Authorization": f"Bearer {api_key}"}
                 async with aiohttp.ClientSession() as session:
-                    # 1. Cari target_id untuk domain ini
+                    # Cari target_id untuk domain ini
                     async with session.get("https://app.pentest-tools.com/api/v2/targets", headers=headers) as t_resp:
                         if t_resp.status == 200:
                             targets_data = await t_resp.json()
@@ -2317,7 +2277,7 @@ async def get_pdf_report(filename: str, current_user = Depends(get_current_user)
                                     break
                             
                             if target_id:
-                                # 2. Cari scan_id terakhir yang sudah finished
+                                # Cari scan_id terakhir yang sudah finished
                                 async with session.get("https://app.pentest-tools.com/api/v2/scans", headers=headers) as s_resp:
                                     if s_resp.status == 200:
                                         scans_data = await s_resp.json()
@@ -2325,7 +2285,7 @@ async def get_pdf_report(filename: str, current_user = Depends(get_current_user)
                                         scans.sort(key=lambda x: x.get("id", 0), reverse=True)
                                         if scans:
                                             scan_id = scans[0]["id"]
-                                            # 3. Minta pembuatan PDF Report
+                                            # Minta pembuatan PDF Report
                                             payload = {
                                                 "source": "scans",
                                                 "resources": [scan_id],
@@ -2337,7 +2297,7 @@ async def get_pdf_report(filename: str, current_user = Depends(get_current_user)
                                                     report_json = await r_resp.json()
                                                     report_id = report_json["data"]["report_id"]
                                                     
-                                                    # 4. Polling untuk download
+                                                    # Polling untuk download
                                                     dl_url = f"https://app.pentest-tools.com/api/v2/reports/{report_id}/download"
                                                     for _ in range(15):
                                                         async with session.get(dl_url, headers=headers) as dl_resp:
@@ -2420,15 +2380,10 @@ async def get_pdf_report(filename: str, current_user = Depends(get_current_user)
             ]
         raise HTTPException(status_code=404, detail="File PDF report dari Pentest-Tools tidak ditemukan untuk target ini.")
 
-# ===================================================================
 # Mount Static Files — HARUS di bawah semua route API
-# ===================================================================
 app.mount("/dashboard", StaticFiles(directory=DASHBOARD_PATH, html=True), name="dashboard")
 
 
-# ===================================================================
-# Main
-# ===================================================================
 class GenerateReportRequest(BaseModel):
     history_id: int
     report_type: str = "pentest_report"
@@ -2451,7 +2406,7 @@ async def _generate_report_bytes(req: GenerateReportRequest, current_user = Depe
     if not conn:
         raise HTTPException(status_code=503, detail="Database not configured")
 
-    # 1. Look up the history_id to get the pt_scan_id
+    # Look up the history_id to get the pt_scan_id
     try:
         with conn.cursor(cursor_factory=db_manager.RealDictCursor) as cur:
             cur.execute('SELECT raw_json FROM scan_history WHERE id = %s', (req.history_id,))
@@ -2481,7 +2436,7 @@ async def _generate_report_bytes(req: GenerateReportRequest, current_user = Depe
     if not pt_scan_id:
         raise HTTPException(status_code=400, detail="Cannot generate report for this history because it does not contain a valid Pentest-Tools scan ID (pt_scan_id).")
         
-    # 2. Call Pentest-Tools API to Generate Report
+    # Call Pentest-Tools API to Generate Report
     url = f"{config.PENTEST_TOOLS_BASE_URL}/reports"
     headers = {
         "Authorization": f"Bearer {config.PENTEST_TOOLS_API_KEY}",
@@ -2522,7 +2477,7 @@ async def _generate_report_bytes(req: GenerateReportRequest, current_user = Depe
             resp_json = await resp.json()
             report_id = resp_json["data"]["report_id"]
             
-        # 3. Poll for completion
+        # Poll for completion
         download_url = f"{config.PENTEST_TOOLS_BASE_URL}/reports/{report_id}/download"
         
         for _ in range(40): # Wait up to 200 seconds
@@ -2627,9 +2582,7 @@ async def share_report_endpoint(req: ShareReportRequest, current_user = Depends(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal mengirim email: {str(e)}")
 
-# ==============================================================================
-# NOTIFICATIONS ROUTES
-# ==============================================================================
+# Notifications routes
 @app.get("/api/notifications")
 async def api_get_notifications():
     """Mengambil riwayat scan, hasil approval domain, dan permintaan pending untuk notifikasi"""
@@ -2759,9 +2712,7 @@ async def webhook_notify(req: InternalNotifyRequest, request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ==============================================================================
-# ENDPOINT PENGATURAN SISTEM (FORCE LOGOUT & SCAN MALAM)
-# ==============================================================================
+# Endpoint pengaturan sistem (force logout & scan malam)
 @app.get("/api/system-settings")
 def get_system_settings(current_user = Depends(get_current_user)):
     return db_manager.get_all_system_settings()
