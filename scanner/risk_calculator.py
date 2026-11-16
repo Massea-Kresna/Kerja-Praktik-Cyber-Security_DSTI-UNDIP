@@ -9,7 +9,7 @@ def calculate_overall_risk(vulnerabilities):
     
     Returns:
         dict: {
-            'risk_level': 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'SAFE',
+            'risk_level': 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO' | 'SAFE',
             'risk_score': float (0.0 - 10.0),
             'counts': { 'critical': int, 'high': int, 'medium': int, 'low': int, 'info': int }
         }
@@ -55,8 +55,11 @@ def calculate_overall_risk(vulnerabilities):
         risk_level = 'HIGH'
     elif counts['medium'] > 0:
         risk_level = 'MEDIUM'
-    elif counts['low'] > 0 or counts['info'] > 0:
+    elif counts['low'] > 0:
         risk_level = 'LOW'
+    elif counts['info'] > 0:
+        # Hanya temuan Info: dicatat INFO, bukan LOW
+        risk_level = 'INFO'
     else:
         risk_level = 'SAFE'
         

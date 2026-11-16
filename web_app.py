@@ -9,7 +9,7 @@ FastAPI backend yang melayani:
 =======================================================================
 """
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Query, Depends, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, BackgroundTasks, Body, HTTPException, Query, Depends, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,11 +18,14 @@ from contextlib import asynccontextmanager
 import db_manager
 import config
 import telegram_notifier
+from report_utils import report_filename
 import uvicorn
 import asyncio
 import aiohttp
 import httpx
 import uuid
+import time
+import re
 import os
 import json
 import requests
@@ -325,6 +328,7 @@ async def run_automated_overnight_scan():
     from scanner.pentest_tools_scheduler import process_domain_scan
     import aiohttp
     
+    started_at = datetime.now(config.WIB)
     try:
         semaphore = asyncio.Semaphore(len(domains_to_scan))
         async with aiohttp.ClientSession() as session:
@@ -337,18 +341,9 @@ async def run_automated_overnight_scan():
 
         for dom in domains_to_scan:
             try:
-                recent_scans = db_manager.get_scan_history_list(limit=20)
-                risk_level = "SAFE"
-                for scan in recent_scans:
-                    if scan.get("domains", {}).get("domain_name") == dom:
-                        risk_level = scan.get("risk_level", "SAFE")
-                        break
-                        
-                if risk_level in ["HIGH", "CRITICAL"]:
-                    await telegram_notifier.notify_high_risk_scan(dom, risk_level)
-                    print(f"[+] Notifikasi Telegram terkirim untuk {dom} ({risk_level})")
+                await announce_scan_finished(dom, "Overnight Scan", started_at=started_at)
             except Exception as e:
-                print(f"[-] Gagal mengirim notifikasi Telegram untuk {dom}: {e}")
+                print(f"[-] Gagal mengumumkan hasil scan malam untuk {dom}: {e}")
 
     except Exception as e:
         print(f"[-] Error saat memproses batch scan: {e}")
@@ -361,10 +356,18 @@ async def automated_midnight_scan_worker():
     """Background worker loop asyncio native untuk memicu scan otomatis malam hari tanpa Celery."""
     print("[*] Asyncio Automated Midnight Scan Worker started.")
     last_triggered_date = None
+    last_prune_date = None
     while True:
         try:
             now_wib = datetime.now(config.WIB)
             today_str = now_wib.strftime("%Y-%m-%d")
+
+            # Sekali sehari: hapus status baca notifikasi yang lebih tua dari 90 hari
+            if last_prune_date != today_str:
+                last_prune_date = today_str
+                removed = await asyncio.to_thread(db_manager.prune_notification_reads)
+                if removed:
+                    print(f"[*] {removed} status baca notifikasi lama dihapus.")
             
             target_hour_str = db_manager.get_system_setting("scheduled_scan_hour", "00:00")
             try:
@@ -544,6 +547,15 @@ class ConnectionManager:
             except Exception:
                 pass
 
+    async def send_to_user(self, username: str, message: dict):
+        for conn in list(self.active_connections):
+            info = self.user_info.get(conn)
+            if info and info.get("username") == username:
+                try:
+                    await conn.send_json(message)
+                except Exception:
+                    pass
+
     async def kick_user(self, username: str, reason: str = "force_logout"):
         for conn in list(self.active_connections):
             info = self.user_info.get(conn)
@@ -573,6 +585,10 @@ class UserRegister(BaseModel):
     username: str
     password: str
     role: str = "user"
+
+# Aturan akun baru (Tambah User Baru). Akun lama (mis. "admin" bawaan) tidak diubah.
+NEW_ACCOUNT_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+NEW_ACCOUNT_MIN_PASSWORD = 8
 
 class UserLogin(BaseModel):
     username: str
@@ -643,6 +659,11 @@ def check_role_force_logout(user: dict):
             except Exception as e:
                 print(f"[-] Parse session_created_at error: {e}")
 
+# Waktu terakhir "last_online" ditulis per akun. Ditulis paling sering sekali per
+# menit, bukan di setiap permintaan (dashboard bisa membuat puluhan permintaan per menit).
+_LAST_SEEN_WRITE = {}
+LAST_SEEN_INTERVAL_SEC = 60
+
 def get_current_user(request: Request):
     session_id = request.cookies.get("session_id")
     if not session_id:
@@ -680,8 +701,11 @@ def get_current_user(request: Request):
     # Cek aturan force logout berdasarkan role (Superadmin 19:00, Admin 16:00, User 1 Jam)
     check_role_force_logout(user)
 
-    # Perbarui last_online ke waktu sekarang
-    db_manager.update_user_session(user["username"], session_id, True)
+    # Perbarui last_online, paling sering sekali per menit per akun
+    now_mono = time.monotonic()
+    if now_mono - _LAST_SEEN_WRITE.get(user["username"], 0.0) >= LAST_SEEN_INTERVAL_SEC:
+        db_manager.update_user_session(user["username"], session_id, True)
+        _LAST_SEEN_WRITE[user["username"]] = now_mono
     return user
 
 def get_current_admin(user = Depends(get_current_user)):
@@ -695,7 +719,29 @@ def get_current_superadmin(user = Depends(get_current_user)):
     return user
 
 
-# CORS Middleware — agar frontend bisa mengakses API
+# Setelah domain atau jadwal berhasil diubah, kabari semua browser yang terbuka lewat
+# koneksi live, supaya tampilannya ikut berubah tanpa menunggu polling (60 detik).
+DATA_CHANGE_PATHS = (
+    ("/api/domains", "domains"),
+    ("/api/internal/domains", "domains"),
+    ("/api/schedule-scan", "domains"),
+    ("/api/scans/schedule", "schedules"),
+)
+
+@app.middleware("http")
+async def announce_data_changes(request: Request, call_next):
+    response = await call_next(request)
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and response.status_code < 400:
+        path = request.url.path
+        kinds = sorted({kind for prefix, kind in DATA_CHANGE_PATHS if path.startswith(prefix)})
+        if kinds:
+            try:
+                await manager.broadcast_to_all({"event": "data_changed", "what": kinds})
+            except Exception as e:
+                print(f"[-] Gagal mengirim kabar perubahan data: {e}")
+    return response
+
+# CORS Middleware: agar frontend bisa mengakses API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -704,7 +750,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static Files — melayani dashboard frontend
+# Static Files: melayani dashboard frontend
 DASHBOARD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard")
 os.makedirs(DASHBOARD_PATH, exist_ok=True)
 
@@ -721,6 +767,13 @@ def register_user(user_data: UserRegister, admin_user = Depends(get_current_admi
     target_role = user_data.role.lower() if user_data.role else "user"
     caller_role = admin_user.get("role")
     caller_username = admin_user.get("username")
+
+    # Akun baru memakai email sebagai username: dirapikan dan disimpan huruf kecil
+    email = (user_data.username or "").strip().lower()
+    if not NEW_ACCOUNT_EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="Format email tidak valid, contoh: nama@undip.ac.id")
+    if len((user_data.password or "").strip()) < NEW_ACCOUNT_MIN_PASSWORD:
+        raise HTTPException(status_code=400, detail=f"Password minimal {NEW_ACCOUNT_MIN_PASSWORD} karakter.")
     
     if target_role == "admin" and caller_role != "superadmin":
         raise HTTPException(status_code=403, detail="Hanya Super Admin yang dapat mendaftarkan akun Admin.")
@@ -729,13 +782,13 @@ def register_user(user_data: UserRegister, admin_user = Depends(get_current_admi
     if target_role not in ["superadmin", "admin", "user"]:
         raise HTTPException(status_code=400, detail="Role tidak valid.")
 
-    # Cek apakah username sudah ada
-    existing = db_manager.get_user_by_username(user_data.username)
+    # Cek apakah email sudah dipakai akun lain
+    existing = db_manager.get_user_by_username(email)
     if existing:
-        raise HTTPException(status_code=400, detail="Username sudah terdaftar.")
-        
+        raise HTTPException(status_code=400, detail="Email ini sudah terdaftar.")
+
     try:
-        db_manager.create_user(user_data.username, user_data.password, target_role, created_by=caller_username)
+        db_manager.create_user(email, user_data.password, target_role, created_by=caller_username)
         return {"status": "ok", "message": "Pendaftaran berhasil."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal melakukan registrasi: {str(e)}")
@@ -761,8 +814,9 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
         raise HTTPException(status_code=400, detail=f"Verifikasi reCAPTCHA gagal. Google Error: {error_codes}")
     
     # Cek Username dan Password ke Database (Menggunakan fungsi bawaan db_manager)
-    user = db_manager.get_user_by_username(credentials.username)
-    
+    # Username/email dicocokkan tanpa membedakan huruf besar (akun disimpan huruf kecil)
+    user = db_manager.get_user_by_username((credentials.username or "").strip().lower())
+
     # Cek apakah user ditemukan dan apakah password hash-nya cocok
     if not user or not db_manager.verify_password(credentials.password, user.get("password")):
         raise HTTPException(status_code=401, detail="Username atau password salah.")
@@ -1079,7 +1133,7 @@ def root():
 # API: Health Check
 @app.get("/api/health")
 def health_check():
-    """Health check endpoint — cek status server dan koneksi database"""
+    """Health check endpoint: cek status server dan koneksi database"""
     db_connected = db_manager.check_db_connection()
     return {
         "status": "ok",
@@ -1105,7 +1159,7 @@ def get_dashboard_stats(current_user = Depends(get_current_user)):
         recent_scans = db_manager.get_recent_scans_history(10)
         stats_resp = db_manager.get_recent_risk_levels(100)
         
-        stats = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "SAFE": 0}
+        stats = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0, "SAFE": 0}
         for row in stats_resp:
             r_level = row.get("risk_level", "SAFE")
             if r_level in stats:
@@ -1123,6 +1177,55 @@ def get_dashboard_stats(current_user = Depends(get_current_user)):
 
 
 # API: Trend Stats (Line Chart) - By Domain
+
+def _trend_scan_summary(scan, wib_tz):
+    """Ringkasan satu scan untuk trend chart: id, domain, waktu (WIB, ISO), jumlah per severity.
+    Aturan hitung sama dengan /api/trend-stats (scan_result + raw_json low/info)."""
+    vulns = list(scan.get("scan_result") or [])
+    raw_json = scan.get("raw_json")
+    if isinstance(raw_json, list):
+        vulns.extend(raw_json)
+    elif isinstance(raw_json, dict) and isinstance(raw_json.get("low_info_vulns"), list):
+        vulns.extend(raw_json["low_info_vulns"])
+    counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
+    for v in vulns:
+        sev = str((v or {}).get("severity", "")).upper() if isinstance(v, dict) else ""
+        if sev == "INFORMATION":
+            sev = "INFO"
+        if sev in counts:
+            counts[sev] += 1
+    try:
+        date_wib = datetime.fromisoformat(scan.get("scan_date")).astimezone(wib_tz).isoformat()
+    except Exception:
+        date_wib = scan.get("scan_date")
+    # Tipe scan dari temuan pertama yang punya check_type (scan tanpa temuan: tidak diketahui)
+    check_type = next((str(v.get("check_type")) for v in (scan.get("scan_result") or [])
+                       if isinstance(v, dict) and v.get("check_type")), "")
+    scan_type = "Network Scan" if "network" in check_type.lower() else ("Website Scan" if "web" in check_type.lower() else None)
+    return {
+        "id": scan.get("id"),
+        "domain": (scan.get("domains") or {}).get("domain_name") or "Unknown",
+        "date": date_wib,
+        "counts": counts,
+        "total": len(vulns),
+        "type": scan_type,
+    }
+
+
+def _trend_extra_fields(scans, start_dt, end_dt, start_time_iso, wib_tz):
+    """Field tambahan untuk trend chart versi baru. Field lama tetap dikirim (kompatibel)."""
+    return {
+        "range_start": start_dt.astimezone(wib_tz).isoformat(),
+        "range_end": end_dt.astimezone(wib_tz).isoformat(),
+        "scans": [_trend_scan_summary(s, wib_tz) for s in scans if s.get("scan_date")],
+        # Baseline hanya untuk domain yang di-scan di rentang ini (grafik hanya menampilkan domain tsb).
+        # Tanpa filter ini, baseline memuat scan terakhir SEMUA domain yang pernah di-scan.
+        "baseline": [_trend_scan_summary(s, wib_tz) for s in db_manager.get_latest_scans_before(
+            start_time_iso,
+            {(s.get("domains") or {}).get("domain_name") for s in scans if (s.get("domains") or {}).get("domain_name")}
+        )],
+    }
+
 @app.get("/api/trend-stats")
 def get_trend_stats(start_date: str | None = Query(None), end_date: str | None = Query(None), current_user = Depends(get_current_user)):
     """Mengambil data tren kerentanan per domain (rekap 1-per-1 tiap eksekusi scan)"""
@@ -1154,7 +1257,12 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
         raw_labels = []
         scan_ids = []
         
-        all_domains = [d.get("domain_name") for d in db_manager.get_all_domains()]
+        # Hanya domain yang punya scan di rentang ini. Sebelumnya semua domain inventaris ikut dikirim
+        # (di server kantor 995 domain), sehingga filter domain berisi ratusan domain kosong dan respons membengkak.
+        all_domains = sorted({
+            (s.get("domains") or {}).get("domain_name") or "Unknown"
+            for s in scans if s.get("scan_date")
+        })
         domains_data = {domain: [] for domain in all_domains}
         
         for scan in scans:
@@ -1200,7 +1308,8 @@ def get_trend_stats(start_date: str | None = Query(None), end_date: str | None =
                     "data": data,
                 }
                 for domain, data in domains_data.items()
-            ]
+            ],
+            **_trend_extra_fields(scans, start_dt, end_dt, start_time_iso, wib_tz)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1294,7 +1403,8 @@ def get_severity_trend_stats(start_date: str | None = Query(None), end_date: str
                     "domains": domains_by_sev[sev]
                 }
                 for sev in severities
-            ]
+            ],
+            **_trend_extra_fields(scans, start_dt, end_dt, start_time_iso, wib_tz)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1324,22 +1434,21 @@ class DomainUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 @app.post("/api/domains")
-async def create_domain(payload: DomainCreate, request: Request):
+async def create_domain(payload: DomainCreate, request: Request, current_user = Depends(get_current_admin)):
     """Menambahkan domain baru (Admin memerlukan persetujuan Super Admin)"""
     if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
+    # Bersihkan nama domain (huruf kecil, tanpa http(s)://, path, port, dan tanpa 'www.')
+    payload.domain_name = db_manager.normalize_domain_name(payload.domain_name)
+    if not payload.domain_name:
+        raise HTTPException(status_code=400, detail="Nama domain tidak valid.")
     try:
         existing = db_manager.get_domain_by_name(payload.domain_name)
         if existing:
-            raise HTTPException(status_code=400, detail="Domain sudah terdaftar")
+            raise HTTPException(status_code=400, detail=f"Domain sudah terdaftar sebagai {existing.get('domain_name', payload.domain_name)}")
             
-        current_user = None
-        session_id = request.cookies.get("session_id")
-        if session_id:
-            current_user = db_manager.get_user_by_session_id(session_id)
-
-        caller_role = current_user.get("role") if current_user else "admin"
-        caller_username = current_user.get("username") if current_user else "admin"
+        caller_role = current_user.get("role")
+        caller_username = current_user.get("username")
 
         if caller_role == "superadmin":
             approval_status = "approved"
@@ -1399,6 +1508,13 @@ async def approve_domain_endpoint(domain_id: int, admin_user = Depends(get_curre
     requested_by = res.get("requested_by") or "Admin"
     superadmin_name = admin_user.get("username", "Super Admin")
 
+    # Simpan notifikasi dulu, baru kabari browser: lonceng yang langsung mengambil ulang sudah melihatnya
+    db_manager.add_system_notification(
+        title=f"Domain Disetujui: {domain_name}",
+        message=f"Permintaan penambahan domain '{domain_name}' oleh {requested_by} telah DISETUJUI.",
+        notif_type="domain_approval_result"
+    )
+
     try:
         await manager.broadcast_to_all({
             "event": "domain_approval_result",
@@ -1409,12 +1525,6 @@ async def approve_domain_endpoint(domain_id: int, admin_user = Depends(get_curre
         })
     except Exception as e:
         print(f"[-] Broadcast approval error: {e}")
-
-    db_manager.add_system_notification(
-        title=f"Domain Disetujui: {domain_name}",
-        message=f"Permintaan penambahan domain '{domain_name}' oleh {requested_by} telah DISETUJUI.",
-        notif_type="domain_approval_result"
-    )
 
     return {"status": "ok", "message": f"Domain '{domain_name}' berhasil disetujui.", "data": res}
 
@@ -1433,6 +1543,13 @@ async def reject_domain_endpoint(domain_id: int, admin_user = Depends(get_curren
     if not success:
         raise HTTPException(status_code=404, detail="Domain tidak ditemukan atau gagal ditolak.")
 
+    # Simpan notifikasi dulu, baru kabari browser (lihat approve_domain_endpoint)
+    db_manager.add_system_notification(
+        title=f"Domain Ditolak: {domain_name}",
+        message=f"Permintaan penambahan domain '{domain_name}' oleh {requested_by} DITOLAK.",
+        notif_type="domain_approval_result"
+    )
+
     try:
         await manager.broadcast_to_all({
             "event": "domain_approval_result",
@@ -1444,16 +1561,10 @@ async def reject_domain_endpoint(domain_id: int, admin_user = Depends(get_curren
     except Exception as e:
         print(f"[-] Broadcast rejection error: {e}")
 
-    db_manager.add_system_notification(
-        title=f"Domain Ditolak: {domain_name}",
-        message=f"Permintaan penambahan domain '{domain_name}' oleh {requested_by} DITOLAK.",
-        notif_type="domain_approval_result"
-    )
-
     return {"status": "ok", "message": f"Permintaan domain '{domain_name}' berhasil ditolak."}
 
 @app.put("/api/domains/{domain_id}")
-def update_domain(domain_id: int, payload: DomainUpdate, current_user = Depends(get_current_user)):
+def update_domain(domain_id: int, payload: DomainUpdate, current_user = Depends(get_current_admin)):
     """Memperbarui data domain"""
     if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
@@ -1471,6 +1582,10 @@ def update_domain(domain_id: int, payload: DomainUpdate, current_user = Depends(
         if not current_domain:
             raise HTTPException(status_code=404, detail="Domain tidak ditemukan")
 
+        if payload.domain_name is not None:
+            payload.domain_name = db_manager.normalize_domain_name(payload.domain_name)
+            if not payload.domain_name:
+                raise HTTPException(status_code=400, detail="Nama domain tidak valid.")
         dom_name = payload.domain_name if payload.domain_name is not None else current_domain["domain_name"]
         ip_addr = payload.ip_address if payload.ip_address is not None else current_domain.get("ip_address", "")
         is_act = payload.is_active if payload.is_active is not None else current_domain.get("is_active", True)
@@ -1490,7 +1605,7 @@ def update_domain(domain_id: int, payload: DomainUpdate, current_user = Depends(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/domains/{domain_id}")
-def delete_domain(domain_id: int, current_user = Depends(get_current_user)):
+def delete_domain(domain_id: int, current_user = Depends(get_current_admin)):
     """Menghapus domain"""
     if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
@@ -1505,7 +1620,7 @@ def delete_domain(domain_id: int, current_user = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/internal/domains")
-async def internal_create_domain(payload: list, request: Request):
+async def internal_create_domain(request: Request, payload: List[dict] = Body(...)):
     """Endpoint internal khusus untuk menerima data dari scrapper Celery"""
     client_host = request.client.host
     # Validasi ketat: Hanya izinkan request dari localhost
@@ -1514,9 +1629,11 @@ async def internal_create_domain(payload: list, request: Request):
         
     try:
         for item in payload:
-            domain_name = item.get("domain_name")
+            domain_name = db_manager.normalize_domain_name(item.get("domain_name"))
             ip_address = item.get("ip_address", "")
-            
+            if not domain_name:
+                continue
+
             existing = db_manager.get_domain_by_name(domain_name)
             if not existing:
                 db_manager.create_domain(domain_name, ip_address)
@@ -1526,8 +1643,11 @@ async def internal_create_domain(payload: list, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/domains/bulk")
-async def create_domains_bulk(payload: List[DomainItem]):
+async def create_domains_bulk(payload: List[DomainItem], request: Request):
     """Endpoint khusus untuk menerima banyak data domain sekaligus dari scrapper"""
+    # Hanya dari server itu sendiri (scrapper berjalan di mesin yang sama)
+    if request.client.host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(status_code=403, detail="Forbidden")
     if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
     
@@ -1535,11 +1655,14 @@ async def create_domains_bulk(payload: List[DomainItem]):
     new_domains = []
     try:
         for item in payload:
-            existing = db_manager.get_domain_by_name(item.domain_name)
+            clean_name = db_manager.normalize_domain_name(item.domain_name)
+            if not clean_name or clean_name in new_domains:
+                continue
+            existing = db_manager.get_domain_by_name(clean_name)
             if not existing:
-                db_manager.create_domain(item.domain_name, item.ip_address)
-                inserted_count += 1
-                new_domains.append(item.domain_name)
+                if db_manager.create_domain(clean_name, item.ip_address):
+                    inserted_count += 1
+                    new_domains.append(clean_name)
 
         if inserted_count > 0:
             notif = {
@@ -1618,7 +1741,7 @@ def get_domain_detail(domain_name: str, current_user = Depends(get_current_user)
 
 # API: Scan History (dari Supabase)
 @app.get("/api/scan-history")
-def get_scan_history(limit: int = Query(20, ge=1, le=1000)):
+def get_scan_history(limit: int = Query(20, ge=1, le=1000), current_user = Depends(get_current_user)):
     """Mengambil histori scan terbaru dari database"""
     if not db_manager.check_db_connection():
         raise HTTPException(status_code=503, detail="Database not configured")
@@ -1634,7 +1757,8 @@ def get_scan_history(limit: int = Query(20, ge=1, le=1000)):
 @app.get("/api/vulnerabilities")
 def get_vulnerabilities(
     severity: Optional[str] = Query(None, description="Filter by severity (HIGH, MEDIUM, LOW)"),
-    limit: int = Query(50, ge=1, le=200)
+    limit: int = Query(50, ge=1, le=200),
+    current_user = Depends(get_current_user)
 ):
     """Mengambil daftar kerentanan dari database"""
     if not db_manager.check_db_connection():
@@ -1647,72 +1771,82 @@ def get_vulnerabilities(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =======================================================================
+# Pengumuman "scan selesai": satu jalur untuk scan manual, terjadwal, dan malam.
+# - Kabar live ke SEMUA akun yang login (superadmin, admin, user): dashboard
+#   memperbarui riwayat scan, tabel, dan grafik Overview tanpa refresh.
+# - Notifikasi lonceng untuk SEMUA risk level.
+# - Telegram hanya untuk HIGH dan CRITICAL.
+# - Bila scan gagal (tidak ada hasil baru sejak started_at), tidak ada notifikasi.
+# =======================================================================
+async def announce_scan_finished(domain_name: str, kind: str = "Scan", started_at: Optional[datetime] = None,
+                                 schedule_id: Optional[int] = None, is_scheduled: bool = False):
+    domain_name = db_manager.normalize_domain_name(domain_name) or domain_name
+    await manager.broadcast_to_all({
+        "event": "scan_finished",
+        "domain": domain_name,
+        "schedule_id": schedule_id,
+        "is_scheduled": bool(is_scheduled or schedule_id is not None),
+        "time": datetime.now(config.WIB).isoformat()
+    })
+    await asyncio.sleep(3)
+
+    latest = None
+    try:
+        for s in db_manager.get_scan_history_list(limit=50):
+            if (s.get("domains") or {}).get("domain_name") == domain_name:
+                latest = s
+                break
+    except Exception as e:
+        print(f"[-] Gagal membaca riwayat scan untuk {domain_name}: {e}")
+    if not latest:
+        return
+
+    scan_date = latest.get("scan_date")
+    if started_at is not None and scan_date:
+        try:
+            t = scan_date if isinstance(scan_date, datetime) else datetime.fromisoformat(str(scan_date))
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=config.WIB)
+            if t < started_at - timedelta(minutes=1):
+                print(f"[-] Tidak ada hasil baru untuk {domain_name}; notifikasi tidak dikirim.")
+                return
+        except Exception:
+            pass
+
+    risk_level = str(latest.get("risk_level") or "SAFE").upper()
+    if risk_level in ("HIGH", "CRITICAL"):
+        try:
+            await telegram_notifier.notify_high_risk_scan(domain_name, risk_level)
+        except Exception as e:
+            print(f"[-] Gagal mengirim Telegram untuk {domain_name}: {e}")
+
+    scan_time = scan_date.isoformat() if isinstance(scan_date, datetime) else str(scan_date or datetime.now(config.WIB).isoformat())
+    await manager.broadcast_to_all({
+        "event": "new_notification",
+        "notification": {
+            "id": str(latest.get("id")),
+            "title": f"{kind} Selesai: {domain_name}",
+            "message": f"Risk Level : {risk_level}",
+            "type": "scan_finished",
+            "domain": domain_name,
+            "risk_level": risk_level,
+            "time": scan_time,
+            "created_at": scan_time
+        }
+    })
+
+
 # API: Trigger Pentest Scan
 async def run_pentest_tools_background(domain_name: str):
     """Menjalankan scan via Pentest-Tools API di background"""
     print(f"[*] [BACKGROUND] Memulai scan Pentest-Tools untuk: {domain_name}")
+    started_at = datetime.now(config.WIB)
     semaphore = asyncio.Semaphore(1)
     async with aiohttp.ClientSession() as session:
         await process_domain_scan(session, domain_name, semaphore)
     print(f"[+] [BACKGROUND] Scan Pentest-Tools selesai untuk: {domain_name}")
-    await manager.broadcast_to_admins({
-        "event": "scan_finished",
-        "domain": domain_name,
-        "time": datetime.now(timezone(timedelta(hours=7))).isoformat()
-    })
-
-    await asyncio.sleep(3)
-
-    recent_scans = db_manager.get_scan_history_list(limit=20)
-    risk_level = "SAFE"
-    for scan in recent_scans:
-        if scan.get("domains", {}).get("domain_name") == domain_name:
-            risk_level = scan.get("risk_level", "SAFE")
-            break
-            
-    if risk_level in ["HIGH", "CRITICAL"]:
-        await telegram_notifier.notify_high_risk_scan(domain_name, risk_level)
-
-    if risk_level in ["HIGH", "CRITICAL"]:
-        notif = db_manager.add_system_notification(
-            title=f"Scan Selesai: {domain_name}",
-            message=f"Scan untuk {domain_name} telah selesai dengan tingkat risiko {risk_level}.",
-            notif_type="scan_finished"
-        )
-        if isinstance(notif, dict):
-            notif["domain"] = domain_name
-            notif["time"] = datetime.now(config.WIB).isoformat()
-        else:
-            notif = {
-                "id": uuid.uuid4().hex,
-                "title": "Scan Selesai",
-                "message": f"Scan untuk {domain_name} telah selesai.",
-                "type": "scan_finished",
-                "domain": domain_name,
-                "time": datetime.now(config.WIB).isoformat(),
-                "created_at": datetime.now(config.WIB).isoformat()
-            }
-        scan_id = None
-        scan_time = datetime.now(config.WIB).isoformat()
-        for s in recent_scans:
-            if s.get("domains", {}).get("domain_name") == domain_name:
-                scan_id = str(s.get("id"))
-                scan_time = s.get("scan_date", scan_time)
-                break
-
-        notif = {
-            "id": scan_id or uuid.uuid4().hex,
-            "title": f"Scan Selesai: {domain_name}",
-            "message": f"Risk Level : {risk_level}",
-            "type": "scan_finished",
-            "domain": domain_name,
-            "time": scan_time,
-            "created_at": scan_time
-        }
-        await manager.broadcast_to_admins({
-            "event": "new_notification",
-            "notification": notif
-        })
+    await announce_scan_finished(domain_name, "Scan", started_at=started_at)
 
 # Simpan Jadwal
 class SchedulePayload(BaseModel):
@@ -1720,7 +1854,7 @@ class SchedulePayload(BaseModel):
     inactive_targets: Optional[List[str]] = []
 
 @app.post("/api/schedule-scan")
-async def schedule_scan(payload: SchedulePayload, current_user = Depends(get_current_user)):
+async def schedule_scan(payload: SchedulePayload, current_user = Depends(get_current_admin)):
     """Memprioritaskan domain ke dalam antrean database untuk dieksekusi Celery Beat"""
     conn = db_manager.get_db_connection()
     if not conn:
@@ -1730,11 +1864,11 @@ async def schedule_scan(payload: SchedulePayload, current_user = Depends(get_cur
         # Gunakan eksekusi SQL langsung agar jauh lebih cepat dan kebal error Tuple/Dict
         with conn.cursor() as cur:
             for domain in payload.targets:
-                cur.execute("UPDATE domains SET is_active = True WHERE domain_name = %s", (domain,))
+                cur.execute("UPDATE domains SET is_active = True WHERE domain_name = %s", (db_manager.normalize_domain_name(domain),))
             
             if hasattr(payload, 'inactive_targets') and payload.inactive_targets:
                 for domain in payload.inactive_targets:
-                    cur.execute("UPDATE domains SET is_active = False WHERE domain_name = %s", (domain,))
+                    cur.execute("UPDATE domains SET is_active = False WHERE domain_name = %s", (db_manager.normalize_domain_name(domain),))
         
         # Wajib di-commit agar perubahan tersimpan di database
         conn.commit()
@@ -1853,8 +1987,9 @@ async def cancel_scheduled_scan(
     return {"status": "success", "message": msg}
 
 @app.post("/api/trigger-pentest")
-async def trigger_pentest(domain_name: str, background_tasks: BackgroundTasks, current_user = Depends(get_current_user)):
+async def trigger_pentest(domain_name: str, background_tasks: BackgroundTasks, current_user = Depends(get_current_admin)):
     """Men-trigger scan Pentest-Tools untuk domain tertentu"""
+    domain_name = db_manager.normalize_domain_name(domain_name)
     if not domain_name:
         raise HTTPException(status_code=400, detail="Domain name is required")
 
@@ -1879,82 +2014,25 @@ class NetworkScanRequest(BaseModel):
 
 async def run_network_scan_background(targets: List[str], scan_type: str = "deep", schedule_id: Optional[int] = None, is_scheduled: bool = False):
     """Fungsi latar belakang untuk menjalankan Network Scan pada beberapa target."""
+    started_at = datetime.now(config.WIB)
     semaphore = asyncio.Semaphore(5)
     async with aiohttp.ClientSession() as session:
-        tasks = [process_network_scan(session, target, semaphore, scan_type) for target in targets]
+        tasks = [process_network_scan(session, target, semaphore, scan_type, schedule_id=schedule_id) for target in targets]
         if tasks:
             results = await asyncio.gather(*tasks)
             success_count = sum(1 for r in results if r)
             failed_count = len(results) - success_count
             print(f"[+] Network Scan Selesai: {success_count} sukses, {failed_count} gagal.")
             for target in targets:
-                # Beritahu via WebSocket
-                await manager.broadcast_to_admins({
-                    "event": "scan_finished",
-                    "domain": target,
-                    "schedule_id": schedule_id,
-                    "is_scheduled": is_scheduled or (schedule_id is not None),
-                    "time": datetime.now(config.WIB).isoformat()
-                })
-
-                await asyncio.sleep(3)
-                
-                recent_scans = db_manager.get_scan_history_list(limit=20)
-                risk_level = "SAFE"
-                for scan in recent_scans:
-                    if scan.get("domains", {}).get("domain_name") == target:
-                        risk_level = scan.get("risk_level", "SAFE")
-                        break
-                        
-                if risk_level in ["HIGH", "CRITICAL"]:
-                    await telegram_notifier.notify_high_risk_scan(target, risk_level)
-
-                if risk_level in ["HIGH", "CRITICAL"]:
-                    notif = db_manager.add_system_notification(
-                        title=f"Network Scan Selesai: {target}",
-                        message=f"Network Scan untuk {target} telah selesai dengan tingkat risiko {risk_level}.",
-                        notif_type="scan_finished"
-                    )
-                    if isinstance(notif, dict):
-                        notif["domain"] = target
-                        notif["time"] = datetime.now(config.WIB).isoformat()
-                    else:
-                        notif = {
-                            "id": uuid.uuid4().hex,
-                            "title": "Network Scan Selesai",
-                            "message": f"Network Scan untuk {target} telah selesai.",
-                            "type": "scan_finished",
-                            "domain": target,
-                            "time": datetime.now(config.WIB).isoformat(),
-                            "created_at": datetime.now(config.WIB).isoformat()
-                        }
-                    scan_id = None
-                    scan_time = datetime.now(config.WIB).isoformat()
-                    for s in recent_scans:
-                        if s.get("domains", {}).get("domain_name") == target:
-                            scan_id = str(s.get("id"))
-                            scan_time = s.get("scan_date", scan_time)
-                            break
-
-                    notif = {
-                        "id": scan_id or uuid.uuid4().hex,
-                        "title": f"Scan Selesai: {target}",
-                        "message": f"Risk Level : {risk_level}",
-                        "type": "scan_finished",
-                        "domain": target,
-                        "time": scan_time,
-                        "created_at": scan_time
-                    }
-                    await manager.broadcast_to_admins({
-                        "event": "new_notification",
-                        "notification": notif
-                    })
+                await announce_scan_finished(target, "Network Scan", started_at=started_at,
+                                             schedule_id=schedule_id, is_scheduled=is_scheduled)
 
 async def run_web_scan_background(targets: List[str], scan_type: str = "deep", schedule_id: Optional[int] = None, is_scheduled: bool = False):
     """Fungsi latar belakang untuk menjalankan Web Scan pada beberapa target."""
+    started_at = datetime.now(config.WIB)
     semaphore = asyncio.Semaphore(5)
     async with aiohttp.ClientSession() as session:
-        tasks = [process_domain_scan(session, target, semaphore, scan_type) for target in targets]
+        tasks = [process_domain_scan(session, target, semaphore, scan_type, schedule_id=schedule_id) for target in targets]
         if tasks:
             results = await asyncio.gather(*tasks)
             success_count = sum(1 for r in results if r)
@@ -1962,64 +2040,8 @@ async def run_web_scan_background(targets: List[str], scan_type: str = "deep", s
             print(f"[+] Web Scan Selesai: {success_count} sukses, {failed_count} gagal.")
             
             for target in targets:
-                await manager.broadcast_to_admins({
-                    "event": "scan_finished",
-                    "domain": target,
-                    "time": datetime.now(timezone(timedelta(hours=7))).isoformat()
-                })
-
-                await asyncio.sleep(3)
-                
-                recent_scans = db_manager.get_scan_history_list(limit=20)
-                risk_level = "SAFE"
-                for scan in recent_scans:
-                    if scan.get("domains", {}).get("domain_name") == target:
-                        risk_level = scan.get("risk_level", "SAFE")
-                        break
-                        
-                if risk_level in ["HIGH", "CRITICAL"]:
-                    await telegram_notifier.notify_high_risk_scan(target, risk_level)
-
-                if risk_level in ["HIGH", "CRITICAL"]:
-                    notif = db_manager.add_system_notification(
-                        title=f"Web Scan Selesai: {target}",
-                        message=f"Web Scan untuk {target} telah selesai dengan tingkat risiko {risk_level}.",
-                        notif_type="scan_finished"
-                    )
-                    if isinstance(notif, dict):
-                        notif["domain"] = target
-                        notif["time"] = datetime.now(config.WIB).isoformat()
-                    else:
-                        notif = {
-                            "id": uuid.uuid4().hex,
-                            "title": "Web Scan Selesai",
-                            "message": f"Web Scan untuk {target} telah selesai.",
-                            "type": "scan_finished",
-                            "domain": target,
-                            "time": datetime.now(config.WIB).isoformat(),
-                            "created_at": datetime.now(config.WIB).isoformat()
-                        }
-                    scan_id = None
-                    scan_time = datetime.now(config.WIB).isoformat()
-                    for s in recent_scans:
-                        if s.get("domains", {}).get("domain_name") == target:
-                            scan_id = str(s.get("id"))
-                            scan_time = s.get("scan_date", scan_time)
-                            break
-
-                    notif = {
-                        "id": scan_id or uuid.uuid4().hex,
-                        "title": f"Scan Selesai: {target}",
-                        "message": f"Risk Level : {risk_level}",
-                        "type": "scan_finished",
-                        "domain": target,
-                        "time": scan_time,
-                        "created_at": scan_time
-                    }
-                    await manager.broadcast_to_admins({
-                        "event": "new_notification",
-                        "notification": notif
-                    })
+                await announce_scan_finished(target, "Web Scan", started_at=started_at,
+                                             schedule_id=schedule_id, is_scheduled=is_scheduled)
 
 
 class WebScanRequest(BaseModel):
@@ -2327,7 +2349,7 @@ async def get_pdf_report(filename: str, current_user = Depends(get_current_user)
         if conn:
             try:
                 with conn.cursor(cursor_factory=db_manager.RealDictCursor) as cur:
-                    cur.execute('SELECT id, domain_name, ip_address FROM domains WHERE domain_name = %s LIMIT 1', (target_domain,))
+                    cur.execute('SELECT id, domain_name, ip_address FROM domains WHERE domain_name = %s LIMIT 1', (db_manager.normalize_domain_name(target_domain),))
                     dom = cur.fetchone()
                     if dom:
                         ip_address = dom.get("ip_address", "")
@@ -2380,7 +2402,7 @@ async def get_pdf_report(filename: str, current_user = Depends(get_current_user)
             ]
         raise HTTPException(status_code=404, detail="File PDF report dari Pentest-Tools tidak ditemukan untuk target ini.")
 
-# Mount Static Files — HARUS di bawah semua route API
+# Mount Static Files: HARUS di bawah semua route API
 app.mount("/dashboard", StaticFiles(directory=DASHBOARD_PATH, html=True), name="dashboard")
 
 
@@ -2409,11 +2431,17 @@ async def _generate_report_bytes(req: GenerateReportRequest, current_user = Depe
     # Look up the history_id to get the pt_scan_id
     try:
         with conn.cursor(cursor_factory=db_manager.RealDictCursor) as cur:
-            cur.execute('SELECT raw_json FROM scan_history WHERE id = %s', (req.history_id,))
+            cur.execute('''
+                SELECT h.raw_json, h.scan_date, d.domain_name
+                FROM scan_history h
+                LEFT JOIN domains d ON h.domain_id = d.id
+                WHERE h.id = %s
+            ''', (req.history_id,))
             res = cur.fetchone()
             if not res:
                 raise HTTPException(status_code=404, detail="Scan history not found")
             raw_json = res['raw_json']
+            report_name = report_filename(res.get('domain_name'), res.get('scan_date'), req.report_format)
     finally:
         conn.close()
         
@@ -2485,9 +2513,7 @@ async def _generate_report_bytes(req: GenerateReportRequest, current_user = Depe
                 if dl_resp.status == 200:
                     pdf_data = await dl_resp.read()
                     
-                    format_file = req.report_format.lower()
-                    filename = f"security_report_{req.history_id}.{format_file}"
-                    return pdf_data, filename
+                    return pdf_data, report_name
                     
                 elif dl_resp.status == 202:
                     await asyncio.sleep(5)
@@ -2498,7 +2524,7 @@ async def _generate_report_bytes(req: GenerateReportRequest, current_user = Depe
         raise HTTPException(status_code=408, detail="Timeout saat menunggu pembuatan report selesai.")
 
 @app.post("/api/reports/generate")
-async def generate_report_endpoint(req: GenerateReportRequest, current_user = Depends(get_current_user)):
+async def generate_report_endpoint(req: GenerateReportRequest, current_user = Depends(get_current_admin)):
     """Endpoint untuk mendownload PDF Report langsung"""
     try:
         # Panggil fungsi helper pembangun file bytes
@@ -2516,7 +2542,7 @@ async def generate_report_endpoint(req: GenerateReportRequest, current_user = De
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/reports/share")
-async def share_report_endpoint(req: ShareReportRequest, current_user = Depends(get_current_user)):
+async def share_report_endpoint(req: ShareReportRequest, current_user = Depends(get_current_admin)):
     """Endpoint untuk mengirim PDF Report via Email"""
     # Pastikan kredensial SMTP tersedia
     if not config.SMTP_USERNAME or not config.SMTP_PASSWORD:
@@ -2583,66 +2609,84 @@ async def share_report_endpoint(req: ShareReportRequest, current_user = Depends(
         raise HTTPException(status_code=500, detail=f"Gagal mengirim email: {str(e)}")
 
 # Notifications routes
+def build_notifications(current_user: dict) -> list:
+    """Riwayat scan, hasil approval domain, dan permintaan pending, disaring per role."""
+    recent_scans = db_manager.get_scan_history_list(limit=20)
+    system_notifs = db_manager.get_system_notifications(limit=20)
+    notifs = []
+
+    # Tambahkan notifikasi sistem (seperti hasil approval/rejection)
+    for sn in system_notifs:
+        # Lewati notifikasi scan_finished dari system_notifications agar tidak ada duplikasi
+        if sn.get("type") == "scan_finished":
+            continue
+        notifs.append({
+            # awalan sys_ supaya tidak bentrok dengan id scan yang angkanya sama
+            "id": f"sys_{sn['id']}",
+            "title": sn["title"],
+            "message": sn["message"],
+            "type": sn.get("type", "domain_approval_result"),
+            "created_at": sn.get("created_at"),
+            "is_read": False,
+            "time": sn.get("created_at"),
+            "domain": sn.get("domain") or ""
+        })
+
+    # Tambahkan permintaan approval domain yang pending
+    pending_domains = db_manager.get_pending_domain_requests()
+    for pd in pending_domains:
+        notifs.append({
+            "id": f"pending_dom_{pd['id']}",
+            "title": f"Permintaan Approval Domain: {pd['domain_name']}",
+            "message": f"Diajukan oleh {pd.get('requested_by') or 'Admin'}. Menunggu persetujuan Super Admin.",
+            "type": "domain_request",
+            "created_at": str(pd.get("discovered_at") or ""),
+            "is_read": False,
+            "domain": pd['domain_name'],
+            "time": str(pd.get("discovered_at") or "")
+        })
+
+    # Semua scan selesai masuk notifikasi, apa pun risk level-nya
+    for scan in recent_scans:
+        risk = str(scan.get("risk_level") or "SAFE").upper()
+
+        domain = scan.get("domains", {}).get("domain_name", "Unknown")
+        notifs.append({
+            "id": str(scan.get("id")),
+            "title": f"Scan Selesai: {domain}",
+            "message": f"Risk Level : {risk}",
+            "type": "scan_finished",
+            "risk_level": risk,
+            "created_at": scan.get("scan_date"),
+            "is_read": False,
+            "domain": domain,
+            "time": scan.get("scan_date")
+        })
+
+    # Saring per role: user hanya scan selesai; permintaan domain hanya untuk superadmin
+    role = current_user.get("role")
+    if role == "user":
+        notifs = [n for n in notifs if n["type"] == "scan_finished"]
+    elif role != "superadmin":
+        notifs = [n for n in notifs if n["type"] != "domain_request"]
+    return notifs
+
+
 @app.get("/api/notifications")
-async def api_get_notifications():
-    """Mengambil riwayat scan, hasil approval domain, dan permintaan pending untuk notifikasi"""
+async def api_get_notifications(current_user = Depends(get_current_user)):
+    """Daftar notifikasi plus status baca milik akun ini (sama di semua perangkat)."""
     try:
-        recent_scans = db_manager.get_scan_history_list(limit=10)
-        system_notifs = db_manager.get_system_notifications(limit=20)
-        notifs = []
-
-        # Tambahkan notifikasi sistem (seperti hasil approval/rejection)
-        for sn in system_notifs:
-            # Lewati notifikasi scan_finished dari system_notifications agar tidak ada duplikasi
-            if sn.get("type") == "scan_finished":
-                continue
-            notifs.append({
-                "id": str(sn["id"]),
-                "title": sn["title"],
-                "message": sn["message"],
-                "type": sn.get("type", "domain_approval_result"),
-                "created_at": sn.get("created_at"),
-                "is_read": sn.get("is_read", False),
-                "time": sn.get("created_at"),
-                "domain": sn.get("domain") or ""
-            })
-
-        # Tambahkan permintaan approval domain yang pending
-        pending_domains = db_manager.get_pending_domain_requests()
-        for pd in pending_domains:
-            notifs.append({
-                "id": f"pending_dom_{pd['id']}",
-                "title": f"Permintaan Approval Domain: {pd['domain_name']}",
-                "message": f"Diajukan oleh {pd.get('requested_by') or 'Admin'}. Menunggu persetujuan Super Admin.",
-                "type": "domain_request",
-                "created_at": str(pd.get("discovered_at") or ""),
-                "is_read": False,
-                "domain": pd['domain_name'],
-                "time": str(pd.get("discovered_at") or "")
-            })
-
-        for scan in recent_scans:
-            risk = scan.get("risk_level", "SAFE")
-            if risk not in ["HIGH", "CRITICAL"]:
-                continue
-                
-            domain = scan.get("domains", {}).get("domain_name", "Unknown")
-            notifs.append({
-                "id": str(scan.get("id")),
-                "title": f"Scan Selesai: {domain}",
-                "message": f"Risk Level : {risk}",
-                "type": "scan_finished",
-                "created_at": scan.get("scan_date"),
-                "is_read": False,
-                "domain": domain,
-                "time": scan.get("scan_date")
-            })
-        return {"status": "success", "data": notifs}
+        notifs = build_notifications(current_user)
+        read_ids = db_manager.get_read_notification_keys(current_user.get("id"))
+        read_set = set(read_ids)
+        for n in notifs:
+            n["is_read"] = n["id"] in read_set
+        return {"status": "success", "data": notifs, "read_ids": read_ids}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/notifications/overnight-scans")
-async def api_get_overnight_scans():
+async def api_get_overnight_scans(current_user = Depends(get_current_user)):
     """Mengambil riwayat scan malam hari / dini hari yang berisiko HIGH dan CRITICAL untuk notifikasi jam 7 pagi"""
     try:
         overnight_scans = db_manager.get_overnight_high_critical_scans(limit=10)
@@ -2650,18 +2694,42 @@ async def api_get_overnight_scans():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.put("/api/notifications/{notif_id}/read")
-async def api_mark_notification_read(notif_id: str):
-    """No-op: notifikasi sekarang statis dari scan history"""
-    return {"status": "success"}
+class NotificationReadRequest(BaseModel):
+    ids: list[str]
+
+
+async def _save_read(current_user: dict, ids: list) -> int:
+    ids = [str(i) for i in ids if str(i).strip()][:500]
+    added = await asyncio.to_thread(db_manager.mark_notifications_read, current_user.get("id"), ids)
+    if ids:
+        # Tab dan perangkat lain milik akun yang sama ikut menandai dibaca
+        await manager.send_to_user(current_user.get("username"), {"event": "notifs_read", "ids": ids})
+    return added
+
+
+@app.post("/api/notifications/read")
+async def api_mark_notifications_read(req: NotificationReadRequest, current_user = Depends(get_current_user)):
+    """Tandai beberapa notifikasi dibaca untuk akun ini (maks. 500 per permintaan)."""
+    if len(req.ids) > 500:
+        raise HTTPException(status_code=400, detail="Maksimal 500 notifikasi per permintaan.")
+    added = await _save_read(current_user, req.ids)
+    return {"status": "success", "added": added}
 
 @app.put("/api/notifications/read-all")
-async def api_mark_all_notifications_read():
-    """No-op: notifikasi sekarang statis dari scan history"""
-    return {"status": "success"}
+async def api_mark_all_notifications_read(current_user = Depends(get_current_user)):
+    """Tandai semua notifikasi yang tampil untuk akun ini sebagai dibaca."""
+    ids = [n["id"] for n in build_notifications(current_user)]
+    added = await _save_read(current_user, ids)
+    return {"status": "success", "added": added}
+
+@app.put("/api/notifications/{notif_id}/read")
+async def api_mark_notification_read(notif_id: str, current_user = Depends(get_current_user)):
+    """Tandai satu notifikasi dibaca untuk akun ini."""
+    added = await _save_read(current_user, [notif_id])
+    return {"status": "success", "added": added}
 
 @app.delete("/api/notifications/{notif_id}")
-async def api_delete_notification(notif_id: str):
+async def api_delete_notification(notif_id: str, current_user = Depends(get_current_user)):
     """No-op: tidak bisa menghapus riwayat scan dari menu notifikasi"""
     return {"status": "success"}
 
@@ -2717,6 +2785,10 @@ async def webhook_notify(req: InternalNotifyRequest, request: Request):
 def get_system_settings(current_user = Depends(get_current_user)):
     return db_manager.get_all_system_settings()
 
+@app.get("/api/system-settings/meta")
+def get_system_settings_meta(current_user = Depends(get_current_superadmin)):
+    return {"status": "success", "data": db_manager.get_system_settings_meta()}
+
 @app.put("/api/system-settings")
 async def update_system_settings(payload: SystemSettingsPayload, current_user = Depends(get_current_superadmin)):
     """
@@ -2740,7 +2812,7 @@ async def update_system_settings(payload: SystemSettingsPayload, current_user = 
         cleaned_settings = {
             "force_logout_superadmin": clean_time(payload.force_logout_superadmin, "Super Admin Cutoff Hour"),
             "force_logout_admin": clean_time(payload.force_logout_admin, "Admin Cutoff Hour"),
-            "scheduled_scan_hour": clean_time(payload.scheduled_scan_hour, "Jam Eksekusi Automated Scan"),
+            "scheduled_scan_hour": clean_time(payload.scheduled_scan_hour, "Jam Eksekusi Overnight Scan"),
         }
 
         try:

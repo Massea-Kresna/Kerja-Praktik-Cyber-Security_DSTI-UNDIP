@@ -4,10 +4,30 @@ import hashlib
 import json
 import os
 import uuid
+import re
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 LOCAL_USERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'users_db.json')
+
+def normalize_domain_name(domain_name):
+    """Bersihkan nama domain agar konsisten (dan sesuai cara Pentest-Tools menghitung asset):
+    huruf kecil, tanpa spasi, tanpa http(s)://, path, query, port, titik di akhir, dan tanpa 'www.' di depan.
+    Contoh: ' https://WWW.Aroomi.undip.id:443/login ' -> 'aroomi.undip.id'"""
+    if domain_name is None:
+        return ''
+    name = str(domain_name).strip().lower()
+    name = re.sub(r'^[a-z][a-z0-9+.-]*://', '', name)   # skema (http://, https://, ...)
+    if re.fullmatch(r'\d{1,3}(\.\d{1,3}){3}/\d{1,2}', name):
+        return name                                      # IP range (CIDR) untuk Network Scanner: biarkan
+    name = re.split(r'[/?#]', name, maxsplit=1)[0]       # path / query / fragment
+    name = name.split('@')[-1]                           # user:pass@host
+    if not name.startswith('['):                         # buang port (kecuali IPv6 [..])
+        name = name.split(':')[0]
+    name = name.strip().rstrip('.')
+    while name.startswith('www.'):
+        name = name[4:]
+    return name
 
 def get_db_connection():
     try:
@@ -175,6 +195,18 @@ def ensure_database_schema():
                     updated_by TEXT
                 )
             """)
+            # Table: notification_reads (status baca notifikasi per akun, dibagi antar perangkat)
+            # notif_key = "<tipe>:<id>", misalnya "scan_finished:156" atau "domain_request:5"
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS public.notification_reads (
+                    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+                    notif_key TEXT NOT NULL,
+                    read_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    PRIMARY KEY (user_id, notif_key)
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_notification_reads_read_at ON public.notification_reads (read_at)")
+
             default_settings = {
                 "force_logout_superadmin": "19:00",
                 "force_logout_admin": "16:00",
@@ -557,6 +589,8 @@ def seed_default_admin():
 # Scan saving methods
 
 def upsert_domain(domain_name, ip_address):
+    domain_name = normalize_domain_name(domain_name)
+    if not domain_name: return None
     conn = get_db_connection()
     if not conn: return None
     try:
@@ -585,6 +619,17 @@ def upsert_domain(domain_name, ip_address):
         # print(f"[-] Gagal melakukan seeding admin: {e}")
 
 # Fungsi database PostgreSQL
+
+def normalize_info_risk(risk_level, vulns):
+    """Scan lama yang hanya berisi temuan Info tersimpan sebagai LOW. Kembalikan INFO untuk tampilan.
+    Hanya dipakai saat membaca, isi database tidak diubah."""
+    if str(risk_level or '').upper() != 'LOW' or not vulns:
+        return risk_level
+    sevs = {str((v or {}).get('severity') or (v or {}).get('risk') or '').upper().strip() for v in vulns if isinstance(v, dict)}
+    if sevs and not (sevs & {'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'}):
+        return 'INFO'
+    return risk_level
+
 
 def create_scan_history(domain_id, risk_score, risk_level, raw_json=None, scan_date=None):
     if not scan_date:
@@ -735,7 +780,49 @@ def save_all_results(domain_list, port_results, tech_results, vuln_results):
         print(f'[-] ERROR saat menyimpan ke Postgres: {e}')
         return False
 
-def save_pentest_tools_result(domain_name, report_json, scanner_type='Web Scanner', pt_scan_id=None, scan_date=None):
+def extract_finding_classification(f):
+    """Ambil atribut klasifikasi satu temuan Pentest-Tools.
+
+    Nama field mengikuti output API v2 (cvssv3, in_cisa_catalog, cve berupa list);
+    nama lama (cvss_v3, cvss3_score, cisa_kev, cves, cwes) tetap didukung.
+    Pentest-Tools memakai '-1' sebagai penanda "tanpa CVE", jadi nilai itu dibuang.
+    """
+    def first(*keys):
+        for k in keys:
+            v = f.get(k)
+            if v is not None and v != '':
+                return v
+        return None
+
+    def clean(items):
+        return [str(c) for c in items if str(c).strip() not in ('', '-1')]
+
+    cve_val = f.get('cve', '')
+    if isinstance(cve_val, list):
+        cve_val = clean(cve_val)
+    if not cve_val and not isinstance(cve_val, list):
+        cves = f.get('cves', [])
+        cve_val = ', '.join(clean(cves)) if isinstance(cves, list) else ''
+
+    cwe_val = f.get('cwe', '')
+    if not cwe_val:
+        cwes = f.get('cwes', [])
+        if isinstance(cwes, list) and cwes:
+            cwe_val = ', '.join(str(c) for c in cwes)
+
+    cvss = first('cvssv3', 'cvss_v3', 'cvss3_score')
+    kev = first('in_cisa_catalog', 'cisa_kev')
+    return {
+        'epss_score': f.get('epss_score'),
+        'epss_percentile': f.get('epss_percentile'),
+        'cisa_kev': bool(kev) if kev is not None else None,
+        'cve': cve_val,
+        'cvss_v3': str(cvss) if cvss is not None else None,
+        'cwe': cwe_val or '',
+    }
+
+
+def save_pentest_tools_result(domain_name, report_json, scanner_type='Web Scanner', pt_scan_id=None, scan_date=None, schedule_id=None):
     print(f'[*] Parse & Save ke DB: {domain_name} ({scanner_type})')
     
     conn = get_db_connection()
@@ -745,7 +832,12 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type='Web Scanne
         
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute('SELECT id FROM domains WHERE domain_name = %s LIMIT 1', (domain_name,))
+            clean_name = normalize_domain_name(domain_name)
+            cur.execute(
+                "SELECT id FROM domains WHERE domain_name = %s OR domain_name = %s "
+                "ORDER BY (domain_name = %s) DESC LIMIT 1",
+                (clean_name, 'www.' + clean_name, clean_name)
+            )
             res = cur.fetchone()
             if not res:
                 print(f'  [-] Domain {domain_name} tidak ditemukan di tabel domains.')
@@ -786,26 +878,14 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type='Web Scanne
                 desc = f.get('details', '')
             recom = f.get('remediation', f.get('recommendation', ''))
             
-            # Ekstraksi atribut klasifikasi baru
-            epss_score = f.get('epss_score')
-            epss_percentile = f.get('epss_percentile')
-            cisa_kev = f.get('cisa_kev')
-            
-            cve_val = f.get('cve', '')
-            if not cve_val:
-                cves = f.get('cves', [])
-                if isinstance(cves, list) and cves:
-                    cve_val = ', '.join(str(c) for c in cves)
-            
-            cvss_v3 = f.get('cvss_v3')
-            if not cvss_v3:
-                cvss_v3 = f.get('cvss3_score')
-            
-            cwe_val = f.get('cwe', '')
-            if not cwe_val:
-                cwes = f.get('cwes', [])
-                if isinstance(cwes, list) and cwes:
-                    cwe_val = ', '.join(str(c) for c in cwes)
+            # Atribut klasifikasi (CVSS, CISA KEV, CVE, CWE, EPSS)
+            meta = extract_finding_classification(f)
+            epss_score = meta['epss_score']
+            epss_percentile = meta['epss_percentile']
+            cisa_kev = meta['cisa_kev']
+            cve_val = meta['cve']
+            cvss_v3 = meta['cvss_v3']
+            cwe_val = meta['cwe']
             
             # Ekstraksi Evidence (Simpan sebagai JSON agar UI baru dapat melakukan render komponen card)
             evidence_val = ''
@@ -862,8 +942,18 @@ def save_pentest_tools_result(domain_name, report_json, scanner_type='Web Scanne
             final_risk_score = 0.0
         
         raw_json_data = low_info_vulns if low_info_vulns else []
-        if pt_scan_id:
-            raw_json_data = {'low_info_vulns': raw_json_data, 'pt_scan_id': pt_scan_id}
+        if pt_scan_id or schedule_id is not None:
+            raw_json_data = {'low_info_vulns': raw_json_data}
+            if pt_scan_id:
+                raw_json_data['pt_scan_id'] = pt_scan_id
+            # Penanda scan dari jadwal Automated, agar hasilnya bisa ditautkan ke jadwalnya
+            # (disimpan di raw_json yang sudah ada, tanpa kolom baru)
+            if schedule_id is not None:
+                raw_json_data['schedule_id'] = schedule_id
+                raw_json_data['is_scheduled'] = True
+            else:
+                # Scan manual / Overnight: penanda eksplisit agar tidak ikut dicocokkan ke jadwal Automated
+                raw_json_data['is_scheduled'] = False
         else:
             raw_json_data = low_info_vulns if low_info_vulns else None
 
@@ -937,11 +1027,18 @@ def get_active_domains():
         conn.close()
 
 def get_domain_by_name(domain_name):
+    domain_name = normalize_domain_name(domain_name)
+    if not domain_name: return None
     conn = get_db_connection()
     if not conn: return None
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute('SELECT * FROM domains WHERE domain_name = %s LIMIT 1', (domain_name,))
+            # Cek juga versi 'www.' untuk data lama yang belum dibersihkan (lihat database/migrations/2026-11-14_001_normalize_domain_names.sql)
+            cur.execute(
+                "SELECT * FROM domains WHERE domain_name = %s OR domain_name = %s "
+                "ORDER BY (domain_name = %s) DESC LIMIT 1",
+                (domain_name, 'www.' + domain_name, domain_name)
+            )
             res = cur.fetchone()
             return dict(res) if res else None
     except Exception as e:
@@ -951,6 +1048,8 @@ def get_domain_by_name(domain_name):
         conn.close()
 
 def create_domain(domain_name, ip_address, approval_status='approved', requested_by=None):
+    domain_name = normalize_domain_name(domain_name)
+    if not domain_name: return None
     conn = get_db_connection()
     if not conn: return None
     try:
@@ -1029,6 +1128,8 @@ def get_pending_domain_requests():
         conn.close()
 
 def update_domain(domain_id, domain_name, ip_address, is_active):
+    domain_name = normalize_domain_name(domain_name)
+    if not domain_name: return None
     conn = get_db_connection()
     if not conn: return None
     try:
@@ -1126,6 +1227,55 @@ def get_recent_risk_levels(limit=100):
     finally:
         conn.close()
 
+def get_latest_scans_before(start_time_iso, domain_names=None):
+    """Scan terakhir tiap domain SEBELUM awal rentang (read-only).
+    Dipakai trend chart agar garis memakai nilai scan terakhir, bukan mulai dari 0.
+    domain_names (opsional): batasi ke domain tertentu, mis. hanya domain yang di-scan di rentang."""
+    if domain_names is not None and len(domain_names) == 0:
+        return []
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            domain_filter = ""
+            params = [start_time_iso]
+            if domain_names is not None:
+                domain_filter = "AND d.domain_name = ANY(%s)"
+                params.append(list(domain_names))
+            cur.execute(f"""
+                SELECT DISTINCT ON (sh.domain_id) sh.id, sh.scan_date, sh.raw_json, d.domain_name
+                FROM scan_history sh
+                LEFT JOIN domains d ON sh.domain_id = d.id
+                WHERE sh.scan_date < %s {domain_filter}
+                ORDER BY sh.domain_id, sh.scan_date DESC
+            """, tuple(params))
+            h_res = cur.fetchall()
+            if not h_res: return []
+            h_ids = tuple([h['id'] for h in h_res])
+            cur.execute("SELECT id, history_id, severity, check_type FROM scan_result WHERE history_id IN %s", (h_ids,))
+            sr_map = {}
+            for sr in cur.fetchall():
+                sr_map.setdefault(sr['history_id'], []).append(dict(sr))
+            result = []
+            for h in h_res:
+                row = dict(h)
+                row['domains'] = {'domain_name': row.pop('domain_name')}
+                if isinstance(row['scan_date'], datetime):
+                    row['scan_date'] = row['scan_date'].isoformat()
+                row['scan_result'] = sr_map.get(row['id'], [])
+                if isinstance(row.get('raw_json'), str):
+                    try:
+                        row['raw_json'] = json.loads(row['raw_json'])
+                    except Exception:
+                        pass
+                result.append(row)
+            return result
+    except Exception as e:
+        print(f'[-] Error get_latest_scans_before: {e}')
+        return []
+    finally:
+        conn.close()
+
 def get_trend_scans(start_time_iso, end_time_iso):
     conn = get_db_connection()
     if not conn: return []
@@ -1145,7 +1295,7 @@ def get_trend_scans(start_time_iso, end_time_iso):
             h_ids = tuple([h['id'] for h in h_res])
             
             cur.execute("""
-                SELECT id, history_id, severity FROM scan_result WHERE history_id IN %s
+                SELECT id, history_id, severity, check_type FROM scan_result WHERE history_id IN %s
             """, (h_ids,))
             sr_res = cur.fetchall()
             
@@ -1258,7 +1408,7 @@ def get_domain_scan_history_summary(domain_name):
                 WHERE d.domain_name = %s
                 ORDER BY sh.scan_date DESC
                 LIMIT 1
-            """, (domain_name,))
+            """, (normalize_domain_name(domain_name),))
             res = cur.fetchone()
             if not res: return []
             d = dict(res)
@@ -1444,6 +1594,81 @@ def get_system_notifications(limit=20):
     return _read_local_notifs()
     return [n for n in _read_local_notifs() if n.get('type') != 'scan_finished'][:limit]
 
+# ---------------------------------------------------------------
+# Status baca notifikasi per akun (tabel notification_reads)
+# notif_key = id notifikasi seperti yang dipakai dashboard:
+#   "156" (scan selesai), "sys_18" (notifikasi sistem), "pending_dom_5" (permintaan domain)
+# ---------------------------------------------------------------
+NOTIF_READ_KEEP_DAYS = 90
+NOTIF_KEY_MAX_LEN = 100
+
+
+def get_read_notification_keys(user_id, limit=1000):
+    """Daftar notif_key yang sudah dibaca akun ini, terbaru dulu."""
+    if not user_id:
+        return []
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""SELECT notif_key FROM public.notification_reads
+                           WHERE user_id = %s ORDER BY read_at DESC LIMIT %s""", (str(user_id), limit))
+            return [r[0] for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[-] Error get_read_notification_keys: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def mark_notifications_read(user_id, keys):
+    """Tandai notifikasi dibaca. Mengembalikan jumlah baris baru (yang sudah ada diabaikan)."""
+    clean = []
+    for k in keys or []:
+        k = str(k).strip()
+        if k and len(k) <= NOTIF_KEY_MAX_LEN and k not in clean:
+            clean.append(k)
+    if not user_id or not clean:
+        return 0
+    conn = get_db_connection()
+    if not conn:
+        return 0
+    try:
+        with conn.cursor() as cur:
+            cur.executemany("""INSERT INTO public.notification_reads (user_id, notif_key)
+                               VALUES (%s, %s) ON CONFLICT (user_id, notif_key) DO NOTHING""",
+                            [(str(user_id), k) for k in clean])
+            added = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+        conn.commit()
+        return added
+    except Exception as e:
+        conn.rollback()
+        print(f"[-] Error mark_notifications_read: {e}")
+        return 0
+    finally:
+        conn.close()
+
+
+def prune_notification_reads(days=NOTIF_READ_KEEP_DAYS):
+    """Hapus status baca yang lebih tua dari `days` hari. Notifikasinya sendiri sudah lama hilang dari daftar."""
+    conn = get_db_connection()
+    if not conn:
+        return 0
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM public.notification_reads WHERE read_at < now() - (%s * interval '1 day')", (int(days),))
+            removed = cur.rowcount or 0
+        conn.commit()
+        return removed
+    except Exception as e:
+        conn.rollback()
+        print(f"[-] Error prune_notification_reads: {e}")
+        return 0
+    finally:
+        conn.close()
+
+
 def get_scan_history_list(limit=20):
     conn = get_db_connection()
     if not conn: return []
@@ -1485,6 +1710,17 @@ def get_scan_history_list(limit=20):
                     except: raw_json = []
                 if isinstance(raw_json, list):
                     row['vulnerabilities'].extend(raw_json)
+                elif isinstance(raw_json, dict):
+                    # Format objek (scan dengan pt_scan_id): temuan Low/Info ada di low_info_vulns
+                    if isinstance(raw_json.get('low_info_vulns'), list):
+                        row['vulnerabilities'].extend(raw_json['low_info_vulns'])
+                    if raw_json.get('schedule_id') is not None:
+                        row['schedule_id'] = raw_json.get('schedule_id')
+                        row['is_scheduled'] = True
+                    elif 'is_scheduled' in raw_json:
+                        row['is_scheduled'] = bool(raw_json.get('is_scheduled'))
+                    # scan lama tanpa penanda: is_scheduled tidak dikirim, frontend mencocokkan lewat waktu
+                row['risk_level'] = normalize_info_risk(row.get('risk_level'), row['vulnerabilities'])
                 row.pop('raw_json', None)
                 result.append(row)
             return result
@@ -1888,6 +2124,31 @@ def get_all_system_settings():
     except Exception as e:
         print(f"[-] Error get_all_system_settings: {e}")
         return result
+    finally:
+        conn.close()
+
+def get_system_settings_meta():
+    """Siapa dan kapan pengaturan terakhir diubah (hanya baca). None bila belum pernah diubah manusia."""
+    conn = get_db_connection()
+    if not conn: return None
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT updated_by, updated_at FROM public.system_settings
+                WHERE updated_by IS NOT NULL AND updated_by <> 'System'
+                ORDER BY updated_at DESC NULLS LAST LIMIT 1
+            """)
+            row = cur.fetchone()
+            if not row:
+                return None
+            at = row.get('updated_at')
+            return {
+                'updated_by': row.get('updated_by'),
+                'updated_at': at.isoformat() if hasattr(at, 'isoformat') else at
+            }
+    except Exception as e:
+        print(f"[-] Error get_system_settings_meta: {e}")
+        return None
     finally:
         conn.close()
 
